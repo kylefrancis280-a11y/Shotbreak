@@ -358,7 +358,7 @@ function rerunSuggestions(){toast("Re-running suggestions...");}
 function redraftAllMasters(){toast("Redrafting all scene masters...");}
 
 async function saveScript(v){scriptText=v;if(db)db.ref("projects/"+PID+"/scriptText").set(v);}
-function reparseScript() {
+async async async async async async function reparseScript() {
   var btn   = document.getElementById('reparse-btn');
   var pctEl = document.getElementById('reparse-pct');
   var ta    = document.getElementById('story-script');
