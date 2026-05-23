@@ -276,6 +276,7 @@ async function init(){
       appId:cfg.appId
     });
     db=firebase.database();
+    db.ref("projects/"+PID+"/scenes").on("value",function(snap){var d=snap.val();if(d&&Array.isArray(d)&&d.length){SCENES=d;if(document.getElementById("content").innerHTML)renderSec(curSec);}});
     db.ref("projects/"+PID+"/shots").on("value",function(s){var d=s.val();if(d)ST.shots=d;else initShots();if(document.getElementById("content").innerHTML)renderSec(curSec);});
     db.ref("projects/"+PID+"/videos").on("value",function(s){ST.videos=[];var d=s.val();if(d)Object.values(d).forEach(function(v){ST.videos.push(v);});ST.videos.sort(function(a,b){return new Date(b.ts)-new Date(a.ts);});renderLib();});
     hideBoot();
@@ -405,6 +406,12 @@ async function reparseScript() {
       });
     });
     ST.shots = newShots;
+
+    // Persist scenes + shots to Firebase so they survive navigation and refresh
+    if (db) {
+      db.ref("projects/"+PID+"/scenes").set(SCENES);
+      db.ref("projects/"+PID+"/shots").set(newShots);
+    }
 
     // Update meta tags
     var titleEl = document.querySelector('.story-meta-title');
