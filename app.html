@@ -331,34 +331,58 @@ function swTake(k,i,btn){var s=ST.shots[k]||{},v=(s.videos||[])[i];if(!v)return;
 function rerunSuggestions(){toast("Re-running suggestions...");}
 function redraftAllMasters(){toast("Redrafting all scene masters...");}
 
-function reparseScript() {
-  var btn = document.getElementById('reparse-btn');
+async function reparseScript() {
+  var btn   = document.getElementById('reparse-btn');
   var pctEl = document.getElementById('reparse-pct');
-  var ta = document.getElementById('story-script');
-  if (!ta) { toast('No script textarea found'); return; }
-  var raw = ta.value || '';
-  if (!raw.trim()) { toast('Paste a script first'); return; }
+  var ta    = document.getElementById('story-script');
+  if (!ta || !ta.value.trim()) { toast('Paste a script first'); return; }
 
-  if (btn) btn.disabled = true;
+  if (btn) { btn.disabled = true; }
+  if (pctEl) pctEl.textContent = '...';
 
-  // ── Simulate progress bar ──────────────────────────────────────────────────
+  // Show loading state in breakdown grid
+  var grid = document.getElementById('script-breakdown-grid');
+  if (grid) grid.innerHTML = '<div style="color:#888;font-size:13px;padding:12px;grid-column:1/-1;">Grok is reading your script...</div>';
+
+  // Animate progress while waiting
   var p = 0;
   var iv = setInterval(function() {
-    p += Math.floor(Math.random() * 18) + 8;
-    if (p >= 90) { clearInterval(iv); }
-    if (pctEl) pctEl.textContent = Math.min(p, 90) + '%';
-  }, 120);
+    p = Math.min(p + Math.floor(Math.random() * 8) + 3, 88);
+    if (pctEl) pctEl.textContent = p + '%';
+  }, 400);
 
-  // ── Parse after short delay so UI updates ─────────────────────────────────
-  setTimeout(function() {
-    var parsed = parseScriptText(raw);
+  try {
+    var resp = await fetch('/.netlify/functions/parse-script', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ script: ta.value })
+    });
 
-    // Update global SCENES
-    SCENES = parsed.scenes;
+    clearInterval(iv);
+
+    if (!resp.ok) {
+      var err = await resp.json().catch(function(){ return { error: 'Unknown error' }; });
+      throw new Error(err.error || 'Parse failed (' + resp.status + ')');
+    }
+
+    var parsed = await resp.json();
+    if (pctEl) pctEl.textContent = '100%';
+    setTimeout(function() { if (pctEl) pctEl.textContent = ''; }, 800);
+
+    // Rebuild SCENES global from Grok response
+    SCENES = parsed.scenes.map(function(sc) {
+      return {
+        id: sc.id,
+        name: sc.name,
+        clips: sc.shots.map(function(sh) { return sh.id; }),
+        shots: sc.shots,
+        description: sc.description || ''
+      };
+    });
 
     // Rebuild ST.shots
     var newShots = {};
-    parsed.scenes.forEach(function(sc) {
+    SCENES.forEach(function(sc) {
       sc.clips.forEach(function(c) {
         newShots[key(c)] = {
           sceneId: sc.id, clipId: c, locked: false, minimized: false,
@@ -370,21 +394,25 @@ function reparseScript() {
     ST.shots = newShots;
 
     // Update meta tags
-    updateStoryMeta(parsed);
+    var titleEl = document.querySelector('.story-meta-title');
+    if (titleEl) titleEl.textContent = parsed.title || '(Untitled)';
+    var tags = document.querySelectorAll('.story-tag');
+    var tagVals = ['screenplay', parsed.scenes.length + ' scenes', (parsed.characters || []).length + ' characters'];
+    tags.forEach(function(t, i) { if (tagVals[i]) t.textContent = tagVals[i]; });
 
     // Render breakdown
-    renderScriptBreakdown(parsed.scenes);
-
-    // Finish progress
-    clearInterval(iv);
-    if (pctEl) pctEl.textContent = '100%';
-    setTimeout(function() {
-      if (pctEl) pctEl.textContent = '';
-      if (btn) btn.disabled = false;
-    }, 800);
+    renderScriptBreakdown(SCENES);
 
     toast('Parsed ' + parsed.scenes.length + ' scenes, ' + parsed.totalShots + ' shots');
-  }, 400);
+
+  } catch(e) {
+    clearInterval(iv);
+    if (pctEl) pctEl.textContent = '';
+    if (grid) grid.innerHTML = '<div style="color:#f87171;font-size:13px;padding:12px;grid-column:1/-1;">Error: ' + e.message + '</div>';
+    toast('Parse failed: ' + e.message);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 function parseScriptText(raw) {
@@ -485,22 +513,28 @@ function renderScriptBreakdown(scenes) {
     return;
   }
   grid.innerHTML = scenes.map(function(sc) {
-    var shots = sc.clips.length;
+    var shots = sc.shots || sc.clips.map(function(c) { return { id: c, type: 'Shot', description: '' }; });
     return '<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;padding:14px;">'
       + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">'
-        + '<div style="font-weight:600;font-size:12px;color:#e0e0e0;line-height:1.4;max-width:70%;">' + sc.name + '</div>'
-        + '<div style="font-size:10px;color:#555;background:#222;border-radius:4px;padding:2px 6px;white-space:nowrap;">' + sc.id + '</div>'
+        + '<div style="font-weight:600;font-size:12px;color:#e0e0e0;line-height:1.4;max-width:75%;">' + sc.name + '</div>'
+        + '<div style="font-size:10px;color:#555;background:#222;border-radius:4px;padding:2px 6px;">' + sc.id + '</div>'
       + '</div>'
-      + '<div style="font-size:11px;color:#888;margin-bottom:10px;">' + shots + ' shot' + (shots !== 1 ? 's' : '') + '</div>'
-      + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(28px,1fr));gap:4px;">'
-        + sc.clips.map(function(c) {
-            return '<div style="background:#2a2a2a;border-radius:4px;padding:4px 2px;text-align:center;font-size:9px;color:#666;">' + c + '</div>';
+      + (sc.description ? '<div style="font-size:11px;color:#666;margin-bottom:8px;line-height:1.4;">' + sc.description + '</div>' : '')
+      + '<div style="font-size:11px;color:#888;margin-bottom:10px;">' + shots.length + ' shot' + (shots.length !== 1 ? 's' : '') + '</div>'
+      + '<div style="display:flex;flex-direction:column;gap:5px;">'
+        + shots.map(function(sh) {
+            return '<div style="display:flex;align-items:flex-start;gap:8px;background:#222;border-radius:5px;padding:6px 8px;">'
+              + '<div style="font-size:10px;color:#facc15;font-weight:600;white-space:nowrap;min-width:36px;">' + sh.id + '</div>'
+              + '<div style="flex:1;">'
+                + '<div style="font-size:10px;color:#60a5fa;margin-bottom:2px;">' + (sh.type || '') + '</div>'
+                + '<div style="font-size:11px;color:#aaa;line-height:1.3;">' + (sh.description || '') + '</div>'
+              + '</div>'
+              + '</div>';
           }).join('')
       + '</div>'
       + '</div>';
   }).join('');
 }
-
 
 function sleep(ms){return new Promise(function(r){setTimeout(r,ms);});}
 function fmt(iso){if(!iso)return'';var d=new Date(iso);return d.toLocaleDateString("en-US",{month:"short",day:"numeric"})+" "+d.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",hour12:true});}
