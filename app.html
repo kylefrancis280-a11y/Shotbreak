@@ -698,23 +698,7 @@ function runCrewStory() {
   runNext();
 }
 
-async function reparseScript() {
-  var btn = document.getElementById('reparse-btn');
-  var pctEl = document.getElementById('reparse-pct');
-  if (btn) btn.disabled = true;
-  var p = 0;
-  var iv = setInterval(function() {
-    p += Math.floor(Math.random() * 22) + 8;
-    if (p >= 100) {
-      p = 100; clearInterval(iv);
-      if (pctEl) pctEl.textContent = '';
-      if (btn) { btn.disabled = false; }
-      toast('Script parsed!');
-    } else {
-      if (pctEl) pctEl.textContent = p + '%';
-    }
-  }, 180);
-}
+
 
 
 document.addEventListener('DOMContentLoaded', init);
