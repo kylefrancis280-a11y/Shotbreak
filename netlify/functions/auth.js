@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 
-const DB = 'https://atlas-intelligence-37d6d-default-rtdb.firebaseio.com';
+const DB = 'https://shotbreak-9f342-default-rtdb.firebaseio.com';
 const SECRET = process.env.FIREBASE_DB_SECRET;
 
 function sha256(str) { return crypto.createHash('sha256').update(str).digest('hex'); }
