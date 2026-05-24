@@ -264,6 +264,8 @@ async function init(){
   var bt=document.getElementById("boot-text");
   try{
     if(bt)bt.textContent="Loading config...";
+    // Fast-path: restore script from localStorage instantly (before Firebase responds)
+    try{var _ls=localStorage.getItem("sb_script_"+PID);if(_ls){scriptText=_ls;}}catch(e){}
     var r=await fetch("/.netlify/functions/get-config");
     if(!r.ok){var e=await r.json().catch(function(){return {};});throw new Error(e.error||"Config fetch failed ("+r.status+")");}
     var cfg=await r.json();
@@ -596,7 +598,7 @@ function swTake(k,i,btn){var s=ST.shots[k]||{},v=(s.videos||[])[i];if(!v)return;
 function rerunSuggestions(){toast("Re-running suggestions...");}
 function redraftAllMasters(){toast("Redrafting all scene masters...");}
 
-async function saveScript(v){scriptText=v;if(db)db.ref("projects/"+PID+"/scriptText").set(v);}
+async function saveScript(v){scriptText=v;try{localStorage.setItem("sb_script_"+PID,v);}catch(e){}if(db)db.ref("projects/"+PID+"/scriptText").set(v);}
 async function updateTopbar() {
   var totalClips = 0;
   if (SCENES && SCENES.length) {
