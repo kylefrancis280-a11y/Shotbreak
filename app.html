@@ -252,6 +252,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',-apple-system,sa
 var WSK="",db=null,PID="project-001";
 var AGENTS={story:["Vision Director","Scene Architect","Beat Sheet Architect","Logline Refiner","Tone Guardian","Genre Interpreter","Premise Expander","Creative Prompt Writer","Research Specialist","World Builder","Continuity Supervisor","Emotional Truth Guardian"],cast:["Character Designer","Character Bible Maintainer","Character Arc Guardian","Wardrobe Coordinator","Makeup and Hair Specialist","Location Scout","Prop Master","Crowd Coordinator","Wardrobe and Prop Auditor","Geography and Set Guardian"],coverage:["Cinematographer","Lighting Designer","Movement Choreographer","Director of Photography Assistant","Gaffer","Key Grip","Stunt Coordinator","Practical Effects Supervisor","Stunt Performer Coordinator","Visual Consistency Guardian","Performance Consistency Checker","Timeline Consistency Checker"],generate:["Head Editor","Cut Specialist","Montage Specialist","Color Grading Agent","Music Sync Specialist","Cross-Fade and Transition Artist","Tempo and Pacing Analyst","Dialogue Editor","Sound Editor","Final Cut Approver","Dramatic Logic Guardian","Final Review Orchestrator","Post-Production Supervisor"],edit:["Head Editor","Cut Specialist","Montage Specialist","Color Grading Agent","Music Sync Specialist","Cross-Fade and Transition Artist","Tempo and Pacing Analyst","Dialogue Editor","Sound Editor","Final Cut Approver","Dramatic Logic Guardian","Final Review Orchestrator","Post-Production Supervisor"]};
 var scriptText=""; // persisted to Firebase
+var _parsing=false; // true while reparseScript fetch is in flight -- blocks syncUI re-render
 var SCENES=[]; // populated from Firebase or Grok parse
 var CHARACTER_BIBLE={}; // keyed by char name uppercase, auto-filled from Grok
 var COVF=[["shotType","Shot Type"],["angle","Angle"],["lens","Lens"],["timeOfDay","Time of Day"],["style","Style"],["temperature","Temperature"],["filmGrain","Film Grain"],["season","Season"],["contrast","Contrast"],["depthOfField","Depth of Field"],["cameraMove","Camera Move"],["distortion","Distortion"],["exposure","Exposure"],["colourTheme","Colour Theme"],["cinematics","Cinematics"]];
@@ -351,7 +352,7 @@ function syncUI(source){
     var contentEl=document.getElementById("content");
     if(!contentEl||contentEl.style.display==="none")return;
     updateTopbar();
-    if(pending.scenes||pending.shots||pending.scriptText){
+    if(!_parsing&&(pending.scenes||pending.shots||pending.scriptText)){
       renderSec(curSec);
       if(curSec==='story'){
         if(SCENES&&SCENES.length)renderScriptBreakdown(SCENES);
@@ -611,6 +612,7 @@ async function reparseScript() {
   var pctEl = document.getElementById('reparse-pct');
   var ta    = document.getElementById('story-script');
   if (!ta || !ta.value.trim()) { toast('Paste a script first'); return; }
+  _parsing = true;
   saveScript(ta.value);
 
   if (btn) { btn.disabled = true; }
@@ -640,8 +642,9 @@ async function reparseScript() {
     }
 
     var parsed = await resp.json();
+    pctEl = document.getElementById('reparse-pct'); // re-grab live ref
     if (pctEl) pctEl.textContent = '100%';
-    setTimeout(function() { if (pctEl) pctEl.textContent = ''; }, 800);
+    setTimeout(function() { var el=document.getElementById('reparse-pct'); if(el)el.textContent=''; }, 800);
 
     // Rebuild SCENES global from Grok response
     SCENES = parsed.scenes.map(function(sc) {
@@ -725,7 +728,10 @@ async function reparseScript() {
     if (grid) grid.innerHTML = '<div style="color:#f87171;font-size:13px;padding:12px;grid-column:1/-1;">Error: ' + e.message + '</div>';
     toast('Parse failed: ' + e.message);
   } finally {
-    if (btn) btn.disabled = false;
+    _parsing = false;
+    // Re-grab live DOM refs in case syncUI re-rendered during parse
+    var liveBtn = document.getElementById('reparse-btn');
+    if (liveBtn) liveBtn.disabled = false;
   }
 }
 
