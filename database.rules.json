@@ -1,0 +1,18 @@
+{
+  "rules": {
+    "projects": {
+      "$projectId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "sessions": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "users": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}
