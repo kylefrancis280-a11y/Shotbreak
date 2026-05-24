@@ -853,8 +853,8 @@ function renderAgentGrid(sec) {
         + '<div style="background:'+statusColor+';height:100%;width:'+pct+'%;transition:width .3s;"></div>'
       + '</div>'
       + '<div style="display:flex;gap:6px;align-items:center;margin-top:2px;">'
-        + '<button onclick="runSingleAgent(''+name+'',''+sec+'')" style="flex:1;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:4px;color:#aaa;font-size:10px;padding:4px 0;cursor:pointer;" '+(st.status==='running'?'disabled':'')+'>▶ Run</button>'
-        + (pendingCount > 0 ? '<button onclick="showUpgradesForAgent(''+name+'')" style="flex:1;background:#1a1a2a;border:1px solid #3a3a6a;border-radius:4px;color:#60a5fa;font-size:10px;padding:4px 0;cursor:pointer;">'+pendingCount+' upgrade'+(pendingCount!==1?'s':'')+' ›</button>' : '')
+        + '<button onclick="runSingleAgent('\''+name+'\''+'\''+ sec +'\'')" style="flex:1;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:4px;color:#aaa;font-size:10px;padding:4px 0;cursor:pointer;" '+(st.status==='running'?'disabled':'')+'>▶ Run</button>'
+        + (pendingCount > 0 ? '<button onclick="showUpgradesForAgent(\'+name+\')" style="flex:1;background:#1a1a2a;border:1px solid #3a3a6a;border-radius:4px;color:#60a5fa;font-size:10px;padding:4px 0;cursor:pointer;">'+pendingCount+' upgrade'+(pendingCount!==1?'s':'')+' ›</button>' : '')
       + '</div>'
     + '</div>';
   }).join('');
@@ -878,8 +878,8 @@ function updateAgentCard(name, sec) {
     + '<div style="background:'+statusColor+';height:100%;width:'+pct+'%;transition:width .3s;"></div>'
   + '</div>'
   + '<div style="display:flex;gap:6px;align-items:center;margin-top:2px;">'
-    + '<button onclick="runSingleAgent(''+name+'',''+curSec+'')" style="flex:1;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:4px;color:#aaa;font-size:10px;padding:4px 0;cursor:pointer;" '+(st.status==='running'?'disabled':'')+'>▶ Run</button>'
-    + (pendingCount > 0 ? '<button onclick="showUpgradesForAgent(''+name+'')" style="flex:1;background:#1a1a2a;border:1px solid #3a3a6a;border-radius:4px;color:#60a5fa;font-size:10px;padding:4px 0;cursor:pointer;">'+pendingCount+' upgrade'+(pendingCount!==1?'s':'')+' ›</button>' : '')
+    + '<button onclick="runSingleAgent(\'+name+\',\'+curSec+\')" style="flex:1;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:4px;color:#aaa;font-size:10px;padding:4px 0;cursor:pointer;" '+(st.status==='running'?'disabled':'')+'>▶ Run</button>'
+    + (pendingCount > 0 ? '<button onclick="showUpgradesForAgent(\'+name+\')" style="flex:1;background:#1a1a2a;border:1px solid #3a3a6a;border-radius:4px;color:#60a5fa;font-size:10px;padding:4px 0;cursor:pointer;">'+pendingCount+' upgrade'+(pendingCount!==1?'s':'')+' ›</button>' : '')
   + '</div>';
 }
 
