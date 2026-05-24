@@ -590,7 +590,7 @@ async function updateTopbar() {
   if (tbClips) tbClips.textContent = totalClips;
   if (tbScenes) tbScenes.textContent = (SCENES && SCENES.length) || 0;
 }
-async function reparseScript() {
+async async function reparseScript() {
   var btn   = document.getElementById('reparse-btn');
   var pctEl = document.getElementById('reparse-pct');
   var ta    = document.getElementById('story-script');
