@@ -47,7 +47,7 @@ exports.handler = async (event) => {
     });
     const submitData = await submitRes.json();
     console.log('Wavespeed submit response:', JSON.stringify(submitData));
-    requestId = (submitData.data && submitData.data.id) || submitData.id;
+    requestId = (submitData.data && submitData.data.id) || submitData.id || (submitData.data && submitData.data.task_id) || submitData.task_id;
     if (!requestId) return { statusCode: 500, headers, body: JSON.stringify({ error: 'No requestId from Wavespeed', detail: submitData }) };
   } catch(e) {
     return { statusCode: 500, headers, body: JSON.stringify({ error: 'Wavespeed submit failed: ' + e.message }) };
