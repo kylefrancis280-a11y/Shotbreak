@@ -13,16 +13,20 @@ exports.handler = async (event) => {
   if (!requestId) return { statusCode: 400, headers, body: JSON.stringify({ error: 'id required' }) };
 
   try {
-    const resultUrl = `https://api.wavespeed.ai/api/v3/predictions/${requestId}/result`;
+    // Correct endpoint: /api/v3/predictions/{task-id}  (no /result suffix)
+    const resultUrl = `https://api.wavespeed.ai/api/v3/predictions/${requestId}`;
     const pollRes = await fetch(resultUrl, { headers: { 'Authorization': `Bearer ${key}` } });
     const pollData = await pollRes.json();
-    const status = (pollData.data && pollData.data.status) || pollData.status;
-    const outputs = (pollData.data && pollData.data.outputs) || pollData.outputs || [];
+    console.log('Wavespeed poll response:', JSON.stringify(pollData));
+    const data = pollData.data || {};
+    const status = data.status || pollData.status || 'processing';
+    const outputs = data.outputs || pollData.outputs || [];
     const videoUrl = outputs[0] || null;
+    const error = data.error || pollData.error || null;
     return {
       statusCode: 200,
       headers,
-      body: JSON.stringify({ status, videoUrl, error: (pollData.data && pollData.data.error) || pollData.error || null })
+      body: JSON.stringify({ status, videoUrl, error })
     };
   } catch(e) {
     return { statusCode: 500, headers, body: JSON.stringify({ error: e.message }) };
