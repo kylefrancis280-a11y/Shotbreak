@@ -595,7 +595,7 @@ async function genClip(k,cid){
   var gt=document.getElementById("gp-text-"+k);
   var ge=document.getElementById("gp-eta-"+k);
   if(gp)gp.classList.add("show");
-  var pct=0,startT=Date.now(),est=20000;
+  var pct=0,startT=Date.now(),est=60000;
   var iv=setInterval(function(){
     pct=Math.min(((Date.now()-startT)/est)*90,90);
     if(gf)gf.style.width=pct+"%";
@@ -604,24 +604,52 @@ async function genClip(k,cid){
   },500);
   try{
     var url='';
-    if(WSK){
-      var endpoint=WSE[q]||WSE.standard;
-      var res=await fetch(endpoint,{
-        method:'POST',
-        headers:{"Authorization":"Bearer "+WSK,"Content-Type":"application/json"},
-        body:JSON.stringify({prompt:p,duration:5,aspect_ratio:"16:9"})
-      });
-      if(res.ok){
-        var d=await res.json();
-        url=(d.data&&d.data.outputs&&d.data.outputs[0])||'';
-        if(d.data&&d.data.id&&!url)url=await pollWS(d.data.id);
-      }else{
-        var errTxt=await res.text().catch(function(){return res.status;});
-        console.error("Wavespeed error",res.status,errTxt);
-        toast("Generation failed ("+res.status+")");
+    // Submit via server-side function (avoids CORS, keeps API key server-side)
+    var submitRes=await fetch('/.netlify/functions/gen-clip',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({prompt:p,quality:q})
+    });
+    if(!submitRes.ok){
+      var errTxt=await submitRes.text().catch(function(){return submitRes.status;});
+      console.error("gen-clip submit error",submitRes.status,errTxt);
+      toast("Generation failed ("+submitRes.status+")");
+      clearInterval(iv);
+      if(gp)gp.classList.remove("show");
+      return;
+    }
+    var submitData=await submitRes.json();
+    var requestId=submitData.requestId;
+    if(!requestId){
+      toast("Generation failed: no request ID");
+      clearInterval(iv);
+      if(gp)gp.classList.remove("show");
+      return;
+    }
+    // Poll gen-clip-status until completed or failed (max 90s)
+    var maxPolls=30,pollInterval=3000;
+    for(var i=0;i<maxPolls;i++){
+      await sleep(pollInterval);
+      try{
+        var pollRes=await fetch('/.netlify/functions/gen-clip-status?id='+requestId);
+        var pollData=await pollRes.json();
+        var st=pollData.status;
+        if(st==='completed'||st==='succeeded'){
+          url=pollData.videoUrl||'';
+          break;
+        }
+        if(st==='failed'||st==='error'){
+          console.error("Wavespeed generation failed",pollData);
+          toast("Generation failed: "+(pollData.error||'unknown'));
+          clearInterval(iv);
+          if(gp)gp.classList.remove("show");
+          return;
+        }
+        // still processing -- update ETA estimate
+        est=Math.max(est,(i+1)*pollInterval*1.5);
+      }catch(pe){
+        console.warn("Poll error (transient)",pe);
       }
-    }else{
-      await sleep(2500);
     }
     clearInterval(iv);
     if(gf)gf.style.width="100%";
@@ -635,7 +663,7 @@ async function genClip(k,cid){
     var tw=document.getElementById("takes-"+k);
     if(tw){
       var tabsH=vids.map(function(v,i){
-        return '<button class="take-tab '+(i===vids.length-1?'active':'')+'" onclick="swTake(\''+k+'\','+i+',this)">Take '+(i+1)+'</button>';
+        return '<button class="take-tab '+(i===vids.length-1?'active':'')+'" onclick="swTake(''+k+'','+i+',this)">Take '+(i+1)+'</button>';
       }).join('');
       tw.innerHTML='<div class="takes-tabs">'+tabsH+'</div>'
         +'<div class="take-meta" id="take-meta-'+k+'">'+cid+' · '+qL(q)+' · '+fmt(new Date().toISOString())+'</div>'
@@ -645,7 +673,7 @@ async function genClip(k,cid){
       tw.classList.add("show");
     }
     setTimeout(function(){if(gp)gp.classList.remove("show");},2000);
-    toast("Take "+vids.length+" generated");
+    toast("Take "+vids.length+" generated"+(url?'':' (no video URL returned)'));
   }catch(e){
     clearInterval(iv);
     if(gp)gp.classList.remove("show");
@@ -653,7 +681,6 @@ async function genClip(k,cid){
     toast("Generation failed");
   }
 }
-
 async function pollWS(id){for(var i=0;i<30;i++){await sleep(2000);try{var r=await fetch("https://api.wavespeed.ai/api/v3/predictions/"+id+"/result",{headers:{"Authorization":"Bearer "+WSK}});if(r.ok){var d=await r.json();if(d.data&&d.data.status==="completed")return (d.data.outputs&&d.data.outputs[0])||'';}}catch(e){break;}}return '';}
 async function genAll(sec){if(!db){toast("Not connected");return;}var clips=Object.entries(ST.shots).filter(function(x){return !x[1].locked;}),q=secQ[sec]||'standard',sgp=document.getElementById("sgp-"+sec),sf=document.getElementById("sgp-fill-"+sec),st=document.getElementById("sgp-text-"+sec),se=document.getElementById("sgp-eta-"+sec);if(sgp)sgp.classList.add("show");for(var i=0;i<clips.length;i++){var k=clips[i][0],s=clips[i][1];if(st)st.textContent="Generating clip "+(i+1)+" / "+clips.length+"...";if(sf)sf.style.width=((i/clips.length)*100)+"%";if(se)se.textContent="ETA ~"+((clips.length-i)*20)+"s";await genClip(k,s.clipId||k);}if(sf)sf.style.width="100%";if(st)st.textContent="All clips generated";if(se)se.textContent='';setTimeout(function(){if(sgp)sgp.classList.remove("show");},3000);}
 async function genFinal(){var lk=Object.entries(ST.shots).filter(function(x){return x[1].locked;});if(!lk.length){toast("No locked clips");return;}await genAll("final");toast("Final Master saved to library");}
