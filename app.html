@@ -249,7 +249,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',-apple-system,sa
 <div id="toast"></div>
 <script>
 // runAllAgents is defined below as a proper function
-var WSK="",db=null,PID="project-001";
+var WSK="",db=null,PID="project-001";var WSE={standard:"https://api.wavespeed.ai/api/v3/wavespeed-ai/wan2.1-t2v-720p",pro:"https://api.wavespeed.ai/api/v3/wavespeed-ai/wan2.1-t2v-1080p",veo:"https://api.wavespeed.ai/api/v3/wavespeed-ai/wan2.1-t2v-1080p"};
 var AGENTS={story:["Vision Director","Scene Architect","Beat Sheet Architect","Logline Refiner","Tone Guardian","Genre Interpreter","Premise Expander","Creative Prompt Writer","Research Specialist","World Builder","Continuity Supervisor","Emotional Truth Guardian"],cast:["Character Designer","Character Bible Maintainer","Character Arc Guardian","Wardrobe Coordinator","Makeup and Hair Specialist","Location Scout","Prop Master","Crowd Coordinator","Wardrobe and Prop Auditor","Geography and Set Guardian"],coverage:["Cinematographer","Lighting Designer","Movement Choreographer","Director of Photography Assistant","Gaffer","Key Grip","Stunt Coordinator","Practical Effects Supervisor","Stunt Performer Coordinator","Visual Consistency Guardian","Performance Consistency Checker","Timeline Consistency Checker"],generate:["Head Editor","Cut Specialist","Montage Specialist","Color Grading Agent","Music Sync Specialist","Cross-Fade and Transition Artist","Tempo and Pacing Analyst","Dialogue Editor","Sound Editor","Final Cut Approver","Dramatic Logic Guardian","Final Review Orchestrator","Post-Production Supervisor"],edit:["Head Editor","Cut Specialist","Montage Specialist","Color Grading Agent","Music Sync Specialist","Cross-Fade and Transition Artist","Tempo and Pacing Analyst","Dialogue Editor","Sound Editor","Final Cut Approver","Dramatic Logic Guardian","Final Review Orchestrator","Post-Production Supervisor"]};
 var scriptText=""; // persisted to Firebase
 var _parsing=false; // true while reparseScript fetch is in flight -- blocks syncUI re-render
@@ -585,7 +585,75 @@ async function runFailedAgents(sec){
   toast("Done");
 }
 
-async function genClip(k,cid){if(!db){toast("Not connected");return;}var s=ST.shots[k]||{},p=s.committedPrompt||s.currentPrompt||'';if(!p){toast("Add a prompt before generating");return;}var q=s.quality||'standard',gp=document.getElementById("gp-"+k),gf=document.getElementById("gp-fill-"+k),gt=document.getElementById("gp-text-"+k),ge=document.getElementById("gp-eta-"+k);if(gp)gp.classList.add("show");var pct=0,st=Date.now(),est=20000;var iv=setInterval(function(){pct=Math.min(((Date.now()-st)/est)*90,90);if(gf)gf.style.width=pct+"%";var r=Math.max(0,Math.round((est-(Date.now()-st))/1000));if(ge)ge.textContent="~"+r+"s";},500);try{var url='';if(WSK){var res=await fetch(WSE[q],{method:'POST',headers:{"Authorization":"Bearer "+WSK,"Content-Type":"application/json"},body:JSON.stringify({prompt:p,duration:5,aspect_ratio:"16:9"})});if(res.ok){var d=await res.json();url=(d.data&&d.data.outputs&&d.data.outputs[0])||'';if(d.data&&d.data.id&&!url)url=await pollWS(d.data.id);}}else{await sleep(2500);}clearInterval(iv);if(gf)gf.style.width="100%";if(gt)gt.textContent="Complete";if(ge)ge.textContent='';var vids=(s.videos||[]).concat([{take:(s.videos||[]).length+1,quality:q,url:url,ts:new Date().toISOString(),section:curSec,clipId:cid}]);db.ref("projects/"+PID+"/shots/"+k+"/videos").set(vids);var vid={id:Date.now()+'',clipKey:k,clipId:cid,take:vids.length,quality:q,url:url,ts:new Date().toISOString(),section:curSec};db.ref("projects/"+PID+"/videos/"+vid.id).set(vid);setTimeout(function(){if(gp)gp.classList.remove("show");},2000);toast("Take "+vids.length+" generated");}catch(e){clearInterval(iv);if(gp)gp.classList.remove("show");toast("Generation failed");}}
+async function genClip(k,cid){
+  if(!db){toast("Not connected");return;}
+  var s=ST.shots[k]||{},p=s.committedPrompt||s.currentPrompt||'';
+  if(!p){toast("Add a prompt before generating");return;}
+  var q=s.quality||'standard';
+  var gp=document.getElementById("gp-"+k);
+  var gf=document.getElementById("gp-fill-"+k);
+  var gt=document.getElementById("gp-text-"+k);
+  var ge=document.getElementById("gp-eta-"+k);
+  if(gp)gp.classList.add("show");
+  var pct=0,startT=Date.now(),est=20000;
+  var iv=setInterval(function(){
+    pct=Math.min(((Date.now()-startT)/est)*90,90);
+    if(gf)gf.style.width=pct+"%";
+    var rem=Math.max(0,Math.round((est-(Date.now()-startT))/1000));
+    if(ge)ge.textContent="~"+rem+"s";
+  },500);
+  try{
+    var url='';
+    if(WSK){
+      var endpoint=WSE[q]||WSE.standard;
+      var res=await fetch(endpoint,{
+        method:'POST',
+        headers:{"Authorization":"Bearer "+WSK,"Content-Type":"application/json"},
+        body:JSON.stringify({prompt:p,duration:5,aspect_ratio:"16:9"})
+      });
+      if(res.ok){
+        var d=await res.json();
+        url=(d.data&&d.data.outputs&&d.data.outputs[0])||'';
+        if(d.data&&d.data.id&&!url)url=await pollWS(d.data.id);
+      }else{
+        var errTxt=await res.text().catch(function(){return res.status;});
+        console.error("Wavespeed error",res.status,errTxt);
+        toast("Generation failed ("+res.status+")");
+      }
+    }else{
+      await sleep(2500);
+    }
+    clearInterval(iv);
+    if(gf)gf.style.width="100%";
+    if(gt)gt.textContent="Complete";
+    if(ge)ge.textContent='';
+    var vids=(s.videos||[]).concat([{take:(s.videos||[]).length+1,quality:q,url:url,ts:new Date().toISOString(),section:curSec,clipId:cid}]);
+    db.ref("projects/"+PID+"/shots/"+k+"/videos").set(vids);
+    var vid={id:Date.now()+'',clipKey:k,clipId:cid,take:vids.length,quality:q,url:url,ts:new Date().toISOString(),section:curSec};
+    db.ref("projects/"+PID+"/videos/"+vid.id).set(vid);
+    if(ST.shots[k])ST.shots[k].videos=vids;
+    var tw=document.getElementById("takes-"+k);
+    if(tw){
+      var tabsH=vids.map(function(v,i){
+        return '<button class="take-tab '+(i===vids.length-1?'active':'')+'" onclick="swTake(\''+k+'\','+i+',this)">Take '+(i+1)+'</button>';
+      }).join('');
+      tw.innerHTML='<div class="takes-tabs">'+tabsH+'</div>'
+        +'<div class="take-meta" id="take-meta-'+k+'">'+cid+' · '+qL(q)+' · '+fmt(new Date().toISOString())+'</div>'
+        +'<div class="video-box" id="vprev-'+k+'">'
+        +(url?'<video src="'+url+'" controls style="width:100%;height:100%;border-radius:4px"></video>':'&#9654; Video ready')
+        +'</div>';
+      tw.classList.add("show");
+    }
+    setTimeout(function(){if(gp)gp.classList.remove("show");},2000);
+    toast("Take "+vids.length+" generated");
+  }catch(e){
+    clearInterval(iv);
+    if(gp)gp.classList.remove("show");
+    console.error("genClip error",e);
+    toast("Generation failed");
+  }
+}
+
 async function pollWS(id){for(var i=0;i<30;i++){await sleep(2000);try{var r=await fetch("https://api.wavespeed.ai/api/v3/predictions/"+id+"/result",{headers:{"Authorization":"Bearer "+WSK}});if(r.ok){var d=await r.json();if(d.data&&d.data.status==="completed")return (d.data.outputs&&d.data.outputs[0])||'';}}catch(e){break;}}return '';}
 async function genAll(sec){if(!db){toast("Not connected");return;}var clips=Object.entries(ST.shots).filter(function(x){return !x[1].locked;}),q=secQ[sec]||'standard',sgp=document.getElementById("sgp-"+sec),sf=document.getElementById("sgp-fill-"+sec),st=document.getElementById("sgp-text-"+sec),se=document.getElementById("sgp-eta-"+sec);if(sgp)sgp.classList.add("show");for(var i=0;i<clips.length;i++){var k=clips[i][0],s=clips[i][1];if(st)st.textContent="Generating clip "+(i+1)+" / "+clips.length+"...";if(sf)sf.style.width=((i/clips.length)*100)+"%";if(se)se.textContent="ETA ~"+((clips.length-i)*20)+"s";await genClip(k,s.clipId||k);}if(sf)sf.style.width="100%";if(st)st.textContent="All clips generated";if(se)se.textContent='';setTimeout(function(){if(sgp)sgp.classList.remove("show");},3000);}
 async function genFinal(){var lk=Object.entries(ST.shots).filter(function(x){return x[1].locked;});if(!lk.length){toast("No locked clips");return;}await genAll("final");toast("Final Master saved to library");}
