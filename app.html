@@ -438,7 +438,7 @@ function topFields(cid,s,sec){
 
   // ── Script (Action Line) ──────────────────────────────────────────────────
   var sB='<div class="field-section"><div class="field-label-row"><div class="field-label">Script (Action Line)</div><button class="field-badge">&#128196; EDITABLE</button></div>'
-    +'<textarea class="clip-textarea'+(p?' has-proposal':'')+'" id="prompt-'+k+'" onchange="updP(\''+k+'\',this.value)" placeholder="Action line for this clip...">'+escF(p)+'</textarea></div>';
+    +'<textarea class="clip-textarea'+(p?' has-proposal':'')+'" id="prompt-'+k+'" oninput="updP(\''+k+'\',this.value)" placeholder="Action line for this clip...">'+escF(p)+'</textarea></div>';
 
   // ── Background Description ────────────────────────────────────────────────
   var bB='<div class="field-section"><div class="field-label-row"><div class="field-label">Background Description</div>'
@@ -587,7 +587,7 @@ async function runFailedAgents(sec){
 
 async function genClip(k,cid){
   if(!db){toast("Not connected");return;}
-  var s=ST.shots[k]||{},_ta=document.getElementById('prompt-'+k),p=s.committedPrompt||s.currentPrompt||(_ta&&_ta.value)||'';
+  var s=ST.shots[k]||{},_ta=document.getElementById('prompt-'+k),_tv=(_ta&&_ta.value||'').trim(),p=_tv||s.committedPrompt||s.currentPrompt||'';
   if(!p){toast("Add a prompt before generating");return;}
   var q=s.quality||'standard';
   var gp=document.getElementById("gp-"+k);
