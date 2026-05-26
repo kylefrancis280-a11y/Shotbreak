@@ -1347,8 +1347,8 @@ function showAllPendingUpgrades() {
       + '<div style="font-size:11px;color:#e0e0e0;margin-bottom:6px;line-height:1.5;background:#0a1a0a;border-left:2px solid #4ade80;padding:6px 8px;border-radius:0 4px 4px 0;">' + escHtml(u.proposed) + '</div>'
       + '<div style="font-size:10px;color:#666;margin-bottom:10px;line-height:1.4;font-style:italic;">' + escHtml(u.reason) + '</div>'
       + '<div style="display:flex;gap:8px;">'
-        + '<button onclick="applyUpgrade(\\''+ u.id +'\\')" style="flex:1;background:#14532d;border:1px solid #166534;border-radius:4px;color:#4ade80;font-size:11px;padding:6px 0;cursor:pointer;">&#10003; Apply</button>'
-        + '<button onclick="declineUpgrade(\\''+ u.id +'\\')" style="flex:1;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:4px;color:#888;font-size:11px;padding:6px 0;cursor:pointer;">&#10005; Decline</button>'
+        + '<button onclick="applyUpgrade(\'"+ u.id +"\')" style="flex:1;background:#14532d;border:1px solid #166534;border-radius:4px;color:#4ade80;font-size:11px;padding:6px 0;cursor:pointer;">&#10003; Apply</button>'
+        + '<button onclick="declineUpgrade(\'"+ u.id +"\')" style="flex:1;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:4px;color:#888;font-size:11px;padding:6px 0;cursor:pointer;">&#10005; Decline</button>'
       + '</div>'
     + '</div>';
   });
