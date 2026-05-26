@@ -1192,7 +1192,7 @@ async function runAllAgents(sec) {
 }
 
 // Run ALL agents for this section sequentially on a specific shot -- no auto-apply
-async async function runAllAgentsOnShot(k, sec) {
+async function runAllAgentsOnShot(k, sec) {
   var agents = AGENTS[sec] || [];
   if (!agents.length) { toast('No agents for this section'); return; }
 
