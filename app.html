@@ -1184,13 +1184,8 @@ async function runAllAgents(sec) {
   var errors = 0;
   for (var i = 0; i < agents.length; i++) {
     var name = agents[i];
-    await new Promise(function(resolve) {
-      acquireLock(async function() {
-        try { await runSingleAgent(name, sec); }
-        catch(e) { errors++; }
-        finally { releaseLock(); resolve(); }
-      });
-    });
+    try { await runSingleAgent(name, sec); }
+    catch(e) { errors++; }
   }
   if (btn) { btn.disabled = false; btn.textContent = errors ? ('Run All (' + errors + ' errors)') : '▶▶ Run All'; }
   toast(errors ? (errors + ' agent(s) failed') : 'All agents complete');
@@ -1257,10 +1252,9 @@ async function runSingleAgent(name, sec) {
 
     updateAgentCard(name, sec);
     if (data.upgrades && data.upgrades.length > 0) {
-      toast(name + ': ' + data.upgrades.length + ' upgrade' + (data.upgrades.length!==1?'s':'') + ' ready');
-      // Also refresh upgrade panel if open
-      var panel = document.getElementById('upgrade-panel');
-      if (panel && panel.style.display !== 'none') showUpgradesForAgent(panel.dataset.agent);
+      toast(name + ': ' + data.upgrades.length + ' upgrade' + (data.upgrades.length!==1?'s':'') + ' ready — click to review');
+      // Auto-open upgrade panel so user sees Apply buttons immediately
+      showUpgradesForAgent(name);
     } else {
       toast(name + ': no upgrades needed');
     }
