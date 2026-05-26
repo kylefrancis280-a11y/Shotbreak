@@ -1136,7 +1136,7 @@ function renderAgentGrid(sec) {
       + '<div style="display:flex;gap:6px;align-items:center;margin-top:2px;">'
         + '<button onclick="runSingleAgent(\'"+ name +"\',\'"+ sec +"\')" style="flex:1;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:4px;color:#aaa;font-size:10px;padding:4px 0;cursor:pointer;" '+(st.status==='running'?'disabled':'')+'>&#9654; Run</button>'
         + (st.status==='error' ? '<button onclick="runSingleAgent(\'"+ name +"\',\'"+ sec +"\')" style="flex:1;background:#2a1a1a;border:1px solid #6a2a2a;border-radius:4px;color:#f87171;font-size:10px;padding:4px 0;cursor:pointer;">&#8635; Retry</button>' : '')
-        + (pendingCount > 0 ? '<button onclick="showUpgradesForAgent(\'"+ name +"\')" style="flex:1;background:#1a1a2a;border:1px solid #3a3a6a;border-radius:4px;color:#60a5fa;font-size:10px;padding:4px 0;cursor:pointer;">'+ pendingCount +' upgrade'+(pendingCount!==1?'s':'')+' &#8250;</button>' : '')
+        + (pendingCount > 0 ? '<button onclick="showUpgradesForAgent(\'"+ name +"\')" style="flex:1;background:#14532d;border:1px solid #4ade80;border-radius:4px;color:#4ade80;font-size:10px;padding:4px 0;cursor:pointer;font-weight:700;">&#10003; '+ pendingCount +' upgrade'+(pendingCount!==1?'s':'')+' ›</button>' : '')
       + '</div>'
     + '</div>';
   }).join('');
@@ -1161,7 +1161,7 @@ function updateAgentCard(name, sec) {
   + '</div>'
   + '<div style="display:flex;gap:6px;align-items:center;margin-top:2px;">'
     + '<button onclick="runSingleAgent(\'"+ name +"\',\'"+ curSec +"\')" style="flex:1;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:4px;color:#aaa;font-size:10px;padding:4px 0;cursor:pointer;" '+(st.status==='running'?'disabled':'')+'>&#9654; Run</button>'
-    + (pendingCount > 0 ? '<button onclick="showUpgradesForAgent(\'"+ name +"\')" style="flex:1;background:#1a1a2a;border:1px solid #3a3a6a;border-radius:4px;color:#60a5fa;font-size:10px;padding:4px 0;cursor:pointer;">'+ pendingCount +' upgrade'+(pendingCount!==1?'s':'')+' &#8250;</button>' : '')
+    + (pendingCount > 0 ? '<button onclick="showUpgradesForAgent(\'"+ name +"\')" style="flex:1;background:#14532d;border:1px solid #4ade80;border-radius:4px;color:#4ade80;font-size:10px;padding:4px 0;cursor:pointer;font-weight:700;">&#10003; '+ pendingCount +' upgrade'+(pendingCount!==1?'s':'')+' ›</button>' : '')
   + '</div>';
 }
 
@@ -1181,14 +1181,23 @@ async function runAllAgents(sec) {
   if (!agents.length) { toast('No agents for this section'); return; }
   var btn = document.getElementById('run-all-btn-' + sec);
   if (btn) { btn.disabled = true; btn.textContent = 'Running...'; }
+  window._runAllSuppressPanel = true;
   var errors = 0;
   for (var i = 0; i < agents.length; i++) {
     var name = agents[i];
+    if (btn) btn.textContent = 'Running ' + (i+1) + '/' + agents.length + '...';
     try { await runSingleAgent(name, sec); }
     catch(e) { errors++; }
   }
+  window._runAllSuppressPanel = false;
   if (btn) { btn.disabled = false; btn.textContent = errors ? ('Run All (' + errors + ' errors)') : '▶▶ Run All'; }
-  toast(errors ? (errors + ' agent(s) failed') : 'All agents complete');
+  var totalUpgrades = Object.values(pendingUpgrades).filter(function(u){ return !u.resolved; }).length;
+  if (totalUpgrades > 0) {
+    toast('All agents done — ' + totalUpgrades + ' upgrade' + (totalUpgrades!==1?'s':'') + ' ready');
+    showAllPendingUpgrades();
+  } else {
+    toast(errors ? (errors + ' agent(s) failed') : 'All agents complete — no upgrades needed');
+  }
 }
 
 // Run ALL agents for this section sequentially on a specific shot -- no auto-apply
