@@ -7,36 +7,56 @@ exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers, body: '' };
   if (event.httpMethod !== 'POST') return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) };
 
-  const key = process.env.WAVESPEED_API_KEY;
-  if (!key) return { statusCode: 500, headers, body: JSON.stringify({ error: 'WAVESPEED_API_KEY not set' }) };
-
-  let prompt, quality;
+  let prompt, model, duration;
   try {
     const body = JSON.parse(event.body);
-    prompt = body.prompt;
-    quality = body.quality || 'standard';
+    prompt   = body.prompt;
+    model    = body.model    || 'kling-3.0';
+    duration = body.duration || 5;
   } catch(e) {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid body' }) };
   }
   if (!prompt) return { statusCode: 400, headers, body: JSON.stringify({ error: 'prompt required' }) };
 
-  // Correct Wavespeed model IDs (use slashes: wan-2.1/t2v-...)
-  const MODEL_MAP = {
-    standard: 'wavespeed-ai/wan-2.1/t2v-720p',
-    pro:      'wavespeed-ai/wan-2.1/t2v-720p',
-    veo:      'wavespeed-ai/wan-2.1/t2v-720p'
-  };
-  const model = MODEL_MAP[quality] || MODEL_MAP.standard;
-  const submitUrl = `https://api.wavespeed.ai/api/v3/${model}`;
+  // ── Model routing ─────────────────────────────────────────────────────────
+  // Kling 3.0  → Wavespeed  (5s or 10s)
+  // Veo 3.1    → Wavespeed  (5s or 8s)
+  // Wan 2.7    → Wavespeed  (5s or 10s)
+  // Seedance Turbo → Wavespeed (5s only)
 
-  let requestId;
-  try {
-    const submitRes = await fetch(submitUrl, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        prompt,
-        duration: 5,
+  const WAVESPEED_KEY = process.env.WAVESPEED_API_KEY;
+
+  const MODEL_CONFIG = {
+    'kling-3.0': {
+      key: WAVESPEED_KEY,
+      endpoint: 'https://api.wavespeed.ai/api/v3/wavespeed-ai/kling-v1-6/t2v',
+      allowedDurations: [5, 10],
+      buildBody: (p, d) => ({
+        prompt: p,
+        duration: d,
+        aspect_ratio: '16:9',
+        mode: 'std',
+        cfg_scale: 0.5
+      })
+    },
+    'veo-3.1': {
+      key: WAVESPEED_KEY,
+      endpoint: 'https://api.wavespeed.ai/api/v3/wavespeed-ai/veo3',
+      allowedDurations: [5, 8],
+      buildBody: (p, d) => ({
+        prompt: p,
+        duration: d,
+        aspect_ratio: '16:9',
+        generate_audio: false
+      })
+    },
+    'wan-2.7': {
+      key: WAVESPEED_KEY,
+      endpoint: 'https://api.wavespeed.ai/api/v3/wavespeed-ai/wan-2.1/t2v-720p',
+      allowedDurations: [5, 10],
+      buildBody: (p, d) => ({
+        prompt: p,
+        duration: d,
         size: '1280*720',
         num_inference_steps: 30,
         guidance_scale: 5,
@@ -44,15 +64,46 @@ exports.handler = async (event) => {
         seed: -1,
         enable_safety_checker: false
       })
+    },
+    'seedance-turbo': {
+      key: WAVESPEED_KEY,
+      endpoint: 'https://api.wavespeed.ai/api/v3/wavespeed-ai/seedance-1-0-lite-t2v-480p',
+      allowedDurations: [5],
+      buildBody: (p, d) => ({
+        prompt: p,
+        duration: 5,
+        size: '854*480',
+        seed: -1
+      })
+    }
+  };
+
+  const cfg = MODEL_CONFIG[model];
+  if (!cfg) return { statusCode: 400, headers, body: JSON.stringify({ error: 'Unknown model: ' + model }) };
+  if (!cfg.key) return { statusCode: 500, headers, body: JSON.stringify({ error: 'API key not configured for model: ' + model }) };
+
+  // Clamp duration to what the model supports
+  const safeDuration = cfg.allowedDurations.includes(Number(duration))
+    ? Number(duration)
+    : cfg.allowedDurations[0];
+
+  let requestId;
+  try {
+    const submitRes = await fetch(cfg.endpoint, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${cfg.key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(cfg.buildBody(prompt, safeDuration))
     });
     const submitData = await submitRes.json();
-    console.log('Wavespeed submit response:', JSON.stringify(submitData));
-    requestId = (submitData.data && submitData.data.id) || submitData.id || (submitData.data && submitData.data.task_id) || submitData.task_id;
-    if (!requestId) return { statusCode: 500, headers, body: JSON.stringify({ error: 'No requestId from Wavespeed', detail: submitData }) };
+    console.log('gen-clip submit:', model, JSON.stringify(submitData).slice(0, 300));
+    requestId = (submitData.data && submitData.data.id)
+      || submitData.id
+      || (submitData.data && submitData.data.task_id)
+      || submitData.task_id;
+    if (!requestId) return { statusCode: 500, headers, body: JSON.stringify({ error: 'No requestId from API', detail: submitData }) };
   } catch(e) {
-    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Wavespeed submit failed: ' + e.message }) };
+    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Submit failed: ' + e.message }) };
   }
 
-  // Return requestId immediately -- client polls /gen-clip-status?id=...
-  return { statusCode: 202, headers, body: JSON.stringify({ requestId, status: 'processing' }) };
+  return { statusCode: 202, headers, body: JSON.stringify({ requestId, model, duration: safeDuration, status: 'processing' }) };
 };
