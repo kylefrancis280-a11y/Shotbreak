@@ -704,7 +704,7 @@ async function updateTopbar() {
   if (tbClips) tbClips.textContent = totalClips;
   if (tbScenes) tbScenes.textContent = (SCENES && SCENES.length) || 0;
 }
-async function reparseScript() {
+async async function reparseScript() {
   var btn   = document.getElementById('reparse-btn');
   var pctEl = document.getElementById('reparse-pct');
   var ta    = document.getElementById('story-script');
@@ -1196,36 +1196,39 @@ async function runAllAgentsOnShot(k, sec) {
   var agents = AGENTS[sec] || [];
   if (!agents.length) { toast('No agents for this section'); return; }
 
-  // Lock button
   var card = document.getElementById('card-' + k);
-  var btn = card ? card.querySelector('button[onclick*="runAllAgentsOnShot"]') : null;
+  var btn  = card ? card.querySelector('button[onclick*="runAllAgentsOnShot"]') : null;
   if (btn) { btn.disabled = true; btn.textContent = 'Running...'; }
 
-  // Show inline progress bar
   var rpDiv  = document.getElementById('rp-' + k);
   var rpText = document.getElementById('rp-text-' + k);
   var rpFill = document.getElementById('rp-fill-' + k);
-  if (rpDiv)  { rpDiv.classList.add('show'); }
-  if (rpFill) { rpFill.style.width = '0%'; }
+  if (rpDiv)  rpDiv.style.display = 'block';
+  if (rpFill) rpFill.style.width  = '0%';
+
+  window._runAllSuppressPanel = true;
 
   var errors = 0;
   for (var i = 0; i < agents.length; i++) {
     var agentName = agents[i];
-    if (rpText) rpText.textContent = 'Agent ' + (i+1) + '/' + agents.length + ': ' + agentName + '...';
-    if (rpFill) rpFill.style.width = Math.round(((i) / agents.length) * 100) + '%';
-    try {
-      await runSingleAgent(agentName, sec);
-    } catch(e) {
-      errors++;
-    }
-    if (rpFill) rpFill.style.width = Math.round(((i+1) / agents.length) * 100) + '%';
+    if (rpText) rpText.textContent = 'Agent ' + (i + 1) + '/' + agents.length + ': ' + agentName + '...';
+    if (rpFill) rpFill.style.width = Math.round((i / agents.length) * 100) + '%';
+    try { await runSingleAgent(agentName, sec); }
+    catch(e) { errors++; }
+    if (rpFill) rpFill.style.width = Math.round(((i + 1) / agents.length) * 100) + '%';
   }
 
-  // Done
-  if (rpText) rpText.textContent = errors ? (errors + ' agent(s) failed') : 'All ' + agents.length + ' agents done — review upgrades above';
-  if (rpFill) rpFill.style.width = '100%';
+  window._runAllSuppressPanel = false;
+
+  if (rpText) rpText.textContent = errors
+    ? (errors + ' agent(s) failed — see panel')
+    : 'All ' + agents.length + ' agents done — review upgrades →';
   if (btn) { btn.disabled = false; btn.innerHTML = '&#9654;&#9654; Run all agents on this shot'; }
-  toast(errors ? (errors + ' agent(s) failed — check upgrade panel') : 'All agents complete — review upgrades in panel');
+
+  showAllPendingUpgrades();
+  toast(errors
+    ? (errors + ' agent(s) failed')
+    : 'All agents complete — ' + Object.values(pendingUpgrades).filter(function(u){ return !u.resolved; }).length + ' upgrades ready');
 }
 
 function setShotDur(k) {
@@ -1307,7 +1310,55 @@ async function runSingleAgent(name, sec) {
   }
 }
 
+function showAllPendingUpgrades() {
+  var upgrades = Object.values(pendingUpgrades).filter(function(u){ return !u.resolved; });
+  var panel = document.getElementById('upgrade-panel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'upgrade-panel';
+    panel.style.cssText = 'position:fixed;top:0;right:0;width:420px;height:100vh;background:#0d0d0d;border-left:1px solid #2a2a2a;z-index:1000;overflow-y:auto;display:flex;flex-direction:column;';
+    document.body.appendChild(panel);
+  }
+  panel.style.display = 'flex';
+
+  if (!upgrades.length) {
+    panel.innerHTML = '<div style="padding:20px;"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;"><div style="font-size:13px;font-weight:600;color:#e0e0e0;">Agent Upgrades</div><button onclick="closeUpgradePanel()" style="background:none;border:none;color:#888;font-size:18px;cursor:pointer;">×</button></div><div style="color:#555;font-size:12px;">No pending upgrades.</div></div>';
+    return;
+  }
+
+  var h = '<div style="padding:16px 20px;border-bottom:1px solid #1e1e1e;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:#0d0d0d;z-index:1;">'
+    + '<div><div style="font-size:12px;font-weight:700;color:#e0e0e0;">Agent Upgrades</div>'
+    + '<div style="font-size:10px;color:#555;margin-top:2px;">' + upgrades.length + ' pending upgrade' + (upgrades.length !== 1 ? 's' : '') + '</div></div>'
+    + '<div style="display:flex;gap:8px;align-items:center;">'
+    + '<button onclick="applyAllUpgrades(null)" style="background:#14532d;border:1px solid #166534;border-radius:4px;color:#4ade80;font-size:10px;padding:5px 10px;cursor:pointer;">&#10003; Apply All</button>'
+    + '<button onclick="declineAllUpgrades(null)" style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:4px;color:#888;font-size:10px;padding:5px 10px;cursor:pointer;">&#10005; Decline All</button>'
+    + '<button onclick="closeUpgradePanel()" style="background:none;border:none;color:#888;font-size:18px;cursor:pointer;line-height:1;">×</button>'
+    + '</div></div>'
+    + '<div style="padding:12px 16px;display:flex;flex-direction:column;gap:10px;">';
+
+  upgrades.forEach(function(u) {
+    h += '<div id="upg-card-' + u.id + '" style="background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:12px;">'
+      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">'
+        + '<div style="font-size:10px;color:#facc15;font-weight:600;">Shot ' + u.shotId + '</div>'
+        + '<div style="font-size:9px;color:#555;background:#1a1a1a;border-radius:3px;padding:2px 6px;">' + u.field + '</div>'
+      + '</div>'
+      + '<div style="font-size:9px;color:#888;margin-bottom:4px;">' + u.agentName + '</div>'
+      + (u.current ? '<div style="font-size:10px;color:#555;margin-bottom:4px;line-height:1.4;"><span style="color:#444;">Before:</span> ' + escHtml(u.current) + '</div>' : '')
+      + '<div style="font-size:11px;color:#e0e0e0;margin-bottom:6px;line-height:1.5;background:#0a1a0a;border-left:2px solid #4ade80;padding:6px 8px;border-radius:0 4px 4px 0;">' + escHtml(u.proposed) + '</div>'
+      + '<div style="font-size:10px;color:#666;margin-bottom:10px;line-height:1.4;font-style:italic;">' + escHtml(u.reason) + '</div>'
+      + '<div style="display:flex;gap:8px;">'
+        + '<button onclick="applyUpgrade(\\''+ u.id +'\\')" style="flex:1;background:#14532d;border:1px solid #166534;border-radius:4px;color:#4ade80;font-size:11px;padding:6px 0;cursor:pointer;">&#10003; Apply</button>'
+        + '<button onclick="declineUpgrade(\\''+ u.id +'\\')" style="flex:1;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:4px;color:#888;font-size:11px;padding:6px 0;cursor:pointer;">&#10005; Decline</button>'
+      + '</div>'
+    + '</div>';
+  });
+
+  h += '</div>';
+  panel.innerHTML = h;
+}
+
 function showUpgradesForAgent(agentName) {
+  if (window._runAllSuppressPanel) return;
   var upgrades = Object.values(pendingUpgrades).filter(function(u){ return u.agentName===agentName && !u.resolved; });
   var panel = document.getElementById('upgrade-panel');
   if (!panel) {
@@ -1394,19 +1445,24 @@ function declineUpgrade(uid) {
 function applyAllUpgrades(agentName) {
   Object.keys(pendingUpgrades).forEach(function(uid) {
     var u = pendingUpgrades[uid];
-    if (u.agentName===agentName && !u.resolved) applyUpgrade(uid);
+    if ((agentName === null || u.agentName === agentName) && !u.resolved) applyUpgrade(uid);
   });
-  setTimeout(function(){ showUpgradesForAgent(agentName); }, 500);
+  setTimeout(function(){
+    if (agentName === null) showAllPendingUpgrades();
+    else showUpgradesForAgent(agentName);
+  }, 500);
 }
 
 function declineAllUpgrades(agentName) {
   Object.keys(pendingUpgrades).forEach(function(uid) {
     var u = pendingUpgrades[uid];
-    if (u.agentName===agentName && !u.resolved) declineUpgrade(uid);
+    if ((agentName === null || u.agentName === agentName) && !u.resolved) declineUpgrade(uid);
   });
-  setTimeout(function(){ showUpgradesForAgent(agentName); }, 400);
+  setTimeout(function(){
+    if (agentName === null) showAllPendingUpgrades();
+    else showUpgradesForAgent(agentName);
+  }, 500);
 }
-
 function closeUpgradePanel() {
   var panel = document.getElementById('upgrade-panel');
   if (panel) panel.style.display = 'none';
