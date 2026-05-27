@@ -252,9 +252,10 @@ var scriptText=""; // persisted to Firebase
 var _parsing=false;var _suppressRender=false; // true while reparseScript fetch is in flight -- blocks syncUI re-render
 var _agentsRunning=false; // true while runAllAgents / runSingleAgent is in flight -- blocks Firebase listener overwrites
 var SCENES=[]; // populated from Firebase or Grok parse
+function fbArr(v){if(!v)return [];if(Array.isArray(v))return v;return Object.keys(v).sort(function(a,b){return Number(a)-Number(b);}).map(function(k){return v[k];});}
 var CHARACTER_BIBLE={}; // keyed by char name uppercase, auto-filled from Grok
 var COVF=[["shotType","Shot Type"],["angle","Angle"],["lens","Lens"],["timeOfDay","Time of Day"],["style","Style"],["temperature","Temperature"],["filmGrain","Film Grain"],["season","Season"],["contrast","Contrast"],["depthOfField","Depth of Field"],["cameraMove","Camera Move"],["distortion","Distortion"],["exposure","Exposure"],["colourTheme","Colour Theme"],["cinematics","Cinematics"]];
-var ST={shots:{},videos:[]},curSec="story",libF="all",selAgent={},secQ={},crewA=[];
+var ST={shots:{},videos:[]},curSec=(function(){try{return localStorage.getItem("sb_cursec_"+PID)||"story";}catch(e){return "story";}}()),libF="all",selAgent={},secQ={},crewA=[];
 function key(id){return id.replace(".","_");}
 function bootErr(msg){var e=document.getElementById("boot-err"),t=document.getElementById("boot-text");if(t)t.style.display="none";if(e){e.style.display="block";e.textContent=msg;}}
 function hideBoot(){var b=document.getElementById("boot");if(b)b.style.display="none";}
@@ -287,7 +288,7 @@ async function init(){
     }catch(fe){console.warn("scriptText load:",fe.message);}
     try{
       var snapScenes=await db.ref("projects/"+PID+"/scenes").once("value");
-      var sd=snapScenes.val();if(sd&&Array.isArray(sd)&&sd.length){SCENES=sd;var _chars=new Set();sd.forEach(function(sc){(sc.characters||[]).forEach(function(c){_chars.add(c);});});window._charCount=_chars.size;buildCharacterBible(sd);
+      var sd=fbArr(snapScenes.val());if(sd&&sd.length){SCENES=sd;var _chars=new Set();sd.forEach(function(sc){(sc.characters||[]).forEach(function(c){_chars.add(c);});});window._charCount=_chars.size;buildCharacterBible(sd);
       updateTopbar();}
     }catch(fe){console.warn("scenes load:",fe.message);}
     try{
@@ -306,8 +307,8 @@ async function init(){
         syncUI("scriptText");
       });
       db.ref("projects/"+PID+"/scenes").on("value",function(snap){
-        var d=snap.val();
-        if(d&&Array.isArray(d)&&d.length&&!_parsing&&!_agentsRunning){
+        var d=fbArr(snap.val());
+        if(d&&d.length&&!_parsing&&!_agentsRunning){
           SCENES=d;
           var _chars=new Set();
           d.forEach(function(sc){(sc.characters||[]).forEach(function(c){_chars.add(c);});});
@@ -381,6 +382,7 @@ function syncUI(source){
 function initShots(){if(!db)return;var s={};SCENES.forEach(function(sc){sc.clips.forEach(function(c){s[key(c)]={sceneId:sc.id,clipId:c,locked:false,minimized:false,currentPrompt:"",committedPrompt:"",bg:"",fields:{},log:[],videos:[],quality:"kling-3.0"};});});db.ref("projects/"+PID+"/shots").set(s);}
 function showSec(sec){
   curSec=sec;
+  try{localStorage.setItem("sb_cursec_"+PID,sec);}catch(e){}
   document.querySelectorAll(".sb-step").forEach(function(el){
     el.classList.remove("active");
     if(el.id.replace("nav-","")===sec)el.classList.add("active");
@@ -1098,7 +1100,7 @@ function renderAgentProgress() {
     "Research Specialist","World Builder","Continuity Supervisor","Emotional Truth Guardian"
   ];
   grid.innerHTML = agents.map(function(name) {
-    var s = STORY_AGENT_STATE[name] || {pct:0, status:'idle'};
+    var s = agentState[name] || {pct:0, status:'idle'};
     var pct = s.pct || 0;
     var isActive = s.status === 'active';
     var isDone   = s.status === 'done';
