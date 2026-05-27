@@ -22,7 +22,7 @@ exports.handler = async (event) => {
     } finally { clearTimeout(tmo); }
 
     const rawText = await pollRes.text();
-    console.log('gen-clip-status raw response:', pollRes.status, rawText.slice(0, 400));
+    console.log('gen-clip-status raw:', pollRes.status, rawText.slice(0, 400));
 
     let pollData;
     try { pollData = JSON.parse(rawText); }
@@ -38,7 +38,7 @@ exports.handler = async (event) => {
     const firstOutput = outputs[0];
     const videoUrl = (firstOutput && typeof firstOutput === 'object' ? firstOutput.url : firstOutput) || null;
     const error = data.error || pollData.error || null;
-    console.log('gen-clip-status normalized:', { rawStatus, status, videoUrl, outputs: JSON.stringify(outputs).slice(0,200) });
+    console.log('gen-clip-status normalized:', { rawStatus, status, videoUrl });
     return { statusCode: 200, headers, body: JSON.stringify({ status, videoUrl, error }) };
   } catch(e) {
     return { statusCode: 500, headers, body: JSON.stringify({ error: e.message }) };
