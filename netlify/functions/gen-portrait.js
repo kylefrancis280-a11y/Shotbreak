@@ -24,8 +24,11 @@ exports.handler = async (event) => {
   // wan    → wan-2.2 realism (best for cinematic portraits)
   // wan21  → wan-2.1 t2i (faster, slightly lower quality)
   const MODELS = {
-    wan:   'wavespeed-ai/wan-2.2/text-to-image-realism',
-    wan21: 'wavespeed-ai/wan-2.1/text-to-image'
+    wan:    'wavespeed-ai/wan-2.2/text-to-image-realism',
+    wan21:  'wavespeed-ai/wan-2.1/text-to-image',
+    banana: 'wavespeed-ai/wan-2.2/text-to-image-realism',  // alias → wan realism
+    realism:'wavespeed-ai/wan-2.2/text-to-image-realism',
+    fast:   'wavespeed-ai/wan-2.1/text-to-image'
   };
   const MODEL     = MODELS[modelKey] || MODELS.wan;
   const submitUrl = `https://api.wavespeed.ai/api/v3/${MODEL}`;
@@ -51,10 +54,11 @@ exports.handler = async (event) => {
     return { statusCode: 500, headers, body: JSON.stringify({ error: 'Wavespeed submit failed: ' + e.message }) };
   }
 
-  // Poll max 24s (8 x 3s) — stays under Netlify 26s function limit
+  // Poll up to 25s — first check at 2s (fast gens), then every 3s
+  // Netlify timeout set to 26s in netlify.toml
   const resultUrl = `https://api.wavespeed.ai/api/v3/predictions/${requestId}/result`;
   for (let i = 0; i < 8; i++) {
-    await new Promise(r => setTimeout(r, 3000));
+    await new Promise(r => setTimeout(r, i === 0 ? 2000 : 3000));
     try {
       const pollRes  = await fetch(resultUrl, { headers: { 'Authorization': `Bearer ${key}` } });
       const pollData = await pollRes.json();
