@@ -1389,7 +1389,17 @@ async function runSingleAgent(name, sec) {
 }
 
 function showAllPendingUpgrades() {
-  var upgrades = Object.values(pendingUpgrades).filter(function(u){ return !u.resolved; });
+  // Aggregate pending changes from per-shot changesLog (the live system)
+  var upgrades = [];
+  Object.entries(ST.shots || {}).forEach(function(entry) {
+    var k = entry[0], s = entry[1];
+    (s.changesLog || []).forEach(function(c) {
+      if (c.status === 'pending') {
+        upgrades.push(Object.assign({}, c, { shotKey: k, shotId: k }));
+      }
+    });
+  });
+  upgrades.sort(function(a,b){ return (b.ts||0)-(a.ts||0); });
   var panel = document.getElementById('upgrade-panel');
   if (!panel) {
     panel = document.createElement('div');
