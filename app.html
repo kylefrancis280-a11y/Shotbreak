@@ -1957,16 +1957,33 @@ async function genBibleImage(bkey) {
 
   var portraitModel = (document.getElementById('portrait-model-sel') && document.getElementById('portrait-model-sel').value) || 'wan';
   try {
-    var _portraitCtrl = new AbortController();
-    var _portraitTimeout = setTimeout(function(){ _portraitCtrl.abort(); }, 60000);
+    // Submit portrait (async -- returns requestId immediately)
+    var submitCtrl = new AbortController();
+    var submitTmo = setTimeout(function(){ submitCtrl.abort(); }, 20000);
     var resp = await fetch('/.netlify/functions/gen-portrait', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({prompt: prompt, model: portraitModel}),
-      signal: _portraitCtrl.signal
+      signal: submitCtrl.signal
     });
-    clearTimeout(_portraitTimeout);
-    var data = await resp.json();
+    clearTimeout(submitTmo);
+    var submitData = await resp.json();
+    if (!resp.ok || !submitData.requestId) {
+      toast('Portrait failed: ' + (submitData.error || 'unknown'));
+      if (btn) { btn.disabled = false; btn.textContent = '\u26a1 Generate Portrait'; }
+      return;
+    }
+    // Poll gen-portrait-status until completed or failed (up to ~80s)
+    var data = {};
+    for (var _pi = 0; _pi < 20; _pi++) {
+      await new Promise(function(r){ setTimeout(r, _pi === 0 ? 3000 : 4000); });
+      try {
+        var _pr = await fetch('/.netlify/functions/gen-portrait-status?id=' + submitData.requestId);
+        var _pd = await _pr.json();
+        if (_pd.status === 'completed' && _pd.imageUrl) { data = { imageUrl: _pd.imageUrl }; break; }
+        if (_pd.status === 'failed') { data = { error: _pd.error || 'generation failed' }; break; }
+      } catch(e) { /* keep polling */ }
+    }
     if (data.imageUrl) {
       CHARACTER_BIBLE[bkey].imageUrl = data.imageUrl;
       var el = document.getElementById('character-bible-section');
