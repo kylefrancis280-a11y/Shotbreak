@@ -3,6 +3,18 @@
   command = ""
   functions = "netlify/functions"
 
+[functions]
+  # Default timeout for all functions
+  node_bundler = "esbuild"
+
+[functions."gen-portrait"]
+  # Wavespeed image gen can take 20-25s — bump to Netlify's 26s hard cap
+  timeout = 26
+
+[functions."run-agent"]
+  # Grok calls can be slow on large scripts — give it room
+  timeout = 26
+
 # Everything else (JS, CSS, images): cache for 1 year (content-hashed filenames)
 [[headers]]
   for = "/*"
