@@ -41,11 +41,17 @@ exports.handler = async (event) => {
 
   let requestId;
   try {
-    const submitRes = await fetch(submitUrl, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(reqBody)
-    });
+    const submitCtrl = new AbortController();
+    const submitTmo  = setTimeout(() => submitCtrl.abort(), 25000);
+    let submitRes;
+    try {
+      submitRes = await fetch(submitUrl, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(reqBody),
+        signal: submitCtrl.signal
+      });
+    } finally { clearTimeout(submitTmo); }
     const submitData = await submitRes.json();
     console.log('gen-portrait submit:', MODEL, JSON.stringify(submitData).slice(0, 300));
     requestId = (submitData.data && submitData.data.id) || submitData.id;
