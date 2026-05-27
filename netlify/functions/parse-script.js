@@ -25,6 +25,8 @@ Rules:
 - For each scene, extract ALL production details: characters present, their wardrobe, location details, props, atmosphere.
 - For each character in a scene, provide their name, role/function in the scene, physical description, and wardrobe.
 - For each shot, include a "characters" array listing ONLY the character names that actually appear in that specific shot. Leave it empty [] for establishing shots, cutaways, or shots with no named characters.
+- CRITICAL — shot descriptions: Each shot "description" must describe ONLY what the camera sees in THAT single shot. Do NOT combine multiple shots into one description. One shot = one discrete camera setup = one description. Example: S1.1 "Wide shot of jet touching down on runway" and S1.2 "Street level view of two buses waiting at terminal" are SEPARATE shots with SEPARATE descriptions. Never write "Jet landing then camera lowers to show buses" — that is two shots, not one.
+- Keep each shot description under 15 words. Be specific and visual. No narrative transitions between shots.
 
 Return ONLY valid JSON in this exact format, no markdown, no explanation:
 {
