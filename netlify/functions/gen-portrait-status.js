@@ -13,7 +13,7 @@ exports.handler = async (event) => {
   if (!requestId) return { statusCode: 400, headers, body: JSON.stringify({ error: 'id required' }) };
 
   try {
-    const resultUrl = `https://api.wavespeed.ai/api/v3/predictions/${requestId}`;
+    const resultUrl = `https://api.wavespeed.ai/api/v3/predictions/${requestId}/result`;
     const ctrl = new AbortController();
     const tmo  = setTimeout(() => ctrl.abort(), 20000);
     let pollRes;
@@ -21,26 +21,24 @@ exports.handler = async (event) => {
       pollRes = await fetch(resultUrl, { headers: { 'Authorization': `Bearer ${key}` }, signal: ctrl.signal });
     } finally { clearTimeout(tmo); }
 
-    // Read as text first to avoid JSON parse crash on unexpected responses
     const rawText = await pollRes.text();
-    console.log('gen-portrait-status raw response (first 500):', rawText.slice(0, 500));
+    console.log('gen-portrait-status raw:', pollRes.status, rawText.slice(0, 400));
 
     let pollData;
-    try {
-      pollData = JSON.parse(rawText);
-    } catch(e) {
-      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Wavespeed non-JSON response', raw: rawText.slice(0, 300) }) };
+    try { pollData = JSON.parse(rawText); }
+    catch(e) {
+      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Non-JSON response', raw: rawText.slice(0, 200) }) };
     }
 
     const data = pollData.data || {};
     const rawStatus = data.status || pollData.status || 'processing';
     const STATUS_MAP = { succeed: 'completed', succeeded: 'completed', complete: 'completed', fail: 'failed', failure: 'failed' };
     const status = STATUS_MAP[rawStatus] || rawStatus;
-    const outputs = data.outputs || pollData.outputs || [];
+    const outputs = data.outputs || [];
     const firstOutput = outputs[0];
     const imageUrl = (firstOutput && typeof firstOutput === 'object' ? firstOutput.url : firstOutput) || null;
-    const error = data.error || pollData.error || null;
-    console.log('gen-portrait-status normalized:', { rawStatus, status, imageUrl, outputs: JSON.stringify(outputs).slice(0,200) });
+    const error = data.error || null;
+    console.log('gen-portrait-status:', { rawStatus, status, imageUrl });
     return { statusCode: 200, headers, body: JSON.stringify({ status, imageUrl, error }) };
   } catch(e) {
     return { statusCode: 500, headers, body: JSON.stringify({ error: e.message }) };
