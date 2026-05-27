@@ -250,6 +250,7 @@ var WSK="",db=null,PID="project-001";var WSE={standard:"https://api.wavespeed.ai
 var AGENTS={story:["Beat Sheet Architect","Logline Refiner","Tone Guardian","Genre Interpreter","Premise Expander","Creative Prompt Writer","Research Specialist","World Builder","Continuity Supervisor","Emotional Truth Guardian","Scene Architect","Narrative Flow Guardian"],generate:["Vision Director","Scene Architect","Cinematographer","Lighting Designer","Movement Choreographer","Director of Photography Assistant","Gaffer","Key Grip","Stunt Coordinator","Stunt Performer Coordinator","Practical Effects Supervisor","Visual Consistency Guardian","Performance Consistency Checker","Timeline Consistency Checker","Creative Prompt Writer"],edit:["Head Editor","Cut Specialist","Montage Specialist","Color Grading Agent","Music Sync Specialist","Cross-Fade and Transition Artist","Tempo and Pacing Analyst","Dialogue Editor","Sound Editor","Final Cut Approver","Dramatic Logic Guardian","Final Review Orchestrator","Post-Production Supervisor"]};
 var scriptText=""; // persisted to Firebase
 var _parsing=false;var _suppressRender=false; // true while reparseScript fetch is in flight -- blocks syncUI re-render
+var _agentsRunning=false; // true while runAllAgents / runSingleAgent is in flight -- blocks Firebase listener overwrites
 var SCENES=[]; // populated from Firebase or Grok parse
 var CHARACTER_BIBLE={}; // keyed by char name uppercase, auto-filled from Grok
 var COVF=[["shotType","Shot Type"],["angle","Angle"],["lens","Lens"],["timeOfDay","Time of Day"],["style","Style"],["temperature","Temperature"],["filmGrain","Film Grain"],["season","Season"],["contrast","Contrast"],["depthOfField","Depth of Field"],["cameraMove","Camera Move"],["distortion","Distortion"],["exposure","Exposure"],["colourTheme","Colour Theme"],["cinematics","Cinematics"]];
@@ -306,7 +307,7 @@ async function init(){
       });
       db.ref("projects/"+PID+"/scenes").on("value",function(snap){
         var d=snap.val();
-        if(d&&Array.isArray(d)&&d.length){
+        if(d&&Array.isArray(d)&&d.length&&!_parsing&&!_agentsRunning){
           SCENES=d;
           var _chars=new Set();
           d.forEach(function(sc){(sc.characters||[]).forEach(function(c){_chars.add(c);});});
@@ -318,7 +319,7 @@ async function init(){
       });
       db.ref("projects/"+PID+"/shots").on("value",function(s){
         var d=s.val();
-        if(d)ST.shots=d;
+        if(d&&!_parsing&&!_agentsRunning)ST.shots=d;
         syncUI("shots");
       });
       db.ref("projects/"+PID+"/videos").on("value",function(s){
@@ -1225,6 +1226,7 @@ async function runAllAgents(sec) {
   var btn = document.getElementById('run-all-btn-' + sec);
   if (btn) { btn.disabled = true; btn.textContent = 'Running...'; }
   window._runAllSuppressPanel = true;
+  _agentsRunning = true;
   var errors = 0;
   for (var i = 0; i < agents.length; i++) {
     var name = agents[i];
@@ -1233,6 +1235,7 @@ async function runAllAgents(sec) {
     catch(e) { errors++; }
   }
   window._runAllSuppressPanel = false;
+  _agentsRunning = false;
   if (btn) { btn.disabled = false; btn.textContent = errors ? ('Run All (' + errors + ' errors)') : '▶▶ Run All'; }
   var totalUpgrades = Object.values(pendingUpgrades).filter(function(u){ return !u.resolved; }).length;
   if (totalUpgrades > 0) {
@@ -1259,6 +1262,7 @@ async function runAllAgentsOnShot(k, sec) {
   if (rpFill) rpFill.style.width  = '0%';
 
   window._runAllSuppressPanel = true;
+  _agentsRunning = true;
 
   var errors = 0;
   for (var i = 0; i < agents.length; i++) {
@@ -1271,6 +1275,7 @@ async function runAllAgentsOnShot(k, sec) {
   }
 
   window._runAllSuppressPanel = false;
+  _agentsRunning = false;
 
   if (rpText) rpText.textContent = errors
     ? (errors + ' agent(s) failed — see panel')
