@@ -214,14 +214,19 @@ exports.handler = async (event) => {
   const role = AGENT_ROLES[agentName];
   if (!role) return { statusCode: 400, headers, body: JSON.stringify({ error: `Unknown agent: ${agentName}` }) };
 
-  const sceneArr = Array.isArray(scenes) ? scenes : Object.values(scenes);
-  const shotContext = sceneArr.slice(0, 12).map(sc => {
-    const scShots = Object.entries(shots)
-      .filter(([, s]) => s.sceneId === sc.id || s.sceneId === sc.sceneId)
-      .slice(0, 6)
-      .map(([id, s]) => ({
-        id,
-        desc: (s.description || s.shotDesc || '').slice(0, 120),
+  // ── Per-shot isolation: each shot gets its own Grok call ─────────────────
+  // shotId is the Firebase key injected by code -- LLM never guesses it.
+  const shotEntries = Object.entries(shots).slice(0, 30);
+  const BATCH = 5; // parallel calls per round, keeps total time under 26s
+  const allUpgrades = [];
+
+  for (let i = 0; i < shotEntries.length; i += BATCH) {
+    const batch = shotEntries.slice(i, i + BATCH);
+
+    const batchResults = await Promise.all(batch.map(async ([shotKey, s]) => {
+      const shotData = {
+        id: shotKey,
+        desc: (s.description || s.shotDesc || '').slice(0, 200),
         type: s.shotType || '', angle: s.angle || '', lens: s.lens || '',
         loc: s.locationDesc || '', atm: s.atmosphere || '',
         tod: s.timeOfDay || '', season: s.season || '',
@@ -230,54 +235,53 @@ exports.handler = async (event) => {
         grain: s.filmGrain || '', contrast: s.contrast || '',
         exp: s.exposure || '', dist: s.distortion || '',
         cin: s.cinematics || '', props: s.props || '',
-        prompt: role.WRITES_PROMPT ? (s.currentPrompt || '').slice(0, 80) : undefined
-      }));
-    return { sceneId: sc.id || sc.sceneId, name: sc.name || '', shots: scShots };
-  });
+        ...(role.WRITES_PROMPT ? { prompt: (s.currentPrompt || '').slice(0, 120) } : {})
+      };
 
-  const userPrompt = `${role.prompt}
+      const userPrompt = `${role.prompt}
 
-SCENE/SHOT DATA:
-${JSON.stringify(shotContext, null, 1)}
+SHOT DATA (single shot — analyse ONLY this shot):
+${JSON.stringify(shotData, null, 1)}
 
-TASK: Analyse the shots above. Propose 5-12 specific, high-value upgrades.
-${role.WRITES_PROMPT ? 'Only propose changes to the "currentPrompt" field. Write complete, vivid, filter-safe prompts.' : 'Do NOT change currentPrompt. Only propose changes to structured fields.'}
+TASK: Propose 1-3 specific, high-value upgrades for THIS shot only.
+${role.WRITES_PROMPT
+  ? 'Only propose changes to the "currentPrompt" field. Write a complete, vivid, filter-safe prompt.'
+  : 'Do NOT change currentPrompt. Only propose changes to structured fields (type, angle, lens, loc, atm, tod, season, move, dof, style, colour, grain, contrast, exp, dist, cin, props).'}
 
 Return ONLY a valid JSON array. No markdown, no explanation, no trailing text.
-Each item must have exactly these keys:
-{"shotId":"<exact shot id>","field":"<exact field name>","current":"<current value or empty>","proposed":"<your proposed value>","reason":"<one sentence why>"}`;
+Each item MUST use this exact shotId: "${shotKey}"
+Format: [{"shotId":"${shotKey}","field":"<field>","current":"<current or empty>","proposed":"<value>","reason":"<one sentence>"}]`;
 
-  try {
-    const data = await grokPost({
-      model: 'grok-3-mini',
-      messages: [{ role: 'user', content: userPrompt }],
-      temperature: 0.4,
-      max_tokens: 2000
-    });
+      try {
+        const data = await grokPost({
+          model: 'grok-3-mini',
+          messages: [{ role: 'user', content: userPrompt }],
+          temperature: 0.4,
+          max_tokens: 600
+        });
 
-    if (!data.choices || !data.choices[0]) throw new Error('No choices in Grok response');
+        if (!data.choices || !data.choices[0]) return [];
+        const raw = data.choices[0].message.content || '';
+        let parsed;
+        try { parsed = extractJSON(raw); } catch(_) { return []; }
+        if (!Array.isArray(parsed)) parsed = parsed.upgrades || parsed.changes || Object.values(parsed);
 
-    const raw = data.choices[0].message.content || '';
-    let upgrades;
-    try {
-      upgrades = extractJSON(raw);
-    } catch(parseErr) {
-      console.error('JSON parse failed:', parseErr.message, '\nRaw (first 500):', raw.slice(0, 500));
-      return {
-        statusCode: 200, headers,
-        body: JSON.stringify({ upgrades: [], activity: `${agentName} returned unparseable response — try re-running.`, parseError: parseErr.message })
-      };
-    }
+        // Always force shotId to the correct Firebase key -- never trust LLM
+        return (Array.isArray(parsed) ? parsed : [])
+          .filter(u => u && typeof u === 'object' && u.field && u.proposed)
+          .map(u => ({ ...u, shotId: shotKey }));
 
-    if (!Array.isArray(upgrades)) upgrades = upgrades.upgrades || upgrades.changes || Object.values(upgrades);
-    const valid = (Array.isArray(upgrades) ? upgrades : []).filter(u => u && typeof u === 'object' && u.shotId && u.field && u.proposed);
+      } catch(_) { return []; }
+    }));
 
-    return {
-      statusCode: 200, headers,
-      body: JSON.stringify({ upgrades: valid, activity: `${agentName} proposed ${valid.length} upgrade${valid.length !== 1 ? 's' : ''}.` })
-    };
-  } catch(err) {
-    console.error('run-agent error:', err);
-    return { statusCode: 500, headers, body: JSON.stringify({ error: err.message || 'Agent run failed' }) };
+    batchResults.forEach(r => allUpgrades.push(...r));
   }
+
+  return {
+    statusCode: 200, headers,
+    body: JSON.stringify({
+      upgrades: allUpgrades,
+      activity: `${agentName} proposed ${allUpgrades.length} upgrade${allUpgrades.length !== 1 ? 's' : ''}.`
+    })
+  };
 };
