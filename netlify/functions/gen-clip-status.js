@@ -15,7 +15,12 @@ exports.handler = async (event) => {
   try {
     // Correct endpoint: /api/v3/predictions/{task-id}  (no /result suffix)
     const resultUrl = `https://api.wavespeed.ai/api/v3/predictions/${requestId}`;
-    const pollRes = await fetch(resultUrl, { headers: { 'Authorization': `Bearer ${key}` } });
+    const pollCtrl = new AbortController();
+    const pollTmo  = setTimeout(() => pollCtrl.abort(), 20000);
+    let pollRes;
+    try {
+      pollRes = await fetch(resultUrl, { headers: { 'Authorization': `Bearer ${key}` }, signal: pollCtrl.signal });
+    } finally { clearTimeout(pollTmo); }
     const pollData = await pollRes.json();
     console.log('Wavespeed poll response:', JSON.stringify(pollData));
     const data = pollData.data || {};
