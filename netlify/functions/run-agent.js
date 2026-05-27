@@ -244,6 +244,10 @@ SHOT DATA (single shot — analyse ONLY this shot):
 ${JSON.stringify(shotData, null, 1)}
 
 TASK: Propose 1-3 specific, high-value upgrades for THIS shot only.
+STRICT RULES — you MUST follow these or your response will be rejected:
+1. Use ONLY the data provided in SHOT DATA above. Do NOT invent, assume, or hallucinate any detail not explicitly present.
+2. If the "desc" field is empty or vague, base your proposals ONLY on the other structured fields provided. Do NOT invent scene elements, characters, vehicles, props, or locations not in the data.
+3. For the Creative Prompt Writer: if "desc" is empty, write a minimal cinematic prompt based ONLY on the structured fields (type, angle, loc, atm, tod, style). Do NOT add buses, people, vehicles, or specific elements unless they appear in the shot data.
 ${role.WRITES_PROMPT
   ? 'Only propose changes to the "currentPrompt" field. Write a complete, vivid, filter-safe prompt.'
   : 'Do NOT change currentPrompt. Only propose changes to structured fields (type, angle, lens, loc, atm, tod, season, move, dof, style, colour, grain, contrast, exp, dist, cin, props).'}
