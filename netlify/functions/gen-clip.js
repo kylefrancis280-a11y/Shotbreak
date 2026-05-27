@@ -19,17 +19,18 @@ exports.handler = async (event) => {
   if (!prompt) return { statusCode: 400, headers, body: JSON.stringify({ error: 'prompt required' }) };
 
   // ── Model routing ─────────────────────────────────────────────────────────
-  // Kling 3.0  → Wavespeed  (5s or 10s)
-  // Veo 3.1    → Wavespeed  (5s or 8s)
-  // Wan 2.7    → Wavespeed  (5s or 10s)
-  // Seedance Turbo → Wavespeed (5s only)
+  // kling-3.0      → kwaivgi/kling-v2.1-t2v-master   (5s or 10s)
+  // kling-pro      → kwaivgi/kling-v2.6-pro-text-to-video (5s or 10s)
+  // veo-3.1        → google/veo3.1-fast/text-to-video  (5s or 8s)
+  // wan-2.7        → alibaba/wan-2.6-text-to-video     (5s or 10s)
+  // seedance-turbo → wavespeed-ai/seedance-1-0-lite-t2v-480p (5s only)
 
   const WAVESPEED_KEY = process.env.WAVESPEED_API_KEY;
 
   const MODEL_CONFIG = {
     'kling-3.0': {
       key: WAVESPEED_KEY,
-      endpoint: 'https://api.wavespeed.ai/api/v3/wavespeed-ai/kling-v1-6/t2v',
+      endpoint: 'https://api.wavespeed.ai/api/v3/kwaivgi/kling-v2.1-t2v-master',
       allowedDurations: [5, 10],
       buildBody: (p, d) => ({
         prompt: p,
@@ -39,9 +40,21 @@ exports.handler = async (event) => {
         cfg_scale: 0.5
       })
     },
+    'kling-pro': {
+      key: WAVESPEED_KEY,
+      endpoint: 'https://api.wavespeed.ai/api/v3/kwaivgi/kling-v2.6-pro-text-to-video',
+      allowedDurations: [5, 10],
+      buildBody: (p, d) => ({
+        prompt: p,
+        duration: d,
+        aspect_ratio: '16:9',
+        mode: 'pro',
+        cfg_scale: 0.5
+      })
+    },
     'veo-3.1': {
       key: WAVESPEED_KEY,
-      endpoint: 'https://api.wavespeed.ai/api/v3/wavespeed-ai/veo3',
+      endpoint: 'https://api.wavespeed.ai/api/v3/google/veo3.1-fast/text-to-video',
       allowedDurations: [5, 8],
       buildBody: (p, d) => ({
         prompt: p,
@@ -52,7 +65,7 @@ exports.handler = async (event) => {
     },
     'wan-2.7': {
       key: WAVESPEED_KEY,
-      endpoint: 'https://api.wavespeed.ai/api/v3/wavespeed-ai/wan-2.1/t2v-720p',
+      endpoint: 'https://api.wavespeed.ai/api/v3/alibaba/wan-2.6-text-to-video',
       allowedDurations: [5, 10],
       buildBody: (p, d) => ({
         prompt: p,
