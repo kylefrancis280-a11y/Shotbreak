@@ -31,7 +31,7 @@ exports.handler = async (event) => {
     'kling-3.0': {
       key: WAVESPEED_KEY,
       endpoint: 'https://api.wavespeed.ai/api/v3/kwaivgi/kling-v2.1-t2v-master',
-      allowedDurations: [5, 10],
+      allowedDurations: [4, 6, 8],
       buildBody: (p, d) => ({
         prompt: p,
         duration: d,
@@ -102,7 +102,11 @@ exports.handler = async (event) => {
 
   let requestId;
   try {
-    const submitRes = await fetch(cfg.endpoint, {
+    const submitCtrl = new AbortController();
+    const submitTmo  = setTimeout(() => submitCtrl.abort(), 25000);
+    let submitRes;
+    try {
+      submitRes = await fetch(cfg.endpoint, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${cfg.key}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(cfg.buildBody(prompt, safeDuration))
