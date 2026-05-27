@@ -1488,13 +1488,18 @@ function applyUpgrade(uid) {
   });
   if (shotKey) {
     if (!ST.shots[shotKey].fields) ST.shots[shotKey].fields = {};
+    // Build the surgical Firebase update patch -- only touch the one changed field.
+    // Using .update() instead of .set() prevents overwriting other approved fields
+    // that may have been written by earlier agents (set() does a full replace).
+    var fbPatch = {};
     if (u.field === 'currentPrompt') {
       ST.shots[shotKey].currentPrompt = u.proposed;
+      fbPatch['currentPrompt'] = u.proposed;
     } else {
       ST.shots[shotKey].fields[u.field] = u.proposed;
+      fbPatch['fields/' + u.field] = u.proposed;
     }
-    // Persist to Firebase
-    if (db) db.ref('projects/'+PID+'/shots/'+shotKey).set(ST.shots[shotKey]);
+    if (db) db.ref('projects/'+PID+'/shots/'+shotKey).update(fbPatch);
   }
   u.resolved = true;
   // Remove card from panel
