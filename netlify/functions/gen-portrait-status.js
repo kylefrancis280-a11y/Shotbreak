@@ -22,7 +22,7 @@ exports.handler = async (event) => {
     } finally { clearTimeout(tmo); }
 
     const rawText = await pollRes.text();
-    console.log('gen-portrait-status raw response:', pollRes.status, rawText.slice(0, 400));
+    console.log('gen-portrait-status raw:', pollRes.status, rawText.slice(0, 400));
 
     let pollData;
     try { pollData = JSON.parse(rawText); }
