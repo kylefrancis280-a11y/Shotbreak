@@ -20,8 +20,16 @@ exports.handler = async (event) => {
     try {
       pollRes = await fetch(resultUrl, { headers: { 'Authorization': `Bearer ${key}` }, signal: ctrl.signal });
     } finally { clearTimeout(tmo); }
-    const pollData = await pollRes.json();
-    console.log('gen-portrait-status poll:', JSON.stringify(pollData).slice(0, 300));
+
+    const rawText = await pollRes.text();
+    console.log('gen-portrait-status raw response:', pollRes.status, rawText.slice(0, 400));
+
+    let pollData;
+    try { pollData = JSON.parse(rawText); }
+    catch(e) {
+      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Wavespeed non-JSON response', raw: rawText.slice(0, 200) }) };
+    }
+
     const data = pollData.data || {};
     const rawStatus = data.status || pollData.status || 'processing';
     const STATUS_MAP = { succeed: 'completed', succeeded: 'completed', complete: 'completed', fail: 'failed', failure: 'failed' };
@@ -30,6 +38,7 @@ exports.handler = async (event) => {
     const firstOutput = outputs[0];
     const imageUrl = (firstOutput && typeof firstOutput === 'object' ? firstOutput.url : firstOutput) || null;
     const error = data.error || pollData.error || null;
+    console.log('gen-portrait-status normalized:', { rawStatus, status, imageUrl });
     return { statusCode: 200, headers, body: JSON.stringify({ status, imageUrl, error }) };
   } catch(e) {
     return { statusCode: 500, headers, body: JSON.stringify({ error: e.message }) };
