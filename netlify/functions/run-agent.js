@@ -115,30 +115,75 @@ function grokPost(payload) {
 
 function extractJSON(raw) {
   if (!raw) throw new Error('Empty response from Grok');
-  let s = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
+
+  // Strip markdown fences
+  let s = raw
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/```\s*$/i, '')
+    .trim();
+
+  // Fast path: already valid JSON
   try { return JSON.parse(s); } catch(_) {}
+
+  // Locate the outermost JSON structure
   const arrStart = s.indexOf('[');
   const objStart = s.indexOf('{');
   if (arrStart === -1 && objStart === -1) throw new Error('No JSON structure found');
-  let start = (arrStart === -1) ? objStart : (objStart === -1) ? arrStart : Math.min(arrStart, objStart);
-  const isArr = s[start] === '[';
+  let start = (arrStart === -1) ? objStart
+             : (objStart === -1) ? arrStart
+             : Math.min(arrStart, objStart);
+  const isArr    = s[start] === '[';
   const openChar = isArr ? '[' : '{';
   const closeChar = isArr ? ']' : '}';
+
+  // Walk the string tracking depth + string state
   let depth = 0, end = -1, inStr = false, escape = false;
   for (let i = start; i < s.length; i++) {
     const c = s[i];
-    if (escape) { escape = false; continue; }
-    if (c === '\\' && inStr) { escape = true; continue; }
-    if (c === '"') { inStr = !inStr; continue; }
-    if (inStr) continue;
-    if (c === openChar) depth++;
+    if (escape)          { escape = false; continue; }
+    if (c === '\\' && inStr) { escape = true;  continue; }
+    if (c === '"')       { inStr = !inStr; continue; }
+    if (inStr)           continue;
+    if (c === openChar)  depth++;
     else if (c === closeChar) { depth--; if (depth === 0) { end = i; break; } }
   }
+
+  // ── Attempt 1: clean slice ────────────────────────────────────────────────
   if (end !== -1) {
     const candidate = s.slice(start, end + 1);
     try { return JSON.parse(candidate); } catch(_) {}
+    // Remove trailing commas before ] or }
     try { return JSON.parse(candidate.replace(/,\s*([\]}])/g, '$1')); } catch(_) {}
   }
+
+  // ── Attempt 2: unterminated-string recovery ───────────────────────────────
+  // If inStr is still true the last string was never closed.
+  // Close it, close any open objects/arrays, then re-parse.
+  if (inStr || end === -1) {
+    let partial = s.slice(start);
+    // Close the open string
+    if (inStr) partial += '"';
+    // Close open objects/arrays by re-walking depth
+    let d2 = 0, inS2 = false, esc2 = false;
+    const stack = [];
+    for (let i = 0; i < partial.length; i++) {
+      const c = partial[i];
+      if (esc2)           { esc2 = false; continue; }
+      if (c === '\\' && inS2) { esc2 = true; continue; }
+      if (c === '"')      { inS2 = !inS2; continue; }
+      if (inS2)           continue;
+      if (c === '[' || c === '{') stack.push(c === '[' ? ']' : '}');
+      else if (c === ']' || c === '}') stack.pop();
+    }
+    // Append any unclosed brackets in reverse
+    partial += stack.reverse().join('');
+    // Strip trailing commas before closers
+    partial = partial.replace(/,\s*([\]}])/g, '$1');
+    try { return JSON.parse(partial); } catch(_) {}
+  }
+
+  // ── Attempt 3: array salvage — keep only complete objects ─────────────────
   if (isArr) {
     let salvage = s.slice(start);
     const lastComma = salvage.lastIndexOf('},');
@@ -147,6 +192,7 @@ function extractJSON(raw) {
     }
     try { return JSON.parse(salvage.replace(/,?\s*$/, '') + ']'); } catch(_) {}
   }
+
   throw new Error('Could not extract valid JSON from response');
 }
 
