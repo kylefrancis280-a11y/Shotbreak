@@ -247,7 +247,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',-apple-system,sa
 <script>
 // runAllAgents is defined below as a proper function
 var WSK="",db=null,PID="project-001";var WSE={standard:"https://api.wavespeed.ai/api/v3/kling-ai/kling-v3-5s",pro:"https://api.wavespeed.ai/api/v3/google/veo-3.1-generate-preview",wan:"https://api.wavespeed.ai/api/v3/wavespeed-ai/wan2.7-t2v-720p",turbo:"https://api.wavespeed.ai/api/v3/bytedance/seedance-v1-lite-t2v-turbo"};
-var AGENTS={story:["Beat Sheet Architect","Logline Refiner","Tone Guardian","Genre Interpreter","Premise Expander","Creative Prompt Writer","Research Specialist","World Builder","Continuity Supervisor","Emotional Truth Guardian","Scene Architect","Narrative Flow Guardian"],generate:["Vision Director","Scene Architect","Cinematographer","Lighting Designer","Movement Choreographer","Director of Photography Assistant","Gaffer","Key Grip","Stunt Coordinator","Stunt Performer Coordinator","Practical Effects Supervisor","Visual Consistency Guardian","Performance Consistency Checker","Timeline Consistency Checker","Creative Prompt Writer"],edit:["Head Editor","Cut Specialist","Montage Specialist","Color Grading Agent","Music Sync Specialist","Cross-Fade and Transition Artist","Tempo and Pacing Analyst","Dialogue Editor","Sound Editor","Final Cut Approver","Dramatic Logic Guardian","Final Review Orchestrator","Post-Production Supervisor"]};
+var AGENTS={story:["Beat Sheet Architect","Logline Refiner","Tone Guardian","Genre Interpreter","Premise Expander","Creative Prompt Writer","Research Specialist","World Builder","Continuity Supervisor","Emotional Truth Guardian","Scene Architect","Narrative Flow Guardian","Storyboard Artist","Character Designer","Vision Director","Dramatic Logic Guardian","Character Arc Guardian","Project Memory Keeper","Character Bible Maintainer","Feedback Integrator"],generate:["Vision Director","Scene Architect","Cinematographer","Lighting Designer","Movement Choreographer","Director of Photography Assistant","Gaffer","Key Grip","Stunt Coordinator","Stunt Performer Coordinator","Practical Effects Supervisor","Visual Consistency Guardian","Performance Consistency Checker","Timeline Consistency Checker","Creative Prompt Writer","Location Scout","Prop Master","Wardrobe Coordinator","Makeup & Hair Specialist","Crowd Coordinator","Sound Recordist","VFX Supervisor","VFX Compositor","Particle Specialist","Environment Artist","CGI Character Designer","Matte Painter","Motion Graphics Designer","Rotoscope Artist","Tracking & Matchmove Specialist","Lighting Integration Artist","Simulation Artist","Destruction Specialist","Weather Effects Artist","Wire Removal & Cleanup Artist","Final VFX Deliverer","Geography & Set Guardian","Wardrobe & Prop Auditor","Reference Image Curator"],edit:["Head Editor","Cut Specialist","Montage Specialist","Color Grading Agent","Music Sync Specialist","Cross-Fade and Transition Artist","Tempo and Pacing Analyst","Dialogue Editor","Sound Editor","Final Cut Approver","Dramatic Logic Guardian","Final Review Orchestrator","Post-Production Supervisor","Sound Design Lead","Foley Artist","Composer","Ambient Sound Designer","ADR Specialist","Mixer","Sound Effects Librarian","Emotional Audio Enhancer","Executive Producer","Showrunner","Line Producer","Creative Director","Production Manager","Version Control Agent","Export & Delivery Specialist"]};
 var scriptText=""; // persisted to Firebase
 var _parsing=false;var _suppressRender=false; // true while reparseScript fetch is in flight -- blocks syncUI re-render
 var _agentsRunning=false; // true while runAllAgents / runSingleAgent is in flight -- blocks Firebase listener overwrites
@@ -1089,15 +1089,17 @@ function renderBreakdown(){
   }).join('');
 }
 
-var STORY_AGENT_STATE = {};
+// agentState is the single source of truth — STORY_AGENT_STATE removed
 
 function renderAgentProgress() {
   var grid = document.getElementById('agent-progress-grid');
   if (!grid) return;
   var agents = (window.AGENTS && AGENTS.story) ? AGENTS.story : [
-    "Vision Director","Scene Architect","Beat Sheet Architect","Logline Refiner",
-    "Tone Guardian","Genre Interpreter","Premise Expander","Creative Prompt Writer",
-    "Research Specialist","World Builder","Continuity Supervisor","Emotional Truth Guardian"
+    "Beat Sheet Architect","Logline Refiner","Tone Guardian","Genre Interpreter",
+    "Premise Expander","Creative Prompt Writer","Research Specialist","World Builder",
+    "Continuity Supervisor","Emotional Truth Guardian","Scene Architect","Narrative Flow Guardian",
+    "Storyboard Artist","Character Designer","Vision Director","Dramatic Logic Guardian",
+    "Character Arc Guardian","Project Memory Keeper","Character Bible Maintainer","Feedback Integrator"
   ];
   grid.innerHTML = agents.map(function(name) {
     var s = agentState[name] || {pct:0, status:'idle'};
@@ -1694,7 +1696,11 @@ async function approveChange(k, cid, sec, btn) {
 
   // Refresh the changes box
   var box = document.getElementById('changes-box-'+k);
-  if (box) box.outerHTML = buildChangesBox(k, s);
+  if (box) {
+    var tmp = document.createElement('div');
+    tmp.innerHTML = buildChangesBox(k, s);
+    box.replaceWith(tmp.firstElementChild || tmp);
+  }
 
   toast('Applied: '+change.field+' on '+s.clipId);
 }
@@ -1707,7 +1713,11 @@ function declineChange(k, cid, btn) {
   change.status = 'declined';
   if (db) db.ref('projects/'+PID+'/shots/'+k+'/changesLog').set(s.changesLog);
   var box = document.getElementById('changes-box-'+k);
-  if (box) box.outerHTML = buildChangesBox(k, s);
+  if (box) {
+    var tmp = document.createElement('div');
+    tmp.innerHTML = buildChangesBox(k, s);
+    box.replaceWith(tmp.firstElementChild || tmp);
+  }
 }
 
 // Called by the agent system when it has upgrades for a specific shot
@@ -1721,7 +1731,11 @@ function queueShotChange(shotId, agentName, field, current, proposed, reason) {
   if (db) db.ref('projects/'+PID+'/shots/'+k+'/changesLog').set(s.changesLog);
   // Refresh changes box if visible
   var box = document.getElementById('changes-box-'+k);
-  if (box) box.outerHTML = buildChangesBox(k, s);
+  if (box) {
+    var tmp = document.createElement('div');
+    tmp.innerHTML = buildChangesBox(k, s);
+    box.replaceWith(tmp.firstElementChild || tmp);
+  }
   // Update badge on changes header
   var badge = document.querySelector('#changes-box-'+k+' span[style*="facc15"]');
 }
