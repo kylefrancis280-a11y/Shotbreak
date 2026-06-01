@@ -1,1 +1,1 @@
-// [Full content]
+[Full content of local agents/appliers.js]
