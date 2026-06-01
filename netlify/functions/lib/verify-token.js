@@ -52,15 +52,23 @@ async function getSystemToken() {
   );
   const d = await r.json();
   if (!r.ok || !d.idToken) {
-    const errMsg = (d && d.error && d.error.message) || '';
+    const errObj = d && d.error ? d.error : {};
+    const errMsg = errObj.message || '';
+    const status = r.status;
+
     if (errMsg.includes('admin-restricted') || errMsg.includes('ADMIN_ONLY_OPERATION')) {
       throw new Error(
-        'SYSTEM_AUTH_FAIL: Email/Password sign-in is DISABLED in Firebase Console. ' +
-        'Go to Authentication → Sign-in method → enable Email/Password. ' +
-        'Also confirm SYSTEM_EMAIL and SYSTEM_PASSWORD env vars in Netlify are correct and the user exists in Firebase Auth.'
+        `SYSTEM_AUTH_FAIL (status ${status}): The FIREBASE_API_KEY in Netlify env is likely restricted and does not allow Identity Toolkit calls (accounts:signInWithPassword).\n\n` +
+        `Most common fix:\n` +
+        `1. In Google Cloud Console for shotbreak-9f342 → APIs & Services → Credentials\n` +
+        `2. Find the key used in your Netlify FIREBASE_API_KEY var\n` +
+        `3. Edit it → API restrictions → make sure "Identity Toolkit API" is allowed (or set to "Don't restrict")\n` +
+        `4. Also check Application restrictions (it should allow the Netlify function IPs or be unrestricted for server use)\n\n` +
+        `Alternative (recommended for simplicity): Set FIREBASE_API_KEY in Netlify to the exact same public web key from js/config.js (AIzaSyA5-NRXzzkWuGafQ5-EukGF9WMnQ2txFFA). It already works for the browser.\n\n` +
+        `Full error: ${JSON.stringify(d)}`
       );
     }
-    throw new Error('SYSTEM_AUTH_FAIL: ' + JSON.stringify(d));
+    throw new Error(`SYSTEM_AUTH_FAIL (status ${status}): ` + JSON.stringify(d));
   }
 
   _systemTokenCache = {
