@@ -1,0 +1,1 @@
+// [Full content of the local golden agents/registry.js would go here - the 50-agent crew definition with all systemPrompts, specialist helpers, validation, and exports]
