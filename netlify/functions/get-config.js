@@ -1,17 +1,38 @@
-exports.handler = async () => {
-  const cfg = {
-    apiKey:            process.env.FIREBASE_API_KEY            || "AIzaSyA5-NRXzzkWuGafQ5-EukGF9WMnQ2txFFA",
-    authDomain:        process.env.FIREBASE_AUTH_DOMAIN        || "shotbreak-9f342.firebaseapp.com",
-    databaseURL:       process.env.FIREBASE_DATABASE_URL       || "https://shotbreak-9f342-default-rtdb.firebaseio.com",
-    projectId:         process.env.FIREBASE_PROJECT_ID         || "shotbreak-9f342",
-    storageBucket:     process.env.FIREBASE_STORAGE_BUCKET     || "shotbreak-9f342.firebasestorage.app",
-    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || "515766987392",
-    appId:             process.env.FIREBASE_APP_ID             || "1:515766987392:web:ac3644d952c69d11c7d465",
-    wavespeedApiKey:   process.env.WAVESPEED_API_KEY           || ""
+// netlify/functions/get-config.js
+// Public configuration endpoint (safe to expose to browser)
+// Returns only non-secret Firebase web config.
+
+'use strict';
+
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Content-Type': 'application/json',
+};
+
+exports.handler = async function (event) {
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 204, headers: CORS, body: '' };
+  }
+
+  // Only public Firebase web config
+  // (matches the values in js/config.js)
+  const publicConfig = {
+    firebase: {
+      apiKey: "AIzaSyA5-NRXzzkWuGafQ5-EukGF9WMnQ2txFFA",
+      authDomain: "shotbreak-9f342.firebaseapp.com",
+      projectId: "shotbreak-9f342",
+      storageBucket: "shotbreak-9f342.firebasestorage.app",
+      messagingSenderId: "515766987392",
+      appId: "1:515766987392:web:ac3644d952c69d11c7d465"
+    },
+    version: "v91-max-power"
   };
+
   return {
     statusCode: 200,
-    headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
-    body: JSON.stringify(cfg)
+    headers: CORS,
+    body: JSON.stringify(publicConfig)
   };
 };
