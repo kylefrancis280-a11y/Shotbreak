@@ -6,6 +6,7 @@
 <title>Shotbreak &mdash; Media Hub</title>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 :root{--bg:#0D0D0D;--card:#141414;--card2:#1A1A1A;--card3:#202020;--input:#181818;--border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.12);--gold:#D4A843;--gold-bg:rgba(212,168,67,0.12);--gold-border:rgba(212,168,67,0.5);--green:#3DD68C;--text:#F0F0F0;--text-dim:#888;--text-muted:#555;--text-label:#666;--red:#E05252;--sidebar-w:200px;--r:6px}
@@ -279,6 +280,8 @@ async function init(){
       appId:cfg.appId
     });
     db=firebase.database();
+    if(bt)bt.textContent="Authenticating...";
+    await firebase.auth().signInAnonymously();
     if(bt)bt.textContent="Loading project data...";
     // Load saved data -- wrapped in try/catch so permission errors don't block app load
     try{

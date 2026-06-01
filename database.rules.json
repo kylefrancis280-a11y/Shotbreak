@@ -3,7 +3,7 @@
     "projects": {
       "$projectId": {
         ".read": true,
-        ".write": false
+        ".write": "auth != null"
       }
     },
     "sessions": {
