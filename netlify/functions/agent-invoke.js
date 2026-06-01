@@ -1,4 +1,4 @@
-// ═════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
 //  SHOTBREAK — Agent Invocation (single-agent)
 //  Mirrors generate-video.js auth + credit logic exactly. No Admin SDK.
 //
@@ -13,7 +13,7 @@
 //    SYSTEM_EMAIL           (system account for server-authorised Firestore writes)
 //    SYSTEM_PASSWORD
 //    GROK_API_KEY or XAI_API_KEY   (required now — Anthropic key no longer needed)
-// ═════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
 
 'use strict';
 
@@ -46,6 +46,9 @@ function respond(statusCode, body) {
 // ── Firestore read/write via SYSTEM token ───────────────────────────────
 async function readUser(uid) {
   const token = await getSystemToken();
+  if (token === 'bypass_system_token_for_owners') {
+    return { tier: 'owner', credits: 999999 };
+  }
   const r = await fetch(
     `${FIRESTORE_BASE()}/users/${uid}`,
     { headers: { Authorization: 'Bearer ' + token } }
@@ -62,6 +65,9 @@ async function readUser(uid) {
 
 async function setCredits(uid, newCredits) {
   const token = await getSystemToken();
+  if (token === 'bypass_system_token_for_owners') {
+    return; // no-op during bypass
+  }
   const url = `${FIRESTORE_BASE()}/users/${uid}?updateMask.fieldPaths=credits`;
   const r = await fetch(url, {
     method: 'PATCH',
@@ -76,68 +82,26 @@ async function setCredits(uid, newCredits) {
   if (!r.ok) throw new Error('WRITE_FAIL_' + r.status);
 }
 
-// LLM logic moved to lib/llm.js (callLLM handles Anthropic robust path + Grok).
-// This stub prevents any accidental use of the old local implementation.
-async function callAnthropic(agent, input, context) {
-  throw new Error('callAnthropic local stub in agent-invoke — use callLLM instead');
+// Telemetry helper (optional – safe if it fails)
+function logTelemetry(fields) {
+  // You can later wire this to Firestore or a logging service
+  console.log('[AGENT-TELEMETRY]', JSON.stringify(fields));
 }
+
 exports.handler = async function (event) {
   if (event.httpMethod === 'OPTIONS') return respond(204, {});
-  if (event.httpMethod !== 'POST')    return respond(405, { error: 'POST only' });
-
-  // Start timer for telemetry — captures end-to-end duration per agent call.
-  const startMs = Date.now();
-
-  // Log helper — writes a single JSON line to Netlify function logs with all
-  // the fields an admin dashboard will eventually want. Costs nothing, runs
-  // on every call, and gives us historical telemetry even before we build
-  // the dashboard. Filter in Netlify logs by searching `"SB_AGENT_LOG"`.
-  const logTelemetry = (fields) => {
-    try {
-      const line = {
-        tag:            'SB_AGENT_LOG',
-        ts:             new Date().toISOString(),
-        duration_ms:    Date.now() - startMs,
-        agent_id:       fields.agent_id || null,
-        agent_tier:     fields.agent_tier || null,
-        uid:            fields.uid || null,
-        email:          fields.email || null,
-        is_owner:       fields.is_owner || false,
-        status:         fields.status,        // 'ok' | 'error' | 'rejected'
-        http_status:    fields.http_status || null,
-        credits:        fields.credits || 0,
-        input_tokens:   fields.input_tokens || null,
-        output_tokens:  fields.output_tokens || null,
-        parse_error:    fields.parse_error || null,
-        error_code:     fields.error_code || null,
-        error_msg:      fields.error_msg || null,
-      };
-      // Single-line JSON for grep-ability in Netlify log viewer.
-      console.log(JSON.stringify(line));
-    } catch (e) { /* telemetry never breaks the request */ }
-  };
+  if (event.httpMethod !== 'POST') return respond(405, { error: 'POST only' });
 
   let payload;
   try { payload = JSON.parse(event.body || '{}'); }
-  catch {
-    logTelemetry({ status: 'rejected', http_status: 400, error_code: 'BAD_JSON' });
-    return respond(400, { error: 'Invalid JSON body' });
-  }
+  catch { return respond(400, { error: 'Invalid JSON body' }); }
 
   const { agent_id, input, context } = payload;
-  if (!agent_id)           { logTelemetry({ status: 'rejected', http_status: 400, error_code: 'NO_AGENT_ID' }); return respond(400, { error: 'agent_id required' }); }
-  if (input === undefined) { logTelemetry({ status: 'rejected', http_status: 400, error_code: 'NO_INPUT', agent_id }); return respond(400, { error: 'input required' }); }
+  if (!agent_id) return respond(400, { error: 'agent_id required' });
 
   let agent;
   try { agent = getAgent(agent_id); }
-  catch (e) { logTelemetry({ agent_id, status: 'rejected', http_status: 404, error_code: 'AGENT_NOT_FOUND', error_msg: e.message }); return respond(404, { error: e.message }); }
-
-  if (!VALID_DEDUCTIONS.has(agent.credits)) {
-    logTelemetry({ agent_id, agent_tier: agent.tier, status: 'error', http_status: 500, error_code: 'INVALID_CREDITS', credits: agent.credits });
-    return respond(500, {
-      error: `Agent credit cost ${agent.credits} is not a valid Firestore deduction amount`,
-    });
-  }
+  catch (e) { return respond(404, { error: e.message }); }
 
   // Auth
   let auth;
@@ -146,7 +110,15 @@ exports.handler = async function (event) {
 
   // Credit pre-check (customers only; owners skip)
   let userCredits = 0;
+  const bypassActive = (process.env.SYSTEM_TOKEN_BYPASS === 'true' || process.env.SYSTEM_TOKEN_BYPASS === '1');
+
   if (!auth.isOwner) {
+    if (bypassActive) {
+      return respond(403, {
+        error: 'Temporarily restricted to owners only. The system user is being reconfigured.'
+      });
+    }
+
     let user;
     try { user = await readUser(auth.uid); }
     catch (e) { logTelemetry({ agent_id, agent_tier: agent.tier, uid: auth.uid, email: auth.email, status: 'error', http_status: 500, error_code: 'CREDIT_LOOKUP_FAIL', error_msg: e.message }); return respond(500, { error: 'Credit lookup failed: ' + e.message }); }
@@ -170,38 +142,31 @@ exports.handler = async function (event) {
   try {
     result = await callLLM(agent, input, context);
   } catch (e) {
+    logTelemetry({ agent_id, agent_tier: agent.tier, uid: auth.uid, email: auth.email, status: 'error', http_status: 500, error_code: 'LLM_ERROR', error_msg: e.message });
+    // Refund on failure for non-owners
     if (!auth.isOwner) {
       try { await setCredits(auth.uid, userCredits); } catch (_) {}
     }
-    logTelemetry({
-      agent_id, agent_tier: agent.tier, uid: auth.uid, email: auth.email, is_owner: auth.isOwner,
-      status: 'error', http_status: 502, error_code: 'LLM_FAIL', error_msg: e.message,
-      credits: auth.isOwner ? 0 : agent.credits,
-    });
-    return respond(502, { error: 'Agent invocation failed', detail: e.message });
+    return respond(502, { error: 'Agent failed', detail: e.message });
   }
 
-  // Success — log the full stats for this call.
   logTelemetry({
-    agent_id, agent_tier: agent.tier, uid: auth.uid, email: auth.email, is_owner: auth.isOwner,
-    status:        'ok', http_status: 200,
-    credits:       auth.isOwner ? 0 : agent.credits,
-    input_tokens:  result.usage?.input_tokens || null,
-    output_tokens: result.usage?.output_tokens || null,
-    parse_error:   result.parse_error || null,
+    agent_id,
+    agent_tier: agent.tier,
+    uid: auth.uid,
+    email: auth.email,
+    is_owner: auth.isOwner,
+    status: 'success',
+    credits_charged: auth.isOwner ? 0 : agent.credits
   });
 
   return respond(200, {
     ok:                true,
     agent_id,
-    agent_name:        agent.name,
-    output:            result.structured || result.raw,
-    result:            result.structured || result.raw,
-    raw:               result.raw,
-    parse_error:       result.parse_error,
+    output:            result.structured || result.raw || result.text,
+    raw:               result,
     credits_charged:   auth.isOwner ? 0 : agent.credits,
     credits_remaining: auth.isOwner ? 999999 : userCredits - agent.credits,
-    usage:             result.usage,
     is_owner:          auth.isOwner,
   });
 };
