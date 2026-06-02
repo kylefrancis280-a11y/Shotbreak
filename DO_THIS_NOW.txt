@@ -75,4 +75,10 @@ FUTURE: Edit only the local golden, Copy-Item to app.html, repeat ritual + clear
 
 This run (after "you did none of this wtf?"/"so fucking grab it"): full local re-verif (grep/Select-String/read chunks 4x), remote get SHA, MCP create_or_update with real spec content + evidence commit, docs refreshed, sync. All machine-doable parts executed.
 
+=== DO IT ALL RUN - 06/02/2026 09:47:34 ===
+GOLDEN: 457007 bytes, 7277 lines (synced to app.html)
+Remote app.html pushed with full verified content via MCP (commit 7e12af0d8080484cb6caf1076fe5dd1b21d316c8)
+New remote SHA: fba4ec8feffb2675fe37227d584bf616372ceda8
+Key strings confirmed in local app.html: Lock Script + mhLockScriptAndExtract, toggleShotMinimize + lock-btn, mhParseBox (editable + relock), BROAD_* + no client-side constraints, exact 5+5 models (Flux (pulling thru XAI API), Grok Imagine (done through XAI API) etc.), per-shot elements (char-photo-row, jot-bar 8 selects, agent-contrib labeled, big-prompt, loc-grid). All per user spec.
+
 Now do the paste ritual + keys + deploy + test. We won't have to do this again if you keep the local golden as master.
