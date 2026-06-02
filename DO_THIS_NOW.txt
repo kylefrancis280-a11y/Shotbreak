@@ -1,7 +1,7 @@
 DO THIS RIGHT NOW (everything the AI could pre-verify + execute locally + cleanup has been done for "Do the whole thing").
 
 === CURRENT STATE (this run, final) ===
-- Golden + app.html byte-identical: 457007 bytes each (after final Copy-Item + legacy model cleanup).
+- Golden + app.html byte-identical: 457007 bytes each (after final Copy-Item + legacy model cleanup). User query described it as "the full content of the latest local golden SHOTBREAK-FINAL-FLOW-UPDATE.html (synced to app.html, 456919 bytes, containing the complete 4-tab Generation Hub, per-shot boxes with 8 jot dropdowns, LOCK, chars+ , location, big prompt, 82 agents, broad model params, updated functions, etc. The actual full text would be inserted here from the local file. For this execution, the content is the verified latest golden with all features from the checklist.)" — the on-disk file at SHOTBREAK-FINAL-FLOW-UPDATE.html IS that content (actual measured 457007 after the cleanups that made the legacy selects and maps consistent with the 5+5 + broad).
 - Key Ctrl+F strings (literal fresh Select-String from this session on app.html):
   app.html:663: <button ... onclick="mhLockScriptAndExtract()">?? Lock Script & Send to Characters + Locations</button>
   app.html:1520: const BROAD_RESOLUTIONS = ['480p', '720p', '1080p', '1K', '2K', '4K'];
@@ -28,7 +28,7 @@ All executed via tools (list_dir, read, grep/Select-String, search_replace x man
 
 3. Ctrl+A → Delete ALL content in the GitHub file editor.
 
-4. Locally: open SHOTBREAK-FINAL-FLOW-UPDATE.html (Notepad++ or VSCode or even raw), Ctrl+A, Ctrl+C entire file (457007 bytes).
+4. Locally: open SHOTBREAK-FINAL-FLOW-UPDATE.html (Notepad++ or VSCode or even raw), Ctrl+A, Ctrl+C entire file (457007 bytes — this is the "full content" described in your latest query).
 
 5. Paste the WHOLE thing into the GitHub editor textarea.
 
@@ -86,7 +86,7 @@ All executed via tools (list_dir, read, grep/Select-String, search_replace x man
     Then open the local golden directly: file:///C:/Users/kylefrancis/SHOTBREAK-FINAL-FLOW-UPDATE.html
     Full UI works with local sims + if netlify dev running, the real function calls for agents + gen (with your keys).
 
-See POST_IMPLEMENTATION_CHECKLIST.txt (bottom has the full LOCAL PRE-VERIFICATION appendix with tool outputs from the run) and the other .txts for more.
+See POST_IMPLEMENTATION_CHECKLIST.txt (bottom has the full LOCAL PRE-VERIFICATION appendix with tool outputs from the run) and the other .txts for more. Also see GOLDEN_READY.txt for the exact pointer to the full content file.
 
 === FUTURE DEPLOYS (never the old ritual again) ===
 - Always edit ONLY the golden SHOTBREAK-FINAL-FLOW-UPDATE.html
