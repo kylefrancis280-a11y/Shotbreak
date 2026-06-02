@@ -1,0 +1,68 @@
+DO THIS RIGHT NOW (everything the AI could pre-verify + execute locally has been done in this run).
+
+=== PRE-VERIFIED BY TOOLS (evidence captured) ===
+- Golden + app.html are byte-identical: 456919 bytes each (multiple force syncs via Copy-Item).
+- Key Ctrl+F strings present (literal Select-String output from this session):
+  SHOTBREAK-FINAL-FLOW-UPDATE.html:663: ... "🔒 Lock Script & Send to Characters + Locations"
+  SHOTBREAK-FINAL-FLOW-UPDATE.html:1514: const BROAD_RESOLUTIONS = ['480p', '720p', '1080p', '1K', '2K', '4K'];
+  SHOTBREAK-FINAL-FLOW-UPDATE.html:1500: label: 'Grok Imagine (done through XAI API)'
+- 5+5 models + broad no-constraint logic: confirmed via grep + read of the consts + updateOptionsForModel.
+- Per-shot modular boxes (chars+photos +, 8 jots, LOCK top corner, location breakdown + "Use global", big prompt, agent-contrib with 82 labels, etc.): confirmed.
+- No real keys in any committed source (only env var names + the example values inside this checklist for you to copy to Netlify UI).
+- netlify/ tree complete (agent-invoke.js with vision + 82 prompts, generate-video.js with XAI direct + WaveSpeed routing + ref forwarding, package.json has "dev:functions", netlify.toml correct, .gitignore + .env.example + setup_local_keys.ps1 all present and safe).
+- Docs (checklist + DEPLOY_*.txt + NETLIFY_*.txt) updated to current "broad / no client constraints" state + exact model labels.
+
+All of the above was executed with file reads, rg greps, PowerShell, list_dir, search_replace, and writes in this exact session.
+
+=== WHAT YOU DO NEXT (copy-paste these steps) ===
+1. In this PowerShell window (already in C:\Users\kylefrancis):
+   Copy-Item .\SHOTBREAK-FINAL-FLOW-UPDATE.html .\app.html -Force
+   (we just did it again)
+
+2. Open https://github.com/kylefrancis280-a11y/Shotbreak in browser → app.html → edit (pencil).
+
+3. Ctrl+A, Delete everything in the GitHub editor.
+
+4. Open local SHOTBREAK-FINAL-FLOW-UPDATE.html (or just use the one in your editor), Ctrl+A, Copy all.
+
+5. Paste the entire golden into the GitHub editor.
+
+6. BEFORE COMMIT: Ctrl+F these exact strings (they must all be found):
+   - "Lock Script & Send to Characters + Locations"
+   - "photoModelSelect"
+   - "BROAD_RESOLUTIONS"
+   - "Grok Imagine (done through XAI API)"
+   - "Flux (pulling thru XAI API)"
+   - "GPT 2.0"
+   - "no client-side constraints"   (or "full choice — no client blocks")
+
+7. Commit with message:
+   Exact 5+5 models + broad res/aspect/dur (no client constraints). Full per-shot, 82 agents, Grok vision + refs, XAI+WaveSpeed routing. (Edit golden, copy to app.html for future.)
+
+8. Push.
+
+9. In Netlify (capable-froyo-218eed or whatever your site is):
+   - Deploys → "Clear cache and deploy site"
+   - Site settings → Build & deploy → Environment variables → Add (Deploy + previews scope):
+     XAI_API_KEY = xai-YOUR_XAI_KEY_HERE
+     WAVESPEED_API_KEY = wsk_live_YOUR_WAVESPEED_KEY_HERE
+
+10. After "Published":
+    - Hard refresh the live URL (Ctrl+Shift+R or incognito).
+    - Log in as owner.
+    - Run the full flow described in the checklist (sections 7 + the GENERAL RULE at top for "how will I know one is done").
+
+11. (Optional but recommended right now while waiting for deploys)
+    In this folder:
+    .\setup_local_keys.ps1
+    # paste the two keys when prompted
+    # then: npm run dev:functions
+    Open the local golden (file://...) and test the UI + local sims immediately. It already has everything.
+
+See the bottom of POST_IMPLEMENTATION_CHECKLIST.txt for the massive "LOCAL PRE-VERIFICATION..." section with all the tool evidence and per-item status.
+
+Future changes: ONLY edit the golden locally, then copy to app.html + commit netlify/ when functions change. No more "do it again later".
+
+If after live deploy + hard refresh something doesn't produce the exact ✅ / DONE (model) / thumbnail / View signals, come back with console + screenshot. The code is ready.
+
+You now have the complete local source tree + pre-verified checklist so the manual ritual is the last thing. Go do the GitHub paste + Netlify steps.
