@@ -646,6 +646,9 @@ header{padding:14px 0;border-bottom:1px solid var(--border);position:sticky;top:
             <div style="margin-top:8px">
               <button class="b b-gold" onclick="mhParseBox('script')" style="font-size:12px">Parse Approved Points → Clean Prompt</button>
             </div>
+            <div style="margin-top:8px">
+              <button class="b b-g b-s" onclick="mhLockScriptAndExtract()">🔒 Lock Script & Send to Characters + Locations</button>
+            </div>
             <div id="mhScriptParsed" style="margin-top:8px;background:#111;border:1px solid var(--gold-border);padding:10px;font-size:13px;white-space:pre-wrap;display:none"></div>
           </div>
         </div>
@@ -667,10 +670,10 @@ header{padding:14px 0;border-bottom:1px solid var(--border);position:sticky;top:
             <button class="b b-gold b-s" onclick="addLocationPhoto()">+ Add / Generate Location Photo</button>
             <div style="margin-top:10px" id="locBreakdownInputs">
               <div class="loc-grid">
-                <div><label style="font-size:9px;color:var(--muted)">Primary Location Name</label><input id="locName" value="Abandoned riverside warehouse district" style="width:100%"></div>
-                <div><label style="font-size:9px;color:var(--muted)">Time of Day (default for shots)</label><select id="locTod"><option>Dawn</option><option>Golden Hour AM</option><option>High Noon</option><option>Late Afternoon</option><option>Golden Hour PM</option><option>Dusk</option><option>Blue Hour</option><option>Night</option><option>Midnight</option><option>Neon Night</option><option selected>Stormy</option></select></div>
-                <div><label style="font-size:9px;color:var(--muted)">How Busy</label><select id="locBusy"><option>Deserted / Empty</option><option selected>Quiet</option><option>Moderate foot traffic</option><option>Bustling / Crowded</option><option>Chaotic</option></select></div>
-                <div><label style="font-size:9px;color:var(--muted)">Weather / Atmosphere</label><select id="locWeather"><option>Clear cold</option><option selected>Light persistent rain</option><option>Heavy downpour</option><option>Fog / Mist</option><option>Neon reflections</option></select></div>
+                <div><label style="font-size:9px;color:var(--muted)">Primary Location Name</label><input id="locName" style="width:100%"></div>
+                <div><label style="font-size:9px;color:var(--muted)">Time of Day (default for shots)</label><select id="locTod"><option>Dawn</option><option>Golden Hour AM</option><option>High Noon</option><option>Late Afternoon</option><option>Golden Hour PM</option><option>Dusk</option><option>Blue Hour</option><option>Night</option><option>Midnight</option><option>Neon Night</option><option>Stormy</option></select></div>
+                <div><label style="font-size:9px;color:var(--muted)">How Busy</label><select id="locBusy"><option>Deserted / Empty</option><option>Quiet</option><option>Moderate foot traffic</option><option>Bustling / Crowded</option><option>Chaotic</option></select></div>
+                <div><label style="font-size:9px;color:var(--muted)">Weather / Atmosphere</label><select id="locWeather"><option>Clear cold</option><option>Light persistent rain</option><option>Heavy downpour</option><option>Fog / Mist</option><option>Neon reflections</option></select></div>
               </div>
               <div style="margin-top:6px;font-size:10px;color:var(--dim)">These defaults + any locked location photos are injected into every per-shot prompt in the Generate tab.</div>
             </div>
@@ -2836,7 +2839,7 @@ function mhGoto(step){
   if(step===5){mhLoadPersistedClips();mhRenderEditor()}
 }
 
-// ───────── STEP 1: Lock Script (uses real breakdown engine) ─────────
+// ───────── Script Tab (in 4-tab Generation Hub) ─────────
 function mhRenderScriptStep(){
   const ta=document.getElementById('mhScriptIn');
   const p=projectLoad();
@@ -5889,6 +5892,16 @@ function mhSwitchTab(tab) {
       });
     }
     renderLocationPhotos();
+    // Load the location breakdown fields from project (so user sees what was extracted from script)
+    if(typeof populateLocationUIFromProject === 'function'){
+      setTimeout(populateLocationUIFromProject, 30);
+    }
+  }
+
+  if (tab === 'script') {
+    setTimeout(() => {
+      if(typeof wireScriptTab === 'function') wireScriptTab();
+    }, 50);
   }
 
   if (tab === 'generate') {
@@ -5904,6 +5917,52 @@ function mhRebuildCharAgentBoxes() {
   const area = document.getElementById('mhCharAgentArea');
   if (!area) return;
   const p = projectLoad() || {};
+
+  // Auto-extract from script if we have one (this is the main way "parsing flows to Characters")
+  if(p.script){
+    try{
+      const names = (typeof extractCharacterNames === 'function') ? extractCharacterNames(p.script) : [];
+      if(names.length){
+        if(!p.characterBible) p.characterBible = [];
+        const existingNames = new Set(p.characterBible.map(c => (c.name||'').toUpperCase()));
+        const extracted = p.characterDescriptions || {};
+        names.forEach(name => {
+          const up = name.toUpperCase();
+          if(!existingNames.has(up)){
+            const synthesized = (typeof mhSynthesizeCharDescription === 'function')
+              ? mhSynthesizeCharDescription(name, p, extracted[name])
+              : (extracted[name] || 'Character from script.');
+            const c = {
+              id: 'char_'+name.toLowerCase().replace(/\s+/g,'_'),
+              name: up,
+              description: synthesized || 'Character from script.',
+              imageUrl: null,
+              locked: false,
+              descCustom: !!synthesized
+            };
+            if(typeof ensureCharacterSchema === 'function') ensureCharacterSchema(c);
+            p.characterBible.push(c);
+            existingNames.add(up);
+          }
+        });
+      }
+
+      // Location extraction
+      const locs = (typeof extractLocations === 'function') ? extractLocations(p.script) : [];
+      if(!p.location) p.location = {};
+      if(locs.length && !p.location.name){
+        p.location.name = locs[0];
+      }
+      if(!p.location.tod) p.location.tod = 'Night';
+      if(!p.location.busy) p.location.busy = 'Quiet';
+      if(!p.location.weather) p.location.weather = 'Light persistent rain';
+
+      if(names.length || locs.length){
+        projectSave(p);
+      }
+    }catch(e){ console.warn('Auto-extract in rebuild failed', e); }
+  }
+
   const chars = (p.characterBible || []).length ? p.characterBible : [{name:'Lead', description:'Main character'}];
 
   let html = '';
@@ -5936,6 +5995,10 @@ function mhRebuildCharAgentBoxes() {
     renderCharacterPhotos(key);
   });
   renderLocationPhotos();
+  // Make sure location breakdown fields reflect what was parsed from script
+  if(typeof populateLocationUIFromProject === 'function'){
+    populateLocationUIFromProject();
+  }
 }
 
 function renderCharacterPhotos(charName) {
@@ -6164,6 +6227,158 @@ function mhParseBox(entityBoxId) {
     // In a real implementation this clean text would be stored per-entity and fed to video gen
     console.log('[MediaHub] Parsed clean prompt for', entityBoxId, clean);
   }, 600);
+}
+
+// NEW: Lock the script from the Script tab textarea and push extracted characters + location
+// to the Characters tab data model so the "parsing" flows through as user requested.
+function mhLockScriptAndExtract(){
+  const ta = document.getElementById('mhScriptMain');
+  if(!ta){ alert('Script textarea not found.'); return; }
+  const text = (ta.value || '').trim();
+  if(!text){ alert('Paste your script in the box first.'); return; }
+
+  const p = projectLoad() || {};
+  p.script = text;
+
+  // Basic scene parse for structure (so Characters/Generate have something)
+  const parsed = parseScript(text);
+  p.scenes = (parsed.scenes || []).map((sc, si) => ({
+    id: 'scene_'+si,
+    heading: sc.heading || 'Scene '+(si+1),
+    body: sc.body || '',
+    shots: (sc.shots || []).map((sh, shi) => ({
+      id: 'shot_'+si+'_'+shi,
+      num: shi+1,
+      text: sh.text || sh,
+      characters_in_frame: [],
+      cine: {}
+    })),
+    characterNames: [],
+    background: {description:'', locked:false, cinematography:{}}
+  }));
+
+  // Extract character names from the full script (ALL CAPS in action lines)
+  const charNames = extractCharacterNames(text);
+  p.characterDescriptions = p.characterDescriptions || {};
+  charNames.forEach(n => {
+    if(!p.characterDescriptions[n]){
+      // Will be filled by synthesis on rebuild
+      p.characterDescriptions[n] = '';
+    }
+  });
+
+  // Extract primary location from scene headings
+  const locs = extractLocations(text);
+  p.location = p.location || {};
+  if(locs.length){
+    p.location.name = locs[0];
+  } else if(!p.location.name){
+    p.location.name = 'Primary location from script';
+  }
+  // Keep existing tod/busy/weather if user already set them in Characters tab, otherwise defaults
+  if(!p.location.tod) p.location.tod = 'Night';
+  if(!p.location.busy) p.location.busy = 'Quiet';
+  if(!p.location.weather) p.location.weather = 'Light persistent rain';
+
+  // Seed or merge into characterBible using the same logic as the old renderer
+  if(!p.characterBible) p.characterBible = [];
+  const existingNames = new Set(p.characterBible.map(c => (c.name||'').toUpperCase()));
+  charNames.forEach(name => {
+    const up = name.toUpperCase();
+    if(!existingNames.has(up)){
+      const synthesized = (typeof mhSynthesizeCharDescription === 'function')
+        ? mhSynthesizeCharDescription(name, p, p.characterDescriptions[name])
+        : (p.characterDescriptions[name] || 'Character from script.');
+      const c = {
+        id: 'char_'+name.toLowerCase().replace(/\s+/g,'_'),
+        name: up,
+        description: synthesized || 'Character from script.',
+        imageUrl: null,
+        locked: false,
+        descCustom: !!synthesized
+      };
+      if(typeof ensureCharacterSchema === 'function') ensureCharacterSchema(c);
+      p.characterBible.push(c);
+      existingNames.add(up);
+    }
+  });
+
+  projectSave(p);
+
+  // Now switch to Characters tab and rebuild so user sees the parsed data immediately
+  if(typeof mhSwitchTab === 'function'){
+    mhSwitchTab('characters');
+  }
+  setTimeout(() => {
+    if(typeof mhRebuildCharAgentBoxes === 'function'){
+      mhRebuildCharAgentBoxes();
+    }
+    if(typeof populateLocationUIFromProject === 'function'){
+      populateLocationUIFromProject();
+    }
+  }, 150);
+
+  // Clear visual feedback
+  alert('✅ Script locked + characters & location extracted from your script.\n\nCheck the Characters tab — you should now see real character names and the location from your scene headings.');
+}
+
+// Helper: extract locations from standard scene headings
+function extractLocations(script){
+  if(!script) return [];
+  const re = /^(?:INT\.|EXT\.|I\/E\.|INT\/EXT\.)\s*([^\n\-–—]+)/gim;
+  const out = new Set();
+  let m;
+  while((m = re.exec(script))){
+    const raw = (m[1]||'').trim();
+    if(raw) out.add(raw.replace(/\s+/g,' ').slice(0,60));
+  }
+  return Array.from(out);
+}
+
+// Wire the script textarea to keep p.script in sync (so agents etc see latest)
+function wireScriptTab(){
+  const ta = document.getElementById('mhScriptMain');
+  if(!ta || ta._wired) return;
+  ta._wired = true;
+  ta.addEventListener('input', () => {
+    const p = projectLoad() || {};
+    p.script = ta.value;
+    // light save (debounce not critical here)
+    try{ localStorage.setItem('SB_CurrentProject', JSON.stringify(p)); }catch(e){}
+  });
+  // If project has script but ta is empty, prefill (already done elsewhere, but safe)
+  const p = projectLoad();
+  if(p && p.script && !ta.value){
+    ta.value = p.script;
+  }
+}
+
+function populateLocationUIFromProject(){
+  const p = projectLoad() || {};
+  const loc = p.location || {};
+  const nameEl = document.getElementById('locName');
+  const todEl = document.getElementById('locTod');
+  const busyEl = document.getElementById('locBusy');
+  const weatherEl = document.getElementById('locWeather');
+  if(nameEl) nameEl.value = loc.name || 'Primary location from script';
+  if(todEl) todEl.value = loc.tod || 'Night';
+  if(busyEl) busyEl.value = loc.busy || 'Quiet';
+  if(weatherEl) weatherEl.value = loc.weather || 'Light persistent rain';
+
+  // Wire changes back to project
+  [nameEl, todEl, busyEl, weatherEl].forEach(el => {
+    if(!el || el._locWired) return;
+    el._locWired = true;
+    el.addEventListener('change', () => {
+      const pp = projectLoad() || {};
+      pp.location = pp.location || {};
+      if(nameEl) pp.location.name = nameEl.value;
+      if(todEl) pp.location.tod = todEl.value;
+      if(busyEl) pp.location.busy = busyEl.value;
+      if(weatherEl) pp.location.weather = weatherEl.value;
+      try{ localStorage.setItem('SB_CurrentProject', JSON.stringify(pp)); }catch(e){}
+    });
+  });
 }
 
 async function mhRunScriptAgents() {
