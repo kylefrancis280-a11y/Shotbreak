@@ -10,6 +10,7 @@ exports.handler = async (event) => {
   const key = process.env.WAVESPEED_API_KEY;
   if (!key) return { statusCode: 500, headers, body: JSON.stringify({ error: 'WAVESPEED_API_KEY not set' }) };
 
+  const { verifyToken } = require('./lib/verify-token');
   let prompt, modelKey;
   try {
     const body = JSON.parse(event.body);
@@ -19,6 +20,13 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid body' }) };
   }
   if (!prompt) return { statusCode: 400, headers, body: JSON.stringify({ error: 'prompt required' }) };
+
+  // Enforce login; only owners get unlimited (tier checks client side)
+  const authH = event.headers.authorization || event.headers.Authorization || '';
+  const ar = await verifyToken(authH).catch(() => ({ok:false}));
+  if (!ar.ok) {
+    return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized' }) };
+  }
 
   const MODELS = {
     wan:     'wavespeed-ai/wan-2.2/text-to-image-realism',
