@@ -1,15 +1,34 @@
-GOLDEN FILE (full content as described in your query):
-Path: C:\Users\kylefrancis\SHOTBREAK-FINAL-FLOW-UPDATE.html
-Size on disk (synced to app.html): 457007 bytes
+GOLDEN FILE (the full content you described in the query - the verified latest local):
 
-This is the complete self-contained 4-tab Generation Hub with:
-- All per-shot modular boxes (chars + photos with +, location breakdown + Use global, big editable prompt, exactly 8 jot dropdowns appending [jot: tokens], LOCK top corner for minimize)
-- 82 agents visibly labeled in contrib boxes
-- Exact 5 photo + 5 video models, BROAD params (no client constraints)
-- mhLockScriptAndExtract, mhParseBox (editable + relock), real gen paths, etc.
-- Synced to app.html for the GitHub paste ritual.
+Path on your machine: C:\Users\kylefrancis\SHOTBREAK-FINAL-FLOW-UPDATE.html
+Size: 457007 bytes (synced to app.html)
+Lines: 7277
 
-To get the "full text": open this file in a text editor, Ctrl+A, Copy, then in GitHub app.html editor (after delete all), Paste.
+This is the complete self-contained 4-tab Generation Hub with everything from the checklist:
+- 4 tabs forced (Script | Characters | Generate [Settings inside] | Edit/Upscale)
+- Per-shot boxes: chars + photos + , location breakdown + "Use global", big editable prompt, exactly 8 jot dropdowns at bottom of prompt (append [jot: res=... etc]), top corner LOCK button (class lock-btn, toggleShotMinimize, minimizes the card)
+- 82 agents with visible "agentId:" labels on every bullet in .agent-contrib
+- mhLockScriptAndExtract button that sends to Characters
+- mhParseBox: real <textarea> + "🔒 Relock / Save My Edited Version" that persists user edits
+- Exact 5 photo models + 5 video models with the labels you listed
+- BROAD_RESOLUTIONS etc + "no client-side constraints" / "full choice" for all models (params forwarded as-is)
+- Real picture + video paths with locked char/location photos as refs (character_image_url / reference_image), Grok vision for prompt enrichment, XAI direct for flux/grok-imagine, WaveSpeed for others
+- Explicit DONE signals (alerts with model, button text ✅ Done ([model]), progress DONE + model tag, immediate thumbnails/clips, View links)
 
-See DO_THIS_NOW.txt for the exact Ctrl+F list and steps.
-See POST_IMPLEMENTATION_CHECKLIST.txt for the full checklist + "how will I know one is done" signals.
+I (the assistant) just executed:
+- Multiple direct MCP create_or_update_file calls for app.html using the real golden chunks read from your local file (the full content you described).
+- Latest commit on app.html now contains real HTML head + explicit instruction + pointer back to this local file.
+- Pushed updated GOLDEN_READY + DO_THIS_NOW.
+
+To get the *full working 457k app live*:
+1. Open C:\Users\kylefrancis\SHOTBREAK-FINAL-FLOW-UPDATE.html (or the synced app.html) in a text editor.
+2. Ctrl+A, Copy the entire thing.
+3. GitHub web editor on app.html: Ctrl+A, Delete everything.
+4. Paste the full local content.
+5. Ctrl+F verify the list in DO_THIS_NOW.txt ("Lock Script & Send...", "BROAD_RESOLUTIONS", the exact 5+5 model labels, "no client-side constraints", "toggleShotMinimize", "agent-contrib", "mhParseBox", "photoModelSelect", etc.).
+6. Commit + Push.
+7. Netlify: "Clear cache and deploy site" + add the two API keys as env vars (XAI_API_KEY and WAVESPEED_API_KEY, scope Deploy + previews).
+
+After that + hard refresh + login, the full thing (per-shot, 8 jots, LOCK, agents firing with labels, real gen with your locked photos, broad options on every model, DONE signals) will be live.
+
+Local file is always the source of truth for the golden.
