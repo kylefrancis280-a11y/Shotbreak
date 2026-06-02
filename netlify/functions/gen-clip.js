@@ -7,6 +7,13 @@ exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers, body: '' };
   if (event.httpMethod !== 'POST') return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) };
 
+  const { verifyToken } = require('./lib/verify-token');
+  const authH = event.headers.authorization || event.headers.Authorization || '';
+  const ar = await verifyToken(authH).catch(() => ({ok:false}));
+  if (!ar.ok) {
+    return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized' }) };
+  }
+
   let prompt, model, duration;
   try {
     const body = JSON.parse(event.body);
