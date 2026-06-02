@@ -11,10 +11,10 @@
 //   const headers = await window.hdrs();
 //
 // Supports both:
-//   - Firebase Auth idTokens (normal users + owners via email whitelist)
-//   - Legacy/Convenience owner tokens (owner:kyle:123...:hmac) stored in localStorage
+//   - Firebase Auth idTokens (all users; owners get isOwner if email matches authorized list)
+//   - Owner tokens from /verify-owner (HMAC, name+pw from env) for convenience in shells
 //
-// Owner tokens are still fully supported for the workflow + editor shells.
+// Only authorized owners (current active: kyleF/steveC/scottD shorts for the 3 owners + originals) get special privileges. Client bypasses removed.
 
 (function () {
   'use strict';
@@ -30,12 +30,14 @@
       const nm = localStorage.getItem(OWNER_NAME_KEY);
       const exp = parseInt(localStorage.getItem(OWNER_EXPIRES_KEY) || '0', 10);
 
-      if (tk && nm && exp > Date.now()) {
+      // Only accept proper 4-part HMAC owner tokens (from /verify-owner). Reject old 3-part bypass fakes.
+      const parts = (tk || '').split(':');
+      if (tk && nm && exp > Date.now() && parts.length === 4 && parts[0] === 'owner') {
         window.SB_OWNER_TOKEN = tk;
         window.SB_OWNER_NAME = nm;
         window.SB_OWNER_EXPIRES = exp;
       } else {
-        // Clean up stale data
+        // Clean up stale data (including old bypass fakes)
         clearOwnerToken();
       }
     } catch (e) {
@@ -68,12 +70,13 @@
     } catch (e) {}
   }
 
-  // ── Core getToken helper ────────────────────────────────────────────────
+  // ── Core getToken helper ───────────────────────────────────────────────
   async function getToken() {
-    // 1. Prefer active owner token (most convenient for owners in workflow/editor)
-    if (window.SB_OWNER_TOKEN) {
+    // 1. Prefer active owner token ONLY if proper 4-part HMAC (from /verify-owner). Reject old bypass fakes.
+    const ot = window.SB_OWNER_TOKEN;
+    if (ot && ot.split(':').length === 4 && ot.startsWith('owner:')) {
       touchOwnerToken(); // keep the session alive during active use
-      return window.SB_OWNER_TOKEN;
+      return ot;
     }
 
     // 2. Fall back to Firebase Auth
