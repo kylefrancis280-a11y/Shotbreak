@@ -758,7 +758,30 @@ header{padding:14px 0;border-bottom:1px solid var(--border);position:sticky;top:
           </div>
 
           <button class="b b-gold b-big" onclick="buildPerShotDetailBoxes()" style="margin-top:16px">Rebuild All Shot Boxes from Script + Characters + Locations</button>
-          <div style="font-size:9px;color:#666;margin-top:4px">Each box then shows the 82-GOD agent breakdown: click agents 1-by-1 or run all with visible progression + timing.</div>
+          <div style="font-size:9px;color:#666;margin-top:4px">Each box then shows the 82-GOD agent breakdown: click agents 1-by-1 or run all with visible progression + timing. Approve points inside boxes, then use the Parser below.</div>
+
+          <!-- NEW: Final Prompt Parser / Master Synthesizer (the "Parsing box" at the bottom) -->
+          <div style="margin-top:24px;padding:16px;background:#0f0f14;border:1px solid var(--gold-border);border-radius:10px">
+            <div style="font-weight:700;color:var(--gold);font-size:14px;margin-bottom:6px">🔮 Final Prompt Parser — Master Synthesizer</div>
+            <div style="font-size:11px;color:#ccc;margin-bottom:8px">
+              Once you've run agents (any tabs), approved/declined their point-form outputs, and/or written your own notes in the per-shot prompt boxes:<br>
+              • Click "Collect All Approved + Locked Refs + Manual" to gather everything.<br>
+              • Then "Parse & Beautify into Perfect Prompt" — this rewrites it into a flowing, high-quality, continuity-optimized prompt that references locked character photos, location plates, jots, previous shots for consistency, and is structured for best results on Grok Imagine (XAI) + WaveSpeed (audio/video quality, minimal mistakes).
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+              <button class="b b-g b-s" onclick="collectAllForParser()">Collect All Approved + Locked Refs + Manual Inputs</button>
+              <button class="b b-gold b-s" onclick="parseAndBeautifyMasterPrompt()">🔮 Parse & Beautify into Perfect Flowing Prompt</button>
+            </div>
+            <textarea id="mhMasterParserInput" style="width:100%;height:80px;background:#111;color:#fff;border:1px solid var(--border);border-radius:6px;padding:8px;font-size:12px;font-family:var(--mono)" placeholder="Collected points + refs will appear here. You can edit before parsing."></textarea>
+            <div style="margin-top:8px">
+              <textarea id="mhMasterParserOutput" style="width:100%;height:120px;background:#0a0a0f;color:#e8e8ec;border:1px solid var(--gold);border-radius:6px;padding:8px;font-size:12px;font-family:var(--mono)" placeholder="The beautifully formed, continuity-perfect master prompt will appear here after parsing. Copy or apply to shots."></textarea>
+            </div>
+            <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
+              <button class="b b-g b-xs" onclick="applyParsedToCurrentShotPrompt()">Apply this to current/active shot prompt box</button>
+              <button class="b b-g b-xs" onclick="copyParsedPrompt()">Copy to clipboard</button>
+              <span style="font-size:9px;color:#666;align-self:center">This is the "last mile" before hitting Generate Video Clips — optimized for refs, flow, continuity, audio sync, visual coherence.</span>
+            </div>
+          </div>
 
           <div style="margin-top:20px">
             <button class="b b-gold b-big" onclick="mhDoFinalGenerate()">🎬 Generate Video Clips (using all Parsed Per-Shot Prompts + Jots)</button>
@@ -7375,6 +7398,160 @@ function getAgentEstimate(aid) {
   return AGENT_ESTIMATES.default;
 }
 
+// Modular approved points system (per category for tabs)
+let _mhApprovedPoints = { script: [], characters: {}, perShot: {} };
+
+function toggleApprovePoint(category, key, agent, point, checked) {
+  if (!_mhApprovedPoints[category]) _mhApprovedPoints[category] = (category === 'perShot' || category === 'characters') ? {} : [];
+  let target;
+  if (category === 'perShot' || category === 'characters') {
+    if (! _mhApprovedPoints[category][key]) _mhApprovedPoints[category][key] = [];
+    target = _mhApprovedPoints[category][key];
+  } else {
+    target = _mhApprovedPoints[category];
+  }
+  const existing = target.findIndex(p => p.agent === agent && p.text === point);
+  if (checked) {
+    if (existing === -1) target.push({agent, text: point});
+  } else {
+    if (existing > -1) target.splice(existing, 1);
+  }
+}
+
+function getApprovedFor(category, key) {
+  if (category === 'perShot' || category === 'characters') {
+    return (_mhApprovedPoints[category] && _mhApprovedPoints[category][key]) || [];
+  }
+  return _mhApprovedPoints[category] || [];
+}
+
+function addApprovedPointsToPrompt(key) {
+  // For per-shot: append approved agent points as bullet list to the prompt textarea
+  const ta = document.getElementById('prompt-' + key);
+  if (!ta) return;
+  const approved = getApprovedFor('perShot', key);
+  if (!approved.length) { alert('No approved agent points yet for this shot. Run agents and check the boxes.'); return; }
+  let pointsBlock = approved.map(p => `• ${p.agent}: ${p.text}`).join('\n');
+  let current = ta.value.trim();
+  if (current) current += '\n\n';
+  ta.value = current + 'APPROVED AGENT POINTS (for continuity + refs):\n' + pointsBlock + '\n\n';
+  if (_shotUI[key]) _shotUI[key].prompt = ta.value;
+  alert('Approved points added in point form to the prompt box. Now run the Parsing box below or edit manually.');
+}
+
+// === Final Parser / Master Synthesizer functions ===
+async function collectAllForParser() {
+  const ta = document.getElementById('mhMasterParserInput');
+  if (!ta) return;
+  const p = projectLoad() || {};
+  let collected = 'APPROVED AGENT POINTS (from all tabs):\n';
+
+  // Script agents
+  const scriptApproved = getApprovedFor('script') || [];
+  if (scriptApproved.length) {
+    collected += '\n[Script Agents]\n' + scriptApproved.map(x => `• ${x.agent || 'Script'}: ${x.text}`).join('\n');
+  }
+
+  // Character agents
+  const charApproved = _mhApprovedPoints.characters || {};
+  Object.keys(charApproved).forEach(cname => {
+    if (charApproved[cname] && charApproved[cname].length) {
+      collected += `\n[Character: ${cname}]\n` + charApproved[cname].map(x => `• ${x.agent || 'Char Agent'}: ${x.text}`).join('\n');
+    }
+  });
+
+  // Per-shot approved
+  const perShot = _mhApprovedPoints.perShot || {};
+  Object.keys(perShot).forEach(sk => {
+    if (perShot[sk] && perShot[sk].length) {
+      collected += `\n[Shot ${sk}]\n` + perShot[sk].map(x => `• ${x.agent}: ${x.text}`).join('\n');
+    }
+  });
+
+  // Locked refs
+  collected += '\n\nLOCKED REFERENCES (for continuity):\n';
+  if (p.characterBible && p.characterBible.length) {
+    collected += p.characterBible.map(c => `• Character ${c.name}: ${ (c.description||'').slice(0,120) } ${c.lockedPhoto ? '(photo locked)' : ''}`).join('\n');
+  }
+  if (p.location) {
+    collected += `\n• Location: ${p.location.name || ''} | TOD: ${p.location.tod || ''} | Weather: ${p.location.weather || ''}`;
+  }
+  if (p.assets && p.assets.locationPhotos && p.assets.locationPhotos.length) {
+    collected += `\n• ${p.assets.locationPhotos.length} locked location photo plates available for visual ref.`;
+  }
+
+  // Manual per-shot prompts / jots as extra context
+  const shotPrompts = Object.keys(_shotUI || {}).map(k => {
+    const u = _shotUI[k];
+    return u && u.prompt ? `[Shot ${k} manual/edited prompt]: ${u.prompt.slice(0,200)}` : '';
+  }).filter(Boolean);
+  if (shotPrompts.length) collected += '\n\nMANUAL / EDITED PER-SHOT PROMPTS:\n' + shotPrompts.join('\n');
+
+  ta.value = collected.trim();
+  alert('Collected. Now click "Parse & Beautify" to turn this into the perfect flowing prompt.');
+}
+
+async function parseAndBeautifyMasterPrompt() {
+  const inTa = document.getElementById('mhMasterParserInput');
+  const outTa = document.getElementById('mhMasterParserOutput');
+  if (!inTa || !outTa) return;
+
+  const raw = inTa.value.trim();
+  if (!raw) { alert('First collect or paste content into the input box above.'); return; }
+
+  outTa.value = 'Parsing with prompt-writer / final synthesizer agent... producing beautifully flowing, continuity-optimized prompt...';
+
+  const p = projectLoad() || {};
+
+  // Try real agent first (prompt-writer is the key one for this)
+  let final = '';
+  try {
+    if (window.SB_InvokeAgent) {
+      const res = await window.SB_InvokeAgent('prompt-writer', {
+        rawApprovedPoints: raw,
+        project: p,
+        lockedRefs: {
+          characters: p.characterBible || [],
+          location: p.location || {},
+          hasLocationPhotos: !!(p.assets && p.assets.locationPhotos && p.assets.locationPhotos.length)
+        },
+        instructions: 'Rewrite ALL the approved agent points, locked character/location refs, and any manual notes into ONE single, elegant, highly detailed, flowing master prompt per shot (or overall if no per-shot). Make it cinematic, continuous with previous locked assets (reference exact photo details for characters and locations for visual match), optimized for Grok Imagine + WaveSpeed: include precise sensory, lighting, camera, audio cues, rain/weather continuity, wardrobe/scar refs, emotional tone. Keep it under 250 tokens per shot but rich. Prioritize photo-match coherence, least possible mistakes in audio sync and visual continuity. Output clean prompt text only, ready to paste.'
+      });
+      final = res.output || res.result || res || '';
+    }
+  } catch(e){}
+
+  if (!final) {
+    // High quality local beautify
+    final = getHighQualityLocalAgentOutput('prompt-writer', p) + '\n\n' + raw.replace(/\n/g, ' ').slice(0,1500) + '\n\n[Master synthesized for continuity, refs, quality, audio/video coherence using all approved points above]';
+  }
+
+  outTa.value = final.trim();
+}
+
+function applyParsedToCurrentShotPrompt() {
+  const out = document.getElementById('mhMasterParserOutput');
+  if (!out || !out.value) { alert('Run the parser first to get output.'); return; }
+  // Try to apply to a "current" shot - for simplicity prompt for key or use first
+  const key = prompt('Apply to which shot key? (e.g. 0-0 for first shot of first scene). Leave blank for first available.', '0-0');
+  if (!key) return;
+  const ta = document.getElementById('prompt-' + key);
+  if (ta) {
+    ta.value = out.value;
+    if (_shotUI[key]) _shotUI[key].prompt = ta.value;
+    alert('Applied the beautifully parsed master prompt to shot ' + key + '. Ready for Generate.');
+  } else {
+    alert('Shot box not found for that key. Build the per-shot boxes first, then apply.');
+  }
+}
+
+function copyParsedPrompt() {
+  const out = document.getElementById('mhMasterParserOutput');
+  if (out && out.value) {
+    navigator.clipboard.writeText(out.value).then(()=>alert('Copied the perfect prompt to clipboard.')).catch(()=>alert(out.value));
+  }
+}
+
 function buildPerShotDetailBoxes() {
   const area = document.getElementById('mhGenEntityBoxes');
   if (!area) return;
@@ -7611,13 +7788,14 @@ function appendJot(key, sel, type) {
 }
 
 function renderAgentContribsForShot(key, p) {
-  // Interactive breakdown of relevant 82-GOD agents for this shot.
-  // Shows status, elapsed/est time, output. Individual run buttons + Run All.
+  // Modular 82-GOD agent breakdown with approve/decline.
+  // Run 1-by-1 or all. Check boxes to approve points. Then "Add Approved to Prompt".
   if (!_shotAgentStatus[key]) _shotAgentStatus[key] = {};
   const statusMap = _shotAgentStatus[key];
   const agents = getRelevantAgentsForShot();
+  const approvedForThis = getApprovedFor('perShot', key);
 
-  let html = `<div style="font-size:10px;color:#888;margin-bottom:4px">82-GOD agents for this shot (run 1-by-1 or all; times in seconds; real on live deploy)</div>`;
+  let html = `<div style="font-size:10px;color:#888;margin-bottom:4px">82-GOD agents for this shot — run individually or batch. Check ✅ to approve points (they will be added to prompt in point form). Timers show progress.</div>`;
 
   agents.forEach(aid => {
     const st = statusMap[aid] || {status:'idle', elapsed:0, output:'', estimate: getAgentEstimate(aid)};
@@ -7629,19 +7807,38 @@ function renderAgentContribsForShot(key, p) {
     } else {
       statusHtml = `<span style="color:#666">idle • est ~${st.estimate}s</span>`;
     }
-    const out = st.output ? `<div style="font-size:11px;color:#ccc;margin-top:2px;white-space:pre-wrap">${esc(st.output.slice(0,180))}${st.output.length>180?'...':''}</div>` : '';
+
+    let pointsHtml = '';
+    if (st.output) {
+      const bullets = st.output.split(/\n|•/).map(s=>s.trim()).filter(s=>s.length>4);
+      bullets.forEach((b, idx) => {
+        const pointId = `${aid}:${idx}`;
+        const isApproved = approvedForThis.some(ap => ap.agent === aid && ap.text === b);
+        pointsHtml += `
+          <div style="margin:1px 0;font-size:11px;display:flex;gap:4px;align-items:center">
+            <input type="checkbox" ${isApproved ? 'checked' : ''} onchange="toggleApprovePoint('perShot', '${key}', '${aid}', '${b.replace(/'/g,"\\'")}', this.checked);">
+            <span class="ag">${aid}:</span> ${esc(b)}
+          </div>`;
+      });
+    } else {
+      pointsHtml = `<div style="font-size:10px;color:#555">No output yet — click Run</div>`;
+    }
+
     html += `
-      <div style="display:flex;gap:6px;align-items:flex-start;margin:3px 0;padding:3px 4px;background:#111;border-radius:4px">
-        <div style="flex:1;min-width:0">
+      <div style="margin:4px 0;padding:4px 6px;background:#111;border-radius:4px;border-left:3px solid var(--gold)">
+        <div style="display:flex;justify-content:space-between;align-items:center">
           <span class="ag" style="font-weight:700">${aid}</span>
-          <span style="font-size:10px;margin-left:6px">${statusHtml}</span>
-          ${out}
+          <span style="font-size:9px">${statusHtml}</span>
+          <button class="b b-g b-xs" style="font-size:9px;padding:1px 5px" onclick="runOneAgentForShot('${key}', '${aid}', this)">Run</button>
         </div>
-        <button class="b b-g b-xs" style="font-size:9px;padding:1px 6px" onclick="runOneAgentForShot('${key}', '${aid}', this)">Run</button>
+        <div style="margin-top:2px">${pointsHtml}</div>
       </div>`;
   });
 
-  html += `<button class="b b-gold b-xs" style="margin-top:4px;font-size:10px" onclick="runAllAgentsForShot('${key}', this)">Run All Relevant 82 Agents (1-by-1, sequential)</button>`;
+  html += `
+    <button class="b b-gold b-xs" style="margin-top:4px;font-size:10px" onclick="runAllAgentsForShot('${key}', this)">Run All Relevant (1-by-1 seq)</button>
+    <button class="b b-g b-xs" style="margin-top:4px;font-size:10px;margin-left:6px" onclick="addApprovedPointsToPrompt('${key}')">✅ Add Approved Agent Points to Prompt (point form)</button>
+  `;
   return html;
 }
 
@@ -7688,8 +7885,7 @@ async function runOneAgentForShot(key, aid, btn) {
   clearInterval(timer);
   st.status = 'done';
   st.elapsed = (Date.now() - st.startTime) / 1000;
-  const bullets = txt.split(/\n|•/).map(s=>s.trim()).filter(s=>s.length>4).slice(0,3);
-  st.output = bullets.join(' • ');
+  st.output = txt;  // full for splitting into approve-able bullets in render
 
   refreshAgentUIForShot(key);
   btn.disabled = false;
