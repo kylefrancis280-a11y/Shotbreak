@@ -7,7 +7,7 @@ const CORS = {
   'Content-Type': 'application/json',
 };
 
-// Use shared proper verifier
+// Use the shared proper verifier (no demo allows, strict owner email check only)
 const { verify } = require('./lib/verify-token');
 
 function callGrok(systemPrompt, userPayload) {
