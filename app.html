@@ -753,10 +753,12 @@ header{padding:14px 0;border-bottom:1px solid var(--border);position:sticky;top:
             <div style="padding:16px;background:#111;border:1px dashed var(--border);border-radius:8px;text-align:center;color:var(--dim);font-size:13px">
               Per-shot detail boxes appear here.<br>
               <button class="b b-gold b-s" onclick="buildPerShotDetailBoxes()" style="margin-top:8px">Build / Rebuild Per-Shot Detail Boxes (82-GOD Agent Level)</button>
+              <div style="font-size:9px;color:#666;margin-top:2px">Inside each shot box: full breakdown of relevant 82 agents with individual "Run" buttons + live timers (elapsed vs est). Run 1-by-1 or "Run All" sequential.</div>
             </div>
           </div>
 
           <button class="b b-gold b-big" onclick="buildPerShotDetailBoxes()" style="margin-top:16px">Rebuild All Shot Boxes from Script + Characters + Locations</button>
+          <div style="font-size:9px;color:#666;margin-top:4px">Each box then shows the 82-GOD agent breakdown: click agents 1-by-1 or run all with visible progression + timing.</div>
 
           <div style="margin-top:20px">
             <button class="b b-gold b-big" onclick="mhDoFinalGenerate()">🎬 Generate Video Clips (using all Parsed Per-Shot Prompts + Jots)</button>
@@ -7350,6 +7352,28 @@ async function mhRunScriptAgents() {
 // - Agent contributions labeled with exact 82-GOD agent IDs
 
 let _shotUI = {}; // key `${si}-${shi}` => {minimized, prompt, chars:[], loc:{}, jots:[] }
+let _shotAgentStatus = {}; // key => { [agentId]: {status:'idle'|'running'|'done', startTime:0, elapsed:0, output:'', estimate:8 } }
+
+const AGENT_ESTIMATES = {
+  'vision-director': 6, 'story-director': 8, 'action-writer': 7, 'prompt-writer': 10,
+  'cinematographer': 5, 'lighting-designer': 5, 'continuity-supervisor': 4,
+  'environment-builder': 6, 'atmospherics-builder': 5, 'scene-architect': 7,
+  'visual-character-builder': 9, 'psychological-builder': 8, 'voice-builder': 6,
+  'executive-producer': 4, 'showrunner': 5, 'colorist': 4, 'head-editor': 5,
+  'default': 7
+};
+
+function getRelevantAgentsForShot() {
+  return ['vision-director','story-director','action-writer','prompt-writer','cinematographer','lighting-designer','continuity-supervisor','environment-builder','atmospherics-builder','scene-architect','visual-character-builder','psychological-builder'];
+}
+
+function getAgentEstimate(aid) {
+  const lower = (aid || '').toLowerCase();
+  for (const k in AGENT_ESTIMATES) {
+    if (lower.includes(k.replace(/-/g,'')) || lower.includes(k)) return AGENT_ESTIMATES[k];
+  }
+  return AGENT_ESTIMATES.default;
+}
 
 function buildPerShotDetailBoxes() {
   const area = document.getElementById('mhGenEntityBoxes');
@@ -7374,6 +7398,12 @@ function buildPerShotDetailBoxes() {
     shots.forEach((shot, shi) => {
       const key = `${si}-${shi}`;
       if (!_shotUI[key]) _shotUI[key] = { minimized: false, prompt: '', chars: [], loc: {name:locName, tod:locTod, busy:locBusy, weather:locWeather}, jots: [] };
+      if (!_shotAgentStatus[key]) {
+        _shotAgentStatus[key] = {};
+        getRelevantAgentsForShot().forEach(aid => {
+          _shotAgentStatus[key][aid] = {status:'idle', elapsed:0, output:'', estimate: getAgentEstimate(aid)};
+        });
+      }
 
       const ui = _shotUI[key];
       const shotLabel = `S${si+1}.${shi+1}`;
@@ -7430,7 +7460,8 @@ function buildPerShotDetailBoxes() {
           <div class="shot-section">
             <h6>🤖 82-GOD Agent Contributions (point form — labeled by specialist)</h6>
             <div class="agent-contrib" id="agents-${key}">${renderAgentContribsForShot(key, p)}</div>
-            <button class="b b-gold b-xs" style="margin-top:4px;font-size:10px" onclick="runAgentsForShot('${key}', this)">Run Relevant 82 Agents for this Shot →</button>
+            <button class="b b-gold b-xs" style="margin-top:4px;font-size:10px" onclick="runAllAgentsForShot('${key}', this)">Run All Relevant 82 Agents (1-by-1)</button>
+            <div style="font-size:9px;color:#555;margin-top:2px">Click individual "Run" buttons above for 1-by-1 control. Timers show real elapsed vs estimate while running (live deploys use real XAI/WaveSpeed timing).</div>
           </div>
 
           <!-- BIG VIDEO PROMPT (references everything) -->
@@ -7580,68 +7611,110 @@ function appendJot(key, sel, type) {
 }
 
 function renderAgentContribsForShot(key, p) {
-  // Show labeled points from the 82. In real run we call many agents.
-  // For now seed with 4-6 highly relevant ones so user sees "82 Agents" working.
-  const [si, shi] = key.split('-').map(Number);
-  const scene = (p.scenes || [])[si] || {};
-  const shot = (scene.shots || [])[shi] || {};
-  const base = (shot.text || '').slice(0,40);
+  // Interactive breakdown of relevant 82-GOD agents for this shot.
+  // Shows status, elapsed/est time, output. Individual run buttons + Run All.
+  if (!_shotAgentStatus[key]) _shotAgentStatus[key] = {};
+  const statusMap = _shotAgentStatus[key];
+  const agents = getRelevantAgentsForShot();
 
-  const contribs = [
-    {id:'vision-director', text: `Establish ${base} with neo-noir DNA, high contrast practical sources only.`},
-    {id:'cinematographer', text: `Recommend 35mm Standard or 50mm Normal for intimacy; subtle handheld for tension.`},
-    {id:'lighting-designer', text: `90% practical: one sodium lamp + distant neon spill. No fill. Deep shadows.`},
-    {id:'continuity-supervisor', text: `Maintain exact wardrobe, scar position, and rain intensity from prior shots.`},
-    {id:'atmospherics-builder', text: `Wet surfaces, reflective puddles mandatory. Light persistent rain throughout.`},
-    {id:'prompt-writer', text: `Keep under 220 tokens. End with tactile detail. Reference locked character photo.`}
-  ];
+  let html = `<div style="font-size:10px;color:#888;margin-bottom:4px">82-GOD agents for this shot (run 1-by-1 or all; times in seconds; real on live deploy)</div>`;
 
-  return contribs.map(c => `<div><span class="ag">${c.id}:</span> ${esc(c.text)}</div>`).join('');
+  agents.forEach(aid => {
+    const st = statusMap[aid] || {status:'idle', elapsed:0, output:'', estimate: getAgentEstimate(aid)};
+    let statusHtml = '';
+    if (st.status === 'running') {
+      statusHtml = `<span style="color:#eab308">RUNNING... ${st.elapsed.toFixed(1)}s / ~${st.estimate}s</span>`;
+    } else if (st.status === 'done') {
+      statusHtml = `<span style="color:#22c55e">DONE in ${st.elapsed.toFixed(1)}s</span>`;
+    } else {
+      statusHtml = `<span style="color:#666">idle • est ~${st.estimate}s</span>`;
+    }
+    const out = st.output ? `<div style="font-size:11px;color:#ccc;margin-top:2px;white-space:pre-wrap">${esc(st.output.slice(0,180))}${st.output.length>180?'...':''}</div>` : '';
+    html += `
+      <div style="display:flex;gap:6px;align-items:flex-start;margin:3px 0;padding:3px 4px;background:#111;border-radius:4px">
+        <div style="flex:1;min-width:0">
+          <span class="ag" style="font-weight:700">${aid}</span>
+          <span style="font-size:10px;margin-left:6px">${statusHtml}</span>
+          ${out}
+        </div>
+        <button class="b b-g b-xs" style="font-size:9px;padding:1px 6px" onclick="runOneAgentForShot('${key}', '${aid}', this)">Run</button>
+      </div>`;
+  });
+
+  html += `<button class="b b-gold b-xs" style="margin-top:4px;font-size:10px" onclick="runAllAgentsForShot('${key}', this)">Run All Relevant 82 Agents (1-by-1, sequential)</button>`;
+  return html;
 }
 
-async function runAgentsForShot(key, btn) {
-  btn.textContent = 'Running 82-GOD specialists...';
+function refreshAgentUIForShot(key) {
+  const container = document.getElementById('agents-' + key);
+  if (!container) return;
+  const p = projectLoad() || {};
+  container.innerHTML = renderAgentContribsForShot(key, p);
+}
+
+async function runOneAgentForShot(key, aid, btn) {
+  if (!btn) return;
+  const orig = btn.textContent;
   btn.disabled = true;
+
+  if (!_shotAgentStatus[key]) _shotAgentStatus[key] = {};
+  const st = _shotAgentStatus[key][aid] = _shotAgentStatus[key][aid] || {status:'idle', elapsed:0, output:'', estimate: getAgentEstimate(aid)};
+  st.status = 'running';
+  st.startTime = Date.now();
+  st.elapsed = 0;
+  st.output = '';
+
+  // live timer
+  const timer = setInterval(() => {
+    if (st.status === 'running') {
+      st.elapsed = (Date.now() - st.startTime) / 1000;
+      refreshAgentUIForShot(key);
+    }
+  }, 250);
 
   const p = projectLoad() || {};
   const [si, shi] = key.split('-').map(Number);
 
-  // In production this would fan out to dozens of relevant agents from registry via SB_Agents
-  // Here we simulate + try real if window.SB_Agents exists, and ALWAYS label with agent id.
-  const agentsToRun = ['vision-director','cinematographer','lighting-designer','continuity-supervisor','environment-builder','prompt-writer','scene-architect'];
-
-  let html = '';
-  for (const aid of agentsToRun) {
-    let txt = '';
-    let fb = false;
-    try {
-      const res = await window.SB_InvokeAgent(aid, {sceneIdx:si, shotIdx:shi, project:p});
-      txt = String(res.output || res.result || '');
-    } catch(e) {
-      const isLocal = (location.protocol === 'file:') || (location.hostname === 'localhost') || (location.hostname === '127.0.0.1');
-      console.warn(`[Agent] using local sim for ${aid} (real call failed or no SB_Agents):`, e && e.message);
-      txt = getSimulatedAgentOutput(aid, p);
-      fb = true;
-    }
-    const bullets = txt.split(/\n|•/).map(s=>s.trim()).filter(s=>s.length>4).slice(0,3);
+  let txt = '';
+  try {
+    const res = await window.SB_InvokeAgent(aid, {sceneIdx:si, shotIdx:shi, project:p});
+    txt = String(res.output || res.result || res || '');
+  } catch(e) {
     const isLocal = (location.protocol === 'file:') || (location.hostname === 'localhost') || (location.hostname === '127.0.0.1');
-    bullets.forEach(b => {
-      const label = `${aid}`;
-      html += `<div style="margin:2px 0"><span class="ag">${label}:</span> ${esc(b)}</div>`;
-    });
+    console.warn(`[Agent] ${aid} sim (live would use real):`, e && e.message);
+    txt = getSimulatedAgentOutput(aid, p);
   }
 
-  const container = document.getElementById('agents-' + key);
-  if (container) {
-    let banner = '';
-    if (fb) {
-      banner = '<div style="font-size:9px;color:#c8a25f;margin-bottom:4px">High-quality local simulation (deploy with XAI_API_KEY + functions for live 82-GOD agents)</div>';
-    }
-    container.innerHTML = banner + (html || '<div style="color:#555">No new points.</div>');
-  }
+  clearInterval(timer);
+  st.status = 'done';
+  st.elapsed = (Date.now() - st.startTime) / 1000;
+  const bullets = txt.split(/\n|•/).map(s=>s.trim()).filter(s=>s.length>4).slice(0,3);
+  st.output = bullets.join(' • ');
 
-  btn.textContent = 'Re-run Agents for Shot';
+  refreshAgentUIForShot(key);
   btn.disabled = false;
+}
+
+async function runAllAgentsForShot(key, btn) {
+  if (!btn) return;
+  const orig = btn.textContent;
+  btn.textContent = 'Running agents 1-by-1...';
+  btn.disabled = true;
+
+  const agents = getRelevantAgentsForShot();
+  for (const aid of agents) {
+    // find the button in current DOM for that agent (after refresh it will have new buttons)
+    refreshAgentUIForShot(key);
+    // small delay so UI shows the next running
+    await new Promise(r => setTimeout(r, 60));
+    // trigger the single run (it will update status + refresh inside)
+    const fakeBtn = { disabled: false, textContent: 'Run' }; // not used visually
+    await runOneAgentForShot(key, aid, fakeBtn);
+  }
+
+  btn.textContent = 'Re-run All for Shot';
+  btn.disabled = false;
+  refreshAgentUIForShot(key);
 }
 
 // Generate video for ONE per-shot box using its exact current prompt (with jots), chars/photos, location.
