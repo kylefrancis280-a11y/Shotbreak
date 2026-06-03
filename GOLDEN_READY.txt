@@ -3,7 +3,7 @@ GOLDEN READY — CLEANED (crypto/portfolio/Atlas finance strays REMOVED).
 LATEST: 81be26b (local) + remote deletes (330d3f5.. through c3100739) + branding fixes.
 Removed: portfolio_grader.py + netlify/functions/{prices,news,daily-analysis,seed-universe,get-analysis}.js
 All atlasanalysis.net / finnhub / ATLAS-ETF / stock portfolio refs purged from Shotbreak tree.
-Owner 3-logins (kyle/scott/steve@shotbreak.io) fully present + functional via quick buttons + client bypass in customerLogin + loadUser (any/blank pw) + verify-owner.js server.
+Owners (current active kyleF/steveC/scottD shorts for the 3 Shotbreak owners + originals) present. Strict real Firebase login or proper 4-part HMAC /verify-owner only. All bypasses (quick buttons, any-pw, client mocks, nuclear) removed from active sources. Old debug text cleaned. Use get-owner-token.ps1 helper with the OWNER_PW_* env values.
 
 ---
 

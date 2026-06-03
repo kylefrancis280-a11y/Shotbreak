@@ -79,7 +79,15 @@ async function signup(name, email, password) {
 }
 
 // ── Owner Notifications (private — emails never exposed to frontend) ──
-const OWNER_EMAILS = ['kyle@shotbreak.io', 'scott@shotbreak.io', 'steve@shotbreak.io'];
+const OWNER_EMAILS = [
+  'kyle@shotbreak.io',
+  'scott@shotbreak.io',
+  'steve@shotbreak.io',
+  // Current active shorts for the 3 owners (kyleF/steveC/scottD)
+  'kylef@shotbreak.io',
+  'stevec@shotbreak.io',
+  'scottd@shotbreak.io'
+];
 
 async function notifyOwners(name, email) {
   // 1. Always log to Firebase

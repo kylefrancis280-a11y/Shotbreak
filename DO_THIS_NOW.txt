@@ -60,7 +60,7 @@ VERIFICATION EVIDENCE (run right now):
 
 (The clone C:\Users\kylefrancis\Shotbreak now contains the authoritative full content + is git-managed against the URL you provided.)
 
-REMOTE REPO: https://github.com/kylefrancis280-a11y/Shotbreak (now has the grab commits once you push)
+REMOTE REPO: https://github.com/kylefrancis280-a11y/Shotbreak (now has the grab + clean commits + full golden app.html via PAT restores at ca1fa76; docs and fns updated via MCP + local owner polish)
 
 THE MANUAL RITUAL (largely replaced by the git clone + commit + push above — the web editor paste is no longer required if the git push succeeds with the full file):
 ... (rest of previous ritual for Netlify / keys / test remains)
@@ -68,12 +68,12 @@ THE MANUAL RITUAL (largely replaced by the git clone + commit + push above — t
 LOCAL GOLDEN (source of truth, full verified per user spec):
 Path: C:\Users\kylefrancis\SHOTBREAK-FINAL-FLOW-UPDATE.html
 Synced: Copy-Item .\SHOTBREAK-FINAL-FLOW-UPDATE.html .\app.html -Force
-Size: 457007 bytes
-Lines: 7277
+Size: 463273 bytes
+Lines: 7375
 
 VERIFICATION EVIDENCE (run right now):
-- (Get-Content ... | Measure).Lines → 7277
-- (Get-Item app.html).Length → 457007 (matches golden)
+- (Get-Content ... | Measure).Lines → 7375
+- (Get-Item app.html).Length → 463273 (matches golden)
 - Select-String hits in app.html:
   Line 663: 🔒 Lock Script & Send to Characters + Locations
   BROAD_RESOLUTIONS present (const + populates)
