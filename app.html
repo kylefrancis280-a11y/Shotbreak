@@ -258,7 +258,7 @@ header{padding:14px 0;border-bottom:1px solid var(--border);position:sticky;top:
 
     <!-- Owner login note -->
     <div style="margin-top:18px; padding:12px 14px; background:#1a140a; border:1px solid #d4a84344; border-radius:8px; font-size:12px; line-height:1.35; color:#d4c8a8;">
-      <strong style="color:#f0d9a0">Owners:</strong> In the Sign In form, enter short (kylef / stevec / scottd / kyle / scott / steve) + the matching OWNER_PW_* value from your Netlify env (or a real Firebase password if you created an account for the email). The login now routes owners through /verify-owner so the special passwords work directly in the UI (sets 4-part token + owner tier). ps1 helper still useful for shells/cURL. No bypasses. Non-owners require valid subscription.
+      <strong style="color:#f0d9a0">Owners:</strong> In the Sign In form, enter short (kylef / stevec / scottd / stevek / kyle / scott / steve) + the matching OWNER_PW_* value from your Netlify env (or a real Firebase password if you created an account for the email). The login now routes owners through /verify-owner so the special passwords work directly in the UI (sets 4-part token + owner tier). ps1 helper still useful for shells/cURL. No bypasses. Non-owners require valid subscription.
     </div>
 
   </div>
@@ -998,12 +998,13 @@ header{padding:14px 0;border-bottom:1px solid var(--border);position:sticky;top:
         appId: "1:515766987392:web:ac3644d952c69d11c7d465",
         measurementId: "G-R2BT95E9DE"
       },
-      // Current active for the 3 Shotbreak owners: originals + kyleF/steveC/scottD (plain company not fully set up).
+      // Current active for the 3 Shotbreak owners: originals + kyleF/steveC/scottD/steveK (plain company not fully set up).
       // If the real emails for the shorts are on different domains, update this + OWNER_NAME_TO_EMAIL map in the two verify-token.js.
       // Only these get isOwner/unlimited (after real login). No bypasses.
       OWNER_EMAILS: [
         "kyle@shotbreak.io", "scott@shotbreak.io", "steve@shotbreak.io",
-        "kylef@shotbreak.io", "stevec@shotbreak.io", "scottd@shotbreak.io"
+        "kylef@shotbreak.io", "stevec@shotbreak.io", "scottd@shotbreak.io",
+        "stevek@shotbreak.io"
       ],
       OWNER_META: {
         kyle:  { name: "Kyle Francis", color: "#d4a843" },
@@ -1011,7 +1012,8 @@ header{padding:14px 0;border-bottom:1px solid var(--border);position:sticky;top:
         steve: { name: "Steve", color: "#a78bfa" },
         kylef:  { name: "Kyle F", color: "#d4a843" },
         stevec: { name: "Steve C", color: "#a78bfa" },
-        scottd: { name: "Scott D", color: "#60a5fa" }
+        scottd: { name: "Scott D", color: "#60a5fa" },
+        stevek: { name: "Steve K", color: "#a78bfa" }
       }
     };
   }
@@ -1090,7 +1092,8 @@ header{padding:14px 0;border-bottom:1px solid var(--border);position:sticky;top:
     'scottd': 'scottd@shotbreak.io',
     'kyle': 'kyle@shotbreak.io',
     'scott': 'scott@shotbreak.io',
-    'steve': 'steve@shotbreak.io'
+    'steve': 'steve@shotbreak.io',
+    'stevek': 'stevek@shotbreak.io'
   };
 
   // ===================== AUTH STATE (safe) =====================
@@ -1116,7 +1119,8 @@ const OWNER_META = (window.SHOTBREAK_CONFIG && window.SHOTBREAK_CONFIG.OWNER_MET
   steve: { name: "Steve", color: "#a78bfa" },
   kylef:  { name: "Kyle F", color: "#d4a843" },
   stevec: { name: "Steve C", color: "#a78bfa" },
-  scottd: { name: "Scott D", color: "#60a5fa" }
+  scottd: { name: "Scott D", color: "#60a5fa" },
+  stevek: { name: "Steve K", color: "#a78bfa" }
 };
 
 // ===================== LEGACY STUBS (defensive against old deploy remnants) =====================
@@ -1202,7 +1206,7 @@ function showTab(t){
 
 // Customer login — plain button onclick, no form submission chain
 // Supports owner passwords directly in the UI:
-//   - Enter short (kylef/stevec/scottd/kyle/scott/steve) + the OWNER_PW_* value from Netlify env → uses /verify-owner, gets 4-part token, owner tier (no Firebase user required for shorts).
+//   - Enter short (kylef/stevec/scottd/stevek/kyle/scott/steve) + the OWNER_PW_* value from Netlify env → uses /verify-owner, gets 4-part token, owner tier (no Firebase user required for shorts).
 //   - Or full owner email + OWNER_PW value (auto-maps to short for verify).
 //   - Falls back to real Firebase signInWithEmailAndPassword (for non-owners or owners who set a separate Firebase pw on the email account).
 // This fixes "password doesnt work" when users paste the special owner pw into the login form.
@@ -1370,10 +1374,11 @@ async function loadUser(fbUser){
   const localPart = emailLc.split('@')[0] || 'user';
   let shortKey = localPart;
   if (isOwner && !OWNER_META[shortKey]) {
-    // Support truly different (non-@shotbreak) emails for the current kyleF/steveC/scottD owners
+    // Support truly different (non-@shotbreak) emails for the current kyleF/steveC/scottD/steveK owners
     if (emailLc.includes('kylef') || emailLc.includes('kyle.f') || emailLc.includes('kyle-francis')) shortKey = 'kylef';
     else if (emailLc.includes('stevec') || emailLc.includes('steve.c') || emailLc.includes('steve-c')) shortKey = 'stevec';
     else if (emailLc.includes('scottd') || emailLc.includes('scott.d') || emailLc.includes('scott-d')) shortKey = 'scottd';
+    else if (emailLc.includes('stevek') || emailLc.includes('steve.k') || emailLc.includes('steve-k')) shortKey = 'stevek';
   }
   const ownerMeta = isOwner
     ? (OWNER_META[shortKey] || { name: fbUser.displayName || 'Owner', color: '#d4a843' })
@@ -6634,7 +6639,7 @@ function renderCharacterPhotos(charName) {
   container.innerHTML = html;
 }
 
-async function generateCharacterPhotoForBox(charName) {
+function generateCharacterPhotoForBox(charName) {
   const p = projectLoad();
   if (!p || !p.script) { alert('Lock a script first.'); return; }
 
@@ -6850,7 +6855,7 @@ async function generateCharacterPhotoForBox(charName) {
 
 // NEW: Location photo adder (for coherence matching, lives in Characters tab)
 // Now routes the plate prompt thru Grok (environment-builder / prompt-writer) so location refs are as intelligent/coherent as character + video work.
-async function addLocationPhoto() {
+function addLocationPhoto() {
   const p = projectLoad();
   if (!p) { alert('Load a project first.'); return; }
   if (!p.assets) p.assets = {};
