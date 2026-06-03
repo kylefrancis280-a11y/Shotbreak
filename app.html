@@ -227,7 +227,7 @@ header{padding:14px 0;border-bottom:1px solid var(--border);position:sticky;top:
       <input type="email" id="loginEmail" placeholder="Email" autocomplete="email" autocapitalize="none" spellcheck="false">
       <input type="password" id="loginPw" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')customerLogin()">
       <div id="loginErr" class="form-err" style="display:none"></div>
-      <button type="button" class="b b-gold b-big b-full" onclick="customerLogin()">Sign In</button>
+      <button type="button" class="b b-gold b-big b-full" id="signInBtn">Sign In</button>
       <div style="text-align:center;margin-top:12px">
         <span class="form-link" onclick="showTab('forgot')">Forgot password?</span>
       </div>
@@ -651,7 +651,7 @@ header{padding:14px 0;border-bottom:1px solid var(--border);position:sticky;top:
             <div style="margin-top:8px">
               <button class="b b-g b-s" onclick="mhLockScriptAndExtract()">🔒 Lock Script & Send to Characters + Locations</button>
             </div>
-            <div id="localModeNote" style="font-size:10px;color:#666;margin-top:4px;display:block">LOCAL MODE (high-quality agent simulations for testing). Owners (kyleF/steveC/scottD shorts + originals) use real credentials or proper tokens from get-owner-token.ps1. Open this file directly for full flow testing.</div>
+            <div id="localModeNote" style="font-size:10px;color:#666;margin-top:4px;display:none">LOCAL MODE (high-quality agent simulations for testing). Owners (kyleF/steveC/scottD shorts + originals) use real credentials or proper tokens from get-owner-token.ps1. Open this file directly for full flow testing.</div>
             <div id="mhScriptParsed" style="margin-top:8px;background:#111;border:1px solid var(--gold-border);padding:10px;font-size:13px;white-space:pre-wrap;display:none"></div>
           </div>
         </div>
@@ -1536,6 +1536,28 @@ try{localStorage.removeItem('SB_OWNER_TOKEN');localStorage.removeItem('SB_OWNER_
 curUser=null;document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
 document.getElementById('loginScreen').classList.add('active');window.history.replaceState({},'',window.location.pathname)}
 document.addEventListener('click',e=>{if(!e.target.closest('.user-pill'))document.getElementById('uMenu').classList.remove('open')});
+
+// Robust login button wiring (fixes "doesnt click" even if inline onclick had issues or timing)
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = document.getElementById('signInBtn');
+  if (btn) {
+    btn.addEventListener('click', () => {
+      try {
+        if (typeof customerLogin === 'function') {
+          customerLogin();
+        } else {
+          const errEl = document.getElementById('loginErr');
+          if (errEl) { errEl.textContent = 'Login not ready (hard refresh or wait for full load).'; errEl.style.display = 'block'; }
+          console.error('customerLogin not defined at click time');
+        }
+      } catch (e) {
+        console.error('customerLogin click error:', e);
+        const errEl = document.getElementById('loginErr');
+        if (errEl) { errEl.textContent = 'Error: ' + (e && e.message || e); errEl.style.display = 'block'; }
+      }
+    });
+  }
+});
 
 // (Legacy unconditional SB_OWNER_TOKEN purge removed — it was causing
 // owner sessions to be killed on every refresh, forcing "log in again".
