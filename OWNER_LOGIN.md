@@ -1,96 +1,43 @@
-# How to Log In as Owner (kyleF / steveC / scottD)
+**Important:** After the env vars (OWNER_PW_*) are set in Netlify + Clear cache + deploy, the **UI login form password field now accepts the OWNER_PW values directly** when you type the short in email (kylef + your OWNER_PW_KYLEF value etc). This is the fix for "the fucking password doesnt fucking work".
 
-**Important:** The script you ran (via the .bat) worked! It reached the server and gave the exact error because the passwords are not yet set in Netlify.
+The ps1 script and token path still work for shells.
 
-You are not lost on the script — the missing piece is setting the env vars + deploying.
+## 1. UI Login (easiest for browser)
 
-You are currently lost because there are **two separate systems** for "owner" access.
+In the Login tab of the sign-in screen, just type the **short** (kylef / stevec / scottd / stevek / kyle / scott / steve) in the email field and paste the matching **OWNER_PW_*** value (from the env / my-owner-pws.txt) into the Password field. Hit Sign In.
 
-## 1. Full App UI Login (Recommended for using the editor, agents, per-shot controls, etc.)
+- The form now calls /verify-owner under the hood for owner shorts/fulls.
+- On success you get the real 4-part `owner:...` token stored, owner tier, unlimited, special UI.
 
-This uses normal Firebase email + password sign in.
+Supported owner shorts right now:
+- kylef (→ kylef@shotbreak.io)
+- stevec (→ stevec@shotbreak.io)
+- scottd (→ scottd@shotbreak.io)
+- stevek (→ stevek@shotbreak.io)
+- plus the originals kyle / scott / steve
 
-**Current active owner emails (usernames) you can use:**
-
-- kylef@shotbreak.io   ← for you (Kyle) via the kyleF short
-- stevec@shotbreak.io
-- scottd@shotbreak.io
-
-(The original kyle@shotbreak.io etc. are still in the list but the F/C/D variants are the "current active" ones while the plain company ones are being set up.)
-
-**Easiest way to create the account + set your password:**
-
-1. Open the app:
-   - Live: the deployed site (usually https://shotbreak.io/app or the main app.html)
-   - Or for testing: open `SHOTBREAK-FINAL-FLOW-UPDATE.html` directly in your browser (file://...)
-
-2. In the sign-in screen, switch to the **Signup** tab.
-
-3. Enter:
-   - Email: `kylef@shotbreak.io` (or one of the others)
-   - Password: Choose a strong password you will remember. Type it in the form.
-
-4. Click create / sign up.
-
-5. Then switch to the Login tab and sign in with the exact same email + the password you just chose.
-
-Because the email is in the authorized OWNER_EMAILS list, you will be logged in with full owner privileges (isOwner = true, no subscription prompts, unlimited access, special UI colors, etc.).
-
-**Note:** The password you choose here is a normal Firebase password. It is **completely separate** from the OWNER_PW_* values below.
-
-If the emails need to be on completely different domains (not @shotbreak.io), tell me the three real addresses and I will update the code so the list + token mapping use your real ones.
+If the real emails end up on different domains, the SHORT_TO_FULL_EMAIL map + server OWNER_NAME_TO_EMAIL will need the update (tell me the exact addresses).
 
 ## 2. Token-based Owner Access (for scripts, shells, or quick browser testing without Firebase sign-in)
 
-This uses short names + the special OWNER_PW_* passwords that live only in Netlify Environment Variables.
+Use the get-owner-token.ps1 (or the RUN_ME_FOR_* .bat files) after putting the OWNER_PW_* into Netlify.
 
-**Current shorts (the "name" you send to verify-owner):**
-
+Supported:
 - kyleF   (for the kylef@... identity)
 - steveC
 - scottD
-
-**The passwords (these were generated for you and must be set in Netlify):**
+- steveK (new for stevek@)
 
 See the local file my-owner-pws.txt (in C:\Users\kylefrancis) for the exact long random strings to use.
 
 It contains:
 
-OWNER_PW_KYLEF=...
-OWNER_PW_STEVEC=...
-OWNER_PW_SCOTTD=...
-
-(plus optional backups)
-
-**1. Set the passwords in Netlify (required before the script will work)**
-
-Go to https://app.netlify.com (log in with your account that owns the Shotbreak site).
-
-- Select your site (probably "shotbreak" or similar, the one with the custom domain shotbreak.io)
-- Go to Site configuration (or Site settings) > Environment variables
-- Add three new variables (click "Add a variable" for each):
-
-  Key: OWNER_PW_KYLEF
-  Value: (copy the exact long string from my-owner-pws.txt)
-
-  Key: OWNER_PW_STEVEC
-  Value: (from the file)
-
-  Key: OWNER_PW_SCOTTD
-  Value: (from the file)
-
-- Make sure "Deploy contexts" is set to "All" or at least Production + Deploy Previews.
-- Save.
-
-**2. Deploy the changes**
-
-- Go to the "Deploys" tab for the site.
-- Click the big "Clear cache and deploy site" button.
-- Wait until it shows "Published" with a green check (this can take a minute).
-
-Only after this will the remote /verify-owner endpoint accept the passwords.
-
-**Easiest way to get a token:** (after the above)
+```
+OWNER_PW_KYLEF=6V&3{j7D[Lmy8Md(bscV@D.R
+OWNER_PW_STEVEC=SB}LKs,=.(d(MMXi=Z4^JKfJ
+OWNER_PW_SCOTTD=sbLx(,yBbHC:Pvw!i=?QCS4W
+OWNER_PW_STEVEK=LHu&-;$Bj8$yzG!pIX^u&0Gt$w*-
+```
 
 Then, in PowerShell (your prompt showed `PS C:\Users\kylefrancis>` so use this):
 
@@ -99,58 +46,25 @@ Then, in PowerShell (your prompt showed `PS C:\Users\kylefrancis>` so use this):
 .\Shotbreak\get-owner-token.ps1
 ```
 
-Or with parameters to skip prompts (recommended once you have the pw value):
-
-```powershell
-.\Shotbreak\get-owner-token.ps1 -Name kyleF -Password "paste-the-OWNER_PW_KYLEF-long-string-here"
-```
-
-If you cd first:
-```powershell
-cd Shotbreak
-.\get-owner-token.ps1
-```
-
 **Even easier (new launcher added for your exact situation):** 
 Double-click `run-get-owner-token.bat` (in C:\Users\kylefrancis) or run:
 ```powershell
 .\run-get-owner-token.bat
 ```
-It cds automatically and defaults to kyleF (you only need to paste the pw).
 
-- Choose the short (type `kyleF` and Enter) or use the bat
-- When it asks for the password, paste the corresponding OWNER_PW_KYLEF value (input is hidden for security)
+Or for a specific one:
+- Double click RUN_ME_FOR_STEVEK_TOKEN.bat (new!)
 
-The script will:
+This will:
+- Auto load the pw from my-owner-pws.txt
 - Call the verify-owner endpoint
-- Give you a fresh `owner:kylef:1234567890:longhmac...` token
+- Give you a fresh `owner:stevek:1234567890:longhmac...` token
 - Copy the token to your clipboard
 - Print exact commands for using it
 
-**To act as owner in the browser without signing in via Firebase:**
+## Firebase email+pw for the full emails (kylef@ , stevek@ etc)
 
-After getting the token, open the app page (live or local golden), open DevTools console (F12), and run:
+Create the users in Firebase Auth console with password Shotbreak2026! (for the two requested).
+Then in app login use full email stevek@shotbreak.io + Shotbreak2026!  (falls back to Firebase if verify pw not matching the OWNER_PW one).
 
-```js
-localStorage.setItem('SB_OWNER_TOKEN', 'paste-the-full-token-here');
-location.reload();
-```
-
-You should now see owner behavior.
-
-The token is valid for ~12 hours.
-
-## Quick Checklist if Things Don't Work
-
-- Did you set the three OWNER_PW_KYLEF etc. in Netlify env + redeploy + clear cache?
-- Is the latest golden code live (the updates including the helper references)?
-- For UI: did you actually create the Firebase user with the email via the signup form (or Firebase Console)?
-- For token: are you using the exact short `kyleF` (capital F) and the exact pw value?
-
-If you give me the three real different email addresses you want to use for the accounts, I will immediately update the code (the lists and the map) so everything points to your real emails instead of the @shotbreak.io placeholders.
-
-You are not lost — there are just two paths. The UI signup path (section 1) is usually what people mean by "my username and password".
-
-Run the helper script for the token path.
-
-Let me know which path you're trying and what error you see.
+After any change to these files or env, always: Clear cache and deploy site in Netlify.
