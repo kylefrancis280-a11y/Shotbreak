@@ -27,8 +27,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics-compat.js"></script>
-<script src="js/config.js?v=20260616"></script>
-<script src="js/auth.js?v=20260616"></script>
+<script src="js/config.js?v=20260617"></script>
+<script src="js/auth.js?v=20260617"></script>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Anybody:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -655,9 +655,9 @@ window.safeSignIn = safeSignIn;
 
     <!-- Just the 4 options - the modular building blocks for your movie. Extremely modular. -->
     <div style="display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap;background:var(--surface);padding:6px;border-radius:10px;border:1px solid var(--gold-border)">
-      <button onclick="mhSwitchTab('script')" id="mhTabScript" class="b b-gold b-s" style="flex:1;min-width:110px">Script</button>
+      <button onclick="mhSwitchTab('script')" id="mhTabScript" class="b b-gold b-s" style="flex:1;min-width:110px;background:var(--gold);color:#000">Script</button>
       <button onclick="mhSwitchTab('characters')" id="mhTabCharacters" class="b b-g b-s" style="flex:1;min-width:110px">Characters</button>
-      <button onclick="mhSwitchTab('generate')" id="mhTabGenerate" class="b b-g b-s" style="flex:1;min-width:110px;background:var(--gold);color:#000">Generate</button>
+      <button onclick="mhSwitchTab('generate')" id="mhTabGenerate" class="b b-g b-s" style="flex:1;min-width:110px">Generate</button>
       <button onclick="mhSwitchTab('edit')" id="mhTabEdit" class="b b-g b-s" style="flex:1;min-width:110px">Edit/Upscale</button>
     </div>
 
@@ -1691,7 +1691,7 @@ function showDash(){
   document.querySelectorAll('#dashView, #fwdView, #revView, #charView').forEach(el => { if (el) el.style.display = 'none'; });
   if (hub) {
     hub.style.display = 'block';
-    if (typeof mhSwitchTab === 'function') mhSwitchTab('generate');
+    if (typeof mhSwitchTab === 'function') mhSwitchTab('script');
   }
 }
 
@@ -1704,7 +1704,7 @@ function showMode(m){
     hub.style.display = 'block';
     // Default to the 4-tab Generation Hub experience
     if (typeof mhSwitchTab === 'function') {
-      mhSwitchTab('generate'); // or 'script' – user prefers Generate prominent
+      mhSwitchTab('script');
     }
   }
   document.getElementById('uMenu').classList.remove('open');
@@ -6291,8 +6291,8 @@ async function mhRunAgentPromptBuilder(){
       outputText = getSimulatedAgentOutput(spec.id, p);
     }
 
-    // Turn whatever we got into clean bullet points
-    const bullets = String(outputText).split(/\n|•|\*|- /).map(s=>s.trim()).filter(s=>s.length>3 && s.length<180).slice(0,6);
+    // Turn whatever we got into clean bullet points (Grok markdown-safe)
+    const bullets = mhExtractBullets(outputText, 6);
     const bulletHtml = bullets.length ? bullets.map(b=>`<div style="margin:2px 0">• ${esc(b)}</div>`).join('') : `<div style="font-size:12px;white-space:pre-wrap">${esc(outputText.slice(0,600))}</div>`;
 
     const note = usedReal ? '' : ' <span style="color:#c8a25f;font-size:9px;">(local sim)</span>';
@@ -6537,7 +6537,7 @@ function mhShowQualityPanel(){
 function openMediaHubGenerate(){
   showMode('media');  // forces only the 4-tab Generation Hub, no other sides
   setTimeout(() => {
-    if (typeof mhSwitchTab === 'function') mhSwitchTab('generate');
+    if (typeof mhSwitchTab === 'function') mhSwitchTab('script');
     const p = projectLoad();
     if (p && p.script) {
       const scriptTa = document.getElementById('mhScriptMain');
@@ -7022,7 +7022,7 @@ async function mhRunEntityAgents(kind, entityKey, btn) {
       usedFallback = true;
     }
 
-    const bullets = text.split(/\n|•/).map(s => s.trim()).filter(s => s.length > 5 && s.length < 160).slice(0,5);
+    const bullets = mhExtractBullets(text, 5);
     bullets.forEach(b => {
       suggestions.push({ agent: aid, text: b, approved: true, fallback });
     });
@@ -7123,7 +7123,60 @@ function mhNormalizePoints(raw) {
   }).filter(Boolean);
 }
 
-function mhParseBox(entityBoxId) {
+function mhIsLocalHost() {
+  return (location.protocol === 'file:') || (location.hostname === 'localhost') || (location.hostname === '127.0.0.1');
+}
+
+function mhRenderParsedPromptBox(outEl, entityBoxId, bodyText, meta) {
+  const header = entityBoxId === 'script'
+    ? 'Clean script prompt:'
+    : `Clean prompt for ${entityBoxId}:`;
+  const note = meta && meta.live
+    ? '<div style="font-size:10px;color:#86efac;margin-bottom:6px">Live Grok prompt-writer synthesis</div>'
+    : (meta && meta.local ? '<div style="font-size:10px;color:var(--gold);margin-bottom:6px">Local synthesis (sign in on shotbreak.io for live Grok)</div>' : '');
+
+  outEl.innerHTML = note;
+  outEl.style.cssText = 'margin-top:8px;background:#111;border:1px solid var(--gold-border);padding:8px;font-size:13px;';
+
+  const ta = document.createElement('textarea');
+  ta.style.cssText = 'width:100%;min-height:140px;background:#0a0a0f;color:#fff;border:1px solid var(--gold-border);padding:8px;font-family:var(--mono);font-size:12.5px;resize:vertical;line-height:1.35;';
+  ta.value = header + '\n\n' + String(bodyText || '').trim();
+
+  const btn = document.createElement('button');
+  btn.className = 'b b-gold b-s';
+  btn.style.marginTop = '6px';
+  btn.textContent = '🔒 Relock / Save My Edited Version';
+
+  btn.onclick = () => {
+    const edited = ta.value.trim();
+    const p = projectLoad() || {};
+    if (!p.cleanPrompts) p.cleanPrompts = {};
+    p.cleanPrompts[entityBoxId] = edited;
+
+    if (entityBoxId.startsWith('char_')) {
+      const cname = entityBoxId.replace('char_', '').toUpperCase();
+      const bible = (p.characterBible || []).find(c => (c.name || '').toUpperCase() === cname);
+      if (bible) {
+        bible.cleanPrompt = edited;
+        bible.userLockedPrompt = true;
+      }
+    }
+    if (entityBoxId === 'script') {
+      p.synthesizedPrompt = edited;
+    }
+    projectSave(p);
+
+    btn.textContent = '✅ Relocked (your version will be used)';
+    btn.style.background = 'var(--gold)';
+    btn.style.color = '#000';
+  };
+
+  outEl.appendChild(ta);
+  outEl.appendChild(btn);
+  console.log('[Shotbreak] Parsed clean prompt for', entityBoxId, meta && meta.live ? '(live Grok)' : '(local fallback)', 'build fix-all-20260616');
+}
+
+async function mhParseBox(entityBoxId) {
   const listEl = document.getElementById('points_' + entityBoxId);
   if (!listEl) {
     alert('Parse UI not ready for ' + entityBoxId + '. Refresh the page and try again.');
@@ -7156,62 +7209,48 @@ function mhParseBox(entityBoxId) {
   }
 
   outEl.style.display = 'block';
-  outEl.innerHTML = 'Final prose agent is turning these points into a clean, continuity-safe prompt...';
+  outEl.innerHTML = '<div style="color:var(--dim)">Final prose agent (prompt-writer) is synthesizing your approved points...</div>';
   outEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
-  // Call the existing synthesizer logic but scoped
-  setTimeout(() => {
-    const baseClean = points.join(' | ') +
-      `\n\n(Continuity-safe, no character bleed, location and time locked from the approved points above.)`;
-    const header = entityBoxId === 'script'
-      ? 'Clean script prompt:'
-      : `Clean prompt for ${entityBoxId}:`;
+  const p = projectLoad() || {};
+  const isLocal = mhIsLocalHost();
+  const pointsBlock = points.map(pt => '• ' + pt).join('\n');
+  const charName = entityBoxId.startsWith('char_') ? entityBoxId.replace('char_', '') : '';
+  const synthInput = {
+    task: 'final_prose_synthesis',
+    entity: entityBoxId,
+    character: charName || undefined,
+    script: (p.script || '').slice(0, 2000),
+    all_agent_points: pointsBlock,
+    instruction: 'Turn these approved bullet points into 2-4 beautiful, concise cinematic paragraphs. No bullet points in the final output. Pure evocative neo-noir prose, continuity-safe, photo-anchored, ready for video generation.'
+  };
 
-    // Make it editable + relockable as requested.
-    // User can tweak the synthesized prompt (fix grammar, add personal direction, adjust length) then relock to use their version downstream.
-    outEl.innerHTML = '';
-    outEl.style.cssText = 'margin-top:8px;background:#111;border:1px solid var(--gold-border);padding:8px;font-size:13px;';
+  let finalText = '';
+  let usedLive = false;
 
-    const ta = document.createElement('textarea');
-    ta.style.cssText = 'width:100%;min-height:110px;background:#0a0a0f;color:#fff;border:1px solid var(--gold-border);padding:8px;font-family:var(--mono);font-size:12.5px;resize:vertical;line-height:1.35;';
-    ta.value = header + '\n\n' + baseClean;
+  if (!isLocal) {
+    const token = await mhWaitForAuthToken(10000);
+    if (!token) {
+      outEl.innerHTML = '<div style="color:#f87171;margin-bottom:8px">Not signed in — using local synthesis. Sign in (kylef + owner password) for live Grok.</div>';
+    }
+  }
 
-    const btn = document.createElement('button');
-    btn.className = 'b b-gold b-s';
-    btn.style.marginTop = '6px';
-    btn.textContent = '🔒 Relock / Save My Edited Version';
+  if (!isLocal && window.SB_InvokeAgent) {
+    try {
+      const res = await window.SB_InvokeAgent('prompt-writer', synthInput);
+      finalText = String(res.output || res.result || '').trim();
+      if (finalText) usedLive = true;
+    } catch (e) {
+      console.warn('[mhParseBox] Grok synthesis failed, using local fallback:', e && e.message);
+    }
+  }
 
-    btn.onclick = () => {
-      const edited = ta.value.trim();
-      const p = projectLoad() || {};
-      if (!p.cleanPrompts) p.cleanPrompts = {};
-      p.cleanPrompts[entityBoxId] = edited;
+  if (!finalText) {
+    finalText = points.join('\n\n') +
+      '\n\nCold rain and harsh practical light bind every beat. Continuity-safe, no character bleed — location and time locked from the approved points above. (Edit and relock your version below.)';
+  }
 
-      // For character boxes, also persist directly on the bible entry so video prompts and photo gens can prefer the user-locked version
-      if (entityBoxId.startsWith('char_')) {
-        const cname = entityBoxId.replace('char_', '').toUpperCase();
-        const bible = (p.characterBible || []).find(c => (c.name || '').toUpperCase() === cname);
-        if (bible) {
-          bible.cleanPrompt = edited;
-          bible.userLockedPrompt = true;
-        }
-      }
-      projectSave(p);
-
-      // Visual confirmation
-      btn.textContent = '✅ Relocked (your version will be used)';
-      btn.style.background = 'var(--gold)';
-      btn.style.color = '#000';
-      setTimeout(() => {
-        if (btn.parentNode) btn.parentNode.removeChild(btn); // or keep it for re-edit
-      }, 1200);
-    };
-
-    outEl.appendChild(ta);
-    outEl.appendChild(btn);
-
-    console.log('[MediaHub] Parsed clean prompt for', entityBoxId, '(editable + relockable)');
-  }, 600);
+  mhRenderParsedPromptBox(outEl, entityBoxId, finalText, { live: usedLive, local: isLocal || !usedLive });
 }
 
 // NEW: Lock the script from the Script tab textarea and push extracted characters + location
@@ -7439,7 +7478,7 @@ function mhRenderScriptSuggestions(box, all, usedFallback, isLocal) {
   if (!_mhApprovedPoints) window._mhApprovedPoints = { script: [], characters: {}, generate: {} };
   _mhApprovedPoints.script = all.map(item => item.text).filter(Boolean);
   mhRefreshPointList('script');
-  console.log('[Shotbreak] Script agents done:', all.length, 'bullets, build 7a31dae');
+  console.log('[Shotbreak] Script agents done:', all.length, 'bullets, build fix-all-20260616');
 }
 
 async function mhRunScriptAgents() {
@@ -7455,7 +7494,7 @@ async function mhRunScriptAgents() {
   p.script = script;
   projectSave(p);
 
-  const isLocal = (location.protocol === 'file:') || (location.hostname === 'localhost') || (location.hostname === '127.0.0.1');
+  const isLocal = mhIsLocalHost();
   if (!isLocal) {
     box.innerHTML = '<div style="color:var(--dim)">Checking sign-in...</div>';
     const token = await mhWaitForAuthToken(12000);
@@ -7763,7 +7802,7 @@ function renderAgentContribsForShot(key, p) {
   let html = '';
   agentsToShow.forEach(aid => {
     const txt = getSimulatedAgentOutput(aid, p);
-    const bullets = String(txt).split(/\n|•/).map(s=>s.trim()).filter(s=>s.length>4).slice(0,2);
+    const bullets = mhExtractBullets(txt, 2);
     bullets.forEach(b => {
       html += `<div><span class="ag">${aid}:</span> ${esc(b)}</div>`;
     });
@@ -7798,7 +7837,7 @@ async function runAgentsForShot(key, btn) {
       txt = getSimulatedAgentOutput(aid, p);
       fb = true;
     }
-    const bullets = txt.split(/\n|•/).map(s=>s.trim()).filter(s=>s.length>4).slice(0,3);
+    const bullets = mhExtractBullets(txt, 3);
     const isLocal = (location.protocol === 'file:') || (location.hostname === 'localhost') || (location.hostname === '127.0.0.1');
     bullets.forEach(b => {
       const label = `${aid}`;
