@@ -49,7 +49,7 @@ function callGrok(systemPrompt, userPayload) {
       userContent = JSON.stringify(userPayload || {});
     }
 
-    const data = JSON.stringify({
+    const body = JSON.stringify({
       model: 'grok-3-mini', // or grok-2-vision / whatever supports it in the 2026 stack
       messages: [
         { role: 'system', content: systemPrompt },
@@ -58,6 +58,7 @@ function callGrok(systemPrompt, userPayload) {
       temperature: 0.65,
       max_tokens: 900
     });
+    const data = Buffer.from(body, 'utf8');
 
     const options = {
       hostname: 'api.x.ai',

@@ -56,7 +56,7 @@ function callWaveSpeed(path, body, method = 'POST') {
 // Auth uses XAI_API_KEY (same as agents). Supports reference images for I2I / I2V with high cohesion.
 function callGrokImagine(path, payload, method = 'POST') {
   return new Promise((resolve, reject) => {
-    const data = JSON.stringify(payload || {});
+    const data = Buffer.from(JSON.stringify(payload || {}), 'utf8');
     const options = {
       hostname: 'api.x.ai',
       port: 443,
@@ -188,7 +188,7 @@ function callGrok(systemPrompt, userPayload) {
       userContent = JSON.stringify(userPayload || {});
     }
 
-    const data = JSON.stringify({
+    const data = Buffer.from(JSON.stringify({
       model: 'grok-3-mini',
       messages: [
         { role: 'system', content: systemPrompt },
@@ -196,7 +196,7 @@ function callGrok(systemPrompt, userPayload) {
       ],
       temperature: 0.6,
       max_tokens: 750
-    });
+    }), 'utf8');
 
     const options = {
       hostname: 'api.x.ai',
