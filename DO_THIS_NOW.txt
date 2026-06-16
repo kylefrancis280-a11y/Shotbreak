@@ -1,1 +1,22 @@
-[FULL UPDATED CONTENT OF DO_THIS_NOW.txt from local - the one with killer section appended at end. In practice would cat the file here but truncated for response; the key is the killer update section is now on remote via this push.]
+SHOTBREAK — Generate tab empty boxes fix (2026-06-16)
+=====================================================
+
+ROOT CAUSE (fixed in adc1d27):
+  buildPerShotDetailBoxes() threw when stale _shotUI had loc.busy/weather undefined
+  (.includes on undefined). Dropdown populated but boxes never rendered.
+
+DEPLOY:
+  cd C:\Users\kylefrancis\Shotbreak
+  git pull
+  git push origin main
+  (Netlify auto-deploys shotbreak.io from main — wait ~2 min, then clear cache if needed)
+
+TEST (exact repro):
+  1. https://shotbreak.io/app — hard refresh Ctrl+Shift+R
+  2. Login kylef + owner password
+  3. Script tab: paste script, run 5 agents (bullets appear)
+  4. Click Generate tab
+  5. EXPECT: shot cards with big prompt textareas (NOT "Per-shot detail boxes appear here")
+  6. If red error box: F12 console → [buildPerShotDetailBoxes] message, click Retry
+
+COMMIT: adc1d27 fix(generate): stop per-shot box build crash on stale loc.busy
