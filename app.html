@@ -780,10 +780,9 @@ window.safeSignIn = safeSignIn;
             <div style="font-size:9px;color:#555;margin-top:2px">Full choice of resolution / aspect / duration is available for all models (no client-side blocks). The chosen model name + settings are forwarded to the renderer (WaveSpeed or Grok Imagine via XAI). Use the model note above for guidance on typical strengths.</div>
           </div>
 
-          <div id="mhGenEntityBoxes" style="margin-top:12px">
-            <div style="padding:16px;background:#111;border:1px dashed var(--border);border-radius:8px;text-align:center;color:var(--dim);font-size:13px">
-              Per-shot detail boxes appear here.<br>
-              <button class="b b-gold b-s" onclick="buildPerShotDetailBoxes()" style="margin-top:8px">Build / Rebuild Per-Shot Detail Boxes (82-GOD Agent Level)</button>
+          <div id="mhGenEntityBoxes" style="margin-top:12px;min-height:80px">
+            <div id="mhGenEntityBoxesPlaceholder" style="padding:16px;background:#111;border:1px dashed var(--border);border-radius:8px;text-align:center;color:var(--dim);font-size:13px">
+              Building per-shot prompts from your script…
             </div>
           </div>
 
@@ -6671,9 +6670,8 @@ function mhSwitchTab(tab) {
       mhSyncScenesFromScript(p);
     }
     mhRefreshBaselineShotSelect(projectLoad());
-    setTimeout(() => {
-      if (typeof buildPerShotDetailBoxes === 'function') buildPerShotDetailBoxes();
-    }, 30);
+    if (typeof buildPerShotDetailBoxes === 'function') buildPerShotDetailBoxes();
+    setTimeout(() => { if (typeof buildPerShotDetailBoxes === 'function') buildPerShotDetailBoxes(); }, 250);
     // Populate video model select (the 5 models). Resolution/aspect/duration are broad choices (no client-side model filtering).
     setTimeout(() => {
       const vidSel = document.getElementById('videoModelSelect');
@@ -7658,9 +7656,26 @@ function mhRefreshBaselineShotSelect(p) {
   sel.innerHTML = html;
 }
 
+function mhNormalizeShotUI(key, defaults) {
+  const d = defaults || {};
+  if (!_shotUI[key]) _shotUI[key] = { minimized: false, prompt: '', chars: [], loc: {}, jots: [] };
+  const ui = _shotUI[key];
+  if (!ui.loc) ui.loc = {};
+  ui.loc.name = ui.loc.name || d.name || 'Primary location from script';
+  ui.loc.tod = ui.loc.tod || d.tod || 'Night';
+  ui.loc.busy = String(ui.loc.busy || d.busy || 'Quiet');
+  ui.loc.weather = String(ui.loc.weather || d.weather || 'Light persistent rain');
+  if (!Array.isArray(ui.chars)) ui.chars = [];
+  if (!Array.isArray(ui.jots)) ui.jots = [];
+  if (typeof ui.minimized !== 'boolean') ui.minimized = false;
+  if (typeof ui.prompt !== 'string') ui.prompt = '';
+  return ui;
+}
+
 function buildPerShotDetailBoxes() {
   const area = document.getElementById('mhGenEntityBoxes');
   if (!area) return;
+  try {
   let p = projectLoad() || {};
   if (!(p.scenes || []).length && (p.script || '').trim()) {
     mhSyncScenesFromScript(p);
@@ -7686,13 +7701,13 @@ function buildPerShotDetailBoxes() {
 
   let html = `<div style="margin-bottom:8px;font-size:11px;color:var(--dim)">Per-shot detail — ${scenes.reduce((a,s)=>a+(s.shots||[]).length,0)} shots. Use the corner LOCK on each to minimize while you work. All 82-GOD agents feed the points below (visible and labeled).</div>`;
 
+  const approvedScript = mhNormalizePoints((_mhApprovedPoints && _mhApprovedPoints.script) || []).slice(0, 6).join(' | ');
+
   scenes.forEach((scene, si) => {
     const shots = scene.shots || [];
     shots.forEach((shot, shi) => {
       const key = `${si}-${shi}`;
-      if (!_shotUI[key]) _shotUI[key] = { minimized: false, prompt: '', chars: [], loc: {name:locName, tod:locTod, busy:locBusy, weather:locWeather}, jots: [] };
-
-      const ui = _shotUI[key];
+      const ui = mhNormalizeShotUI(key, { name: locName, tod: locTod, busy: locBusy, weather: locWeather });
       const shotLabel = `S${si+1}.${shi+1}`;
       const action = esc((shot.text || shot.description || shot.action || '').substring(0,90));
 
@@ -7708,8 +7723,10 @@ function buildPerShotDetailBoxes() {
         }
         const shotBlock = shotAction ? `SHOT ${shotLabel}: ${shotAction}` : `SHOT ${shotLabel}`;
         const masterBlock = masterPrompt ? masterPrompt.replace(/^Clean script prompt:\s*/i, '').trim().slice(0, 900) : '';
+        const agentBlock = approvedScript ? ('Agent-approved points: ' + approvedScript) : '';
         ui.prompt = [
           masterBlock,
+          agentBlock,
           charRef,
           locRef,
           `Time: ${ui.loc.tod}. ${ui.loc.weather}, ${ui.loc.busy}.`,
@@ -7747,8 +7764,8 @@ function buildPerShotDetailBoxes() {
             </div>
             <div class="loc-grid">
               <div><label style="font-size:9px">Time of Day</label><select onchange="updateLocForShot('${key}',this)">${CINE.tod.o.map(o => `<option ${o===ui.loc.tod?'selected':''}>${o}</option>`).join('')}</select></div>
-              <div><label style="font-size:9px">How Busy</label><select onchange="updateLocForShot('${key}',this,'busy')"><option ${ui.loc.busy==='Deserted / Empty'?'selected':''}>Deserted / Empty</option><option ${ui.loc.busy==='Quiet'?'selected':''}>Quiet</option><option ${ui.loc.busy.includes('Moderate')?'selected':''}>Moderate foot traffic</option><option ${ui.loc.busy.includes('Bustling')?'selected':''}>Bustling / Crowded</option><option ${ui.loc.busy==='Chaotic'?'selected':''}>Chaotic</option></select></div>
-              <div><label style="font-size:9px">Weather</label><select onchange="updateLocForShot('${key}',this,'weather')"><option ${ui.loc.weather.includes('rain')?'selected':''}>Light persistent rain</option><option ${ui.loc.weather.includes('Heavy')?'selected':''}>Heavy downpour</option><option ${ui.loc.weather.includes('Fog')?'selected':''}>Fog / Mist</option><option ${ui.loc.weather.includes('Clear')?'selected':''}>Clear cold night</option><option ${ui.loc.weather.includes('Neon')?'selected':''}>Neon reflections</option></select></div>
+              <div><label style="font-size:9px">How Busy</label><select onchange="updateLocForShot('${key}',this,'busy')"><option ${ui.loc.busy==='Deserted / Empty'?'selected':''}>Deserted / Empty</option><option ${ui.loc.busy==='Quiet'?'selected':''}>Quiet</option><option ${String(ui.loc.busy).indexOf('Moderate')>=0?'selected':''}>Moderate foot traffic</option><option ${String(ui.loc.busy).indexOf('Bustling')>=0?'selected':''}>Bustling / Crowded</option><option ${ui.loc.busy==='Chaotic'?'selected':''}>Chaotic</option></select></div>
+              <div><label style="font-size:9px">Weather</label><select onchange="updateLocForShot('${key}',this,'weather')"><option ${String(ui.loc.weather).indexOf('rain')>=0?'selected':''}>Light persistent rain</option><option ${String(ui.loc.weather).indexOf('Heavy')>=0?'selected':''}>Heavy downpour</option><option ${String(ui.loc.weather).indexOf('Fog')>=0?'selected':''}>Fog / Mist</option><option ${String(ui.loc.weather).indexOf('Clear')>=0?'selected':''}>Clear cold night</option><option ${String(ui.loc.weather).indexOf('Neon')>=0?'selected':''}>Neon reflections</option></select></div>
             </div>
             <div style="font-size:9px;color:var(--dim);margin-top:4px">Locked location photos from Characters tab are referenced automatically in the prompt below.</div>
           </div>
@@ -7789,9 +7806,17 @@ function buildPerShotDetailBoxes() {
   });
 
   area.innerHTML = html;
-
-  // After render, attach any live listeners if needed (most are inline). Per-shot uses the global Video Settings grid values (model + res/aspect/dur) — no client-side restrictions.
+  console.log('[Shotbreak] Built', scenes.reduce((a,s)=>a+(s.shots||[]).length,0), 'per-shot prompt boxes');
+  } catch (buildErr) {
+    console.error('[buildPerShotDetailBoxes]', buildErr);
+    area.innerHTML = `<div style="padding:14px;background:#1a0a0a;border:1px solid var(--red-border);border-radius:8px">
+      <div style="color:#f87171;font-weight:700;margin-bottom:6px">Could not build shot boxes</div>
+      <div style="font-size:11px;color:#fca5a5;font-family:var(--mono);white-space:pre-wrap;margin-bottom:10px">${esc(buildErr && buildErr.message ? buildErr.message : String(buildErr))}</div>
+      <button class="b b-gold b-s" onclick="buildPerShotDetailBoxes()">Retry Build</button>
+    </div>`;
+  }
 }
+window.buildPerShotDetailBoxes = buildPerShotDetailBoxes;
 
 function toggleShotMinimize(key, hdrEl) {
   if (!_shotUI[key]) _shotUI[key] = {minimized:false};
@@ -8282,9 +8307,7 @@ function generateBaselineVideo() {
   // Refresh per-shot if visible so the new clip shows in the organized video section
   alert(`Local baseline clip generated for ${sceneShot} using ${model} take ${take}.\nUses the per-shot prompt + any added char photos + location details.\nClick "Build / Rebuild Per-Shot Detail Boxes" to see in context (video clips section).`);
   const area = document.getElementById('mhGenEntityBoxes');
-  if (area && area.innerHTML.includes('Per-shot detail boxes')) {
-    buildPerShotDetailBoxes();
-  }
+  buildPerShotDetailBoxes();
 }
 
 // Initialize the 5 photo + 5 video model selects (broad resolution/aspect/duration choices for all; model only drives the note + picture-gen defaults)
