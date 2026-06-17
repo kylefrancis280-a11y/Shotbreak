@@ -789,8 +789,9 @@ window.safeSignIn = safeSignIn;
           <button class="b b-gold b-big" onclick="buildPerShotDetailBoxes()" style="margin-top:16px">Rebuild All Shot Boxes from Script + Characters + Locations</button>
 
           <div style="margin-top:20px">
-            <button class="b b-gold b-big" onclick="mhDoFinalGenerate()">🎬 Generate Video Clips (using all Parsed Per-Shot Prompts + Jots)</button>
-            <div style="font-size:10px;color:#555;margin-top:4px">All video + picture creative direction now routes thru Grok (prompt-writer / visual / environment agents) **with vision on your actual locked photos** for maximum photo-match cohesiveness. (Research: native Grok Imagine I2V on the same refs + enriched prompt would be even tighter for final pixels/continuity than cross-provider renderers.) Same brain as the 82 labeled agents.</div>
+            <button class="b b-gold b-big" id="mhBatchGenBtn" onclick="mhDoFinalGenerate()">🎬 Generate Video Clips (using all Parsed Per-Shot Prompts + Jots)</button>
+            <div id="mhBatchGenStatus" style="display:none;margin-top:10px;padding:12px;background:#111;border:1px solid var(--border);border-radius:8px;font-size:12px;line-height:1.5"></div>
+            <div style="font-size:10px;color:#555;margin-top:4px">Runs every shot <strong>in order</strong> (S1.1 → S1.2 → …) — Grok enrich, submit, wait for completion, then next. All video + picture creative direction routes thru Grok with vision on your locked photos.</div>
           </div>
         </div>
       </div>
@@ -6451,50 +6452,128 @@ function stripJots(text){
   return String(text||'').replace(/\s*\[jot:[^\]]+\]\s*/g, ' ').replace(/\s{2,}/g, ' ').trim();
 }
 
+function mhOrderedShotKeys(p) {
+  const keys = [];
+  (p.scenes || []).forEach((sc, si) => {
+    (sc.shots || []).forEach((sh, shi) => keys.push(`${si}-${shi}`));
+  });
+  return keys;
+}
+
+function mhSetBatchGenStatus(html) {
+  const el = document.getElementById('mhBatchGenStatus');
+  if (!el) return;
+  if (html) {
+    el.innerHTML = html;
+    el.style.display = 'block';
+  } else {
+    el.innerHTML = '';
+    el.style.display = 'none';
+  }
+}
+
+async function mhPollVideoUntilDone(requestId, headers) {
+  const h = headers || (window.hdrs ? await window.hdrs() : { 'Content-Type': 'application/json' });
+  const started = Date.now();
+  const maxWait = sbMaxPollMs();
+  while (Date.now() - started < maxWait) {
+    await new Promise(res => setTimeout(res, 5000));
+    const pr = await fetch(sbVideoProxy(), {
+      method: 'POST',
+      headers: h,
+      body: JSON.stringify({ action: 'status', request_id: requestId })
+    });
+    const pd = await pr.json();
+    const stat = String(pd.status || pd.state || '').toUpperCase();
+    if (stat === 'COMPLETED' || stat === 'SUCCESS' || stat === 'SUCCEEDED') {
+      const rr = await fetch(sbVideoProxy(), {
+        method: 'POST',
+        headers: h,
+        body: JSON.stringify({ action: 'result', request_id: requestId })
+      });
+      const rd = await rr.json();
+      const videoUrl = rd.video_url || rd.url || (rd.video && rd.video.url);
+      if (!videoUrl) throw new Error('completed but no video URL returned');
+      return { videoUrl, provider: rd.provider || null };
+    }
+    if (stat === 'FAILED' || stat === 'ERROR') {
+      throw new Error(pd.error || pd.message || 'provider failed');
+    }
+  }
+  throw new Error('timed out waiting for video');
+}
+
 // Quality / Upscale / Sizing / Downloader panel (final tab in the exact flow the user described)
-function mhDoFinalGenerate() {
+async function mhDoFinalGenerate() {
   const p = projectLoad() || {};
   const scenes = p.scenes || [];
   if (!scenes.length) { alert('Lock script and build per-shot boxes first.'); return; }
 
-  // If per-shot boxes were built, use _shotUI state (the source of truth for edited prompts + jots + per-shot photos/loc)
-  const keys = Object.keys(window._shotUI || {});
-  const model = (document.getElementById('videoModelSelect') ? document.getElementById('videoModelSelect').value : 'seedance-2.0-turbo');
-  const isLocal = (location.protocol === 'file:') || (location.hostname === 'localhost') || (location.hostname === '127.0.0.1');
+  if (window._mhBatchGenRunning) { alert('Batch already running — wait for the current shot queue to finish.'); return; }
 
-  if (!keys.length) {
-    // Fallback: build boxes first then user can click per-shot or re-invoke
-    buildPerShotDetailBoxes();
-    alert('Built the per-shot detail boxes from your locked script/characters. Now click individual "Generate This Shot (Grok prompt + video)" buttons, or rebuild and try Final again.');
-    return;
-  }
+  const keys = mhOrderedShotKeys(p);
+  if (!keys.length) { alert('No shots found. Lock script on the Script tab first.'); return; }
 
-  // Batch: for each shot key, enrich via Grok then submit (real or local)
-  alert('Starting batch using per-shot prompts (jots stripped) + char photos + location. Each shot routes its creative direction thru Grok for coherence (same as 82 agents).');
+  if (!Object.keys(window._shotUI || {}).length) buildPerShotDetailBoxes();
 
-  let submitted = 0;
-  keys.forEach(async (key) => {
-    const ui = _shotUI[key];
-    if (!ui || !ui.prompt) return;
-    const clean = stripJots(ui.prompt);
-    // Minimal: reuse the single-shot path (it does the Grok enrich + submit/fetch)
-    // We synthesize a fake button to drive the same logic without duplicating.
+  const batchBtn = document.getElementById('mhBatchGenBtn');
+  window._mhBatchGenRunning = true;
+  if (batchBtn) { batchBtn.disabled = true; batchBtn.textContent = 'Running shots in order...'; }
+
+  let done = 0;
+  let failed = 0;
+  const errors = [];
+
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
+    const [si, shi] = key.split('-').map(Number);
+    const label = `S${si + 1}.${shi + 1}`;
+    mhSetBatchGenStatus(
+      `<div style="color:var(--gold);font-weight:700">Shot ${i + 1} of ${keys.length}: ${label}</div>` +
+      `<div style="color:var(--dim);margin-top:4px">Grok enrich → submit → wait for completion → next shot</div>` +
+      (done ? `<div style="color:#86efac;font-size:11px;margin-top:6px">${done} completed</div>` : '')
+    );
+
+    let ui = _shotUI[key];
+    if (!ui || !ui.prompt || !ui.prompt.trim()) {
+      buildPerShotDetailBoxes();
+      ui = _shotUI[key];
+    }
+    if (!ui || !ui.prompt || !ui.prompt.trim()) {
+      failed++;
+      errors.push(`${label}: no prompt`);
+      continue;
+    }
+
     const fakeBtn = { textContent: 'batch', disabled: false };
     try {
-      // Call the same function the per-shot buttons use — it already does Grok + ref + submit or local clip
-      await generateVideoForShot(key, fakeBtn);
-      submitted++;
+      await generateVideoForShot(key, fakeBtn, { batch: true, waitForDone: true });
+      done++;
     } catch (e) {
+      failed++;
+      errors.push(`${label}: ${e && e.message ? e.message : String(e)}`);
       console.warn('Batch shot failed', key, e);
     }
-  });
+  }
 
-  // After a tick, offer the quality panel
+  window._mhBatchGenRunning = false;
+  if (batchBtn) {
+    batchBtn.disabled = false;
+    batchBtn.textContent = '🎬 Generate Video Clips (using all Parsed Per-Shot Prompts + Jots)';
+  }
+
+  mhSetBatchGenStatus(
+    `<div style="color:${failed ? '#fbbf24' : '#86efac'};font-weight:700">Batch finished: ${done} of ${keys.length} shots OK${failed ? `, ${failed} failed` : ''}</div>` +
+    (errors.length ? `<div style="color:#fca5a5;font-size:11px;margin-top:6px">${errors.map(e => esc(e)).join('<br>')}</div>` : '') +
+    `<div style="color:var(--dim);font-size:11px;margin-top:6px">Shots ran one at a time in scene order.</div>`
+  );
+
   setTimeout(() => {
     if (typeof mhShowQualityPanel === 'function') mhShowQualityPanel();
     if (typeof buildPerShotDetailBoxes === 'function') buildPerShotDetailBoxes();
-  }, 1200);
+  }, 400);
 }
+window.mhDoFinalGenerate = mhDoFinalGenerate;
 
 function mhShowQualityPanel(){
   let panel = document.getElementById('mhQualityPanel');
@@ -8019,7 +8098,10 @@ async function runAgentsForShot(key, btn) {
 // Generate video for ONE per-shot box using its exact current prompt (with jots), chars/photos, location.
 // Routes the final creative prompt thru Grok (prompt-writer agent) for enrichment/coherence before hitting the renderer (WaveSpeed or local sim).
 // This is the key consolidation: picture refs + video direction intelligence all "thru grok" like the 82 agents.
-async function generateVideoForShot(key, btn) {
+async function generateVideoForShot(key, btn, opts) {
+  opts = opts || {};
+  const batch = !!opts.batch;
+  const waitForDone = !!opts.waitForDone;
   if (!btn) return;
   const origText = btn.textContent;
   btn.disabled = true;
@@ -8191,8 +8273,21 @@ Throughout the full 6s clip enforce (WIND, HAIR, CLOTHING & LEATHER DETAIL EXPER
         if (typeof SBVideo._updateUI === 'function') SBVideo._updateUI();
       }
       const modelUsed = payload.model || 'unknown';
-      alert('✅ Shot ' + (si+1) + '.' + (shi+1) + ' submitted with ' + modelUsed + '.\nGrok-enriched prompt used for coherence.\n' + (charRefUrl ? 'Character photo ref forwarded for I2V match.\n' : '') + (d.request_id ? ('Request: ' + d.request_id + ' — watch the progress list or poll for completion.') : ''));
-      btn.textContent = '⏳ Queued (' + modelUsed + ')';
+      if (waitForDone && d.request_id) {
+        btn.textContent = 'Waiting for render...';
+        const polled = await mhPollVideoUntilDone(d.request_id, h);
+        if (window._mhGenState && window._mhGenState.jobs) {
+          const j = window._mhGenState.jobs.find(x => x.requestId === d.request_id);
+          if (j) { j.status = 'done'; j.videoUrl = polled.videoUrl; j.provider = polled.provider; }
+          if (typeof mhRenderGenProgress === 'function') mhRenderGenProgress();
+        }
+        btn.textContent = '✅ Done (' + modelUsed + ')';
+      } else if (!batch) {
+        alert('✅ Shot ' + (si+1) + '.' + (shi+1) + ' submitted with ' + modelUsed + '.\nGrok-enriched prompt used for coherence.\n' + (charRefUrl ? 'Character photo ref forwarded for I2V match.\n' : '') + (d.request_id ? ('Request: ' + d.request_id + ' — watch the progress list or poll for completion.') : ''));
+        btn.textContent = '⏳ Queued (' + modelUsed + ')';
+      } else {
+        btn.textContent = '✅ Submitted (' + modelUsed + ')';
+      }
     } else {
       throw new Error(d.error || d.detail || 'submit failed');
     }
