@@ -2454,7 +2454,8 @@ V._startPoll=function(rid,model){
       return;
     }
     try{
-      const r=await fetch(PROXY,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"result",request_id:rid,model})});
+      const pollHdrs=window.hdrs?await window.hdrs():{"Content-Type":"application/json"};
+      const r=await fetch(PROXY,{method:"POST",headers:pollHdrs,body:JSON.stringify({action:"result",request_id:rid,model})});
       if(!r.ok){vlog("Poll HTTP "+r.status+" — keep retrying");return}
       const d=await r.json();
       const job=V.jobs.get(rid);
@@ -5717,8 +5718,8 @@ async function mhRunSingleJob(j,model){
       try{
         const pr=await fetch(sbVideoProxy(),{method:'POST',headers:h,body:JSON.stringify({action:'status',request_id:j.requestId})});
         const pd=await pr.json();
-        const stat=(pd.status||pd.state||'').toUpperCase();
-        if(stat==='COMPLETED'||stat==='SUCCESS'||stat==='SUCCEEDED'){
+        const stat=mhNormalizeVideoStatus(pd.status||pd.state||(pd.data&&pd.data.status));
+        if(stat==='COMPLETED'){
           // Fetch result
           const rr=await fetch(sbVideoProxy(),{method:'POST',headers:h,body:JSON.stringify({action:'result',request_id:j.requestId})});
           const rd=await rr.json();
@@ -5752,7 +5753,7 @@ async function mhRunSingleJob(j,model){
           else{j.status='fail';j.error='completed but no video URL returned'}
           mhRenderGenProgress();return;
         }
-        if(stat==='FAILED'||stat==='ERROR'){
+        if(stat==='FAILED'){
           j.status='fail';j.error=pd.error||pd.message||'provider failed';
           mhRenderGenProgress();return;
         }
@@ -6920,6 +6921,13 @@ function mhSetBatchGenStatus(html) {
   }
 }
 
+function mhNormalizeVideoStatus(st) {
+  const s = String(st || '').toUpperCase();
+  if (s === 'COMPLETED' || s === 'SUCCESS' || s === 'SUCCEEDED' || s === 'DONE' || s === 'FINISHED') return 'COMPLETED';
+  if (s === 'FAILED' || s === 'ERROR' || s === 'CANCELLED' || s === 'CANCELED') return 'FAILED';
+  return 'PROCESSING';
+}
+
 async function mhPollVideoUntilDone(requestId, headers) {
   const h = headers || (window.hdrs ? await window.hdrs() : { 'Content-Type': 'application/json' });
   const started = Date.now();
@@ -6932,21 +6940,34 @@ async function mhPollVideoUntilDone(requestId, headers) {
       body: JSON.stringify({ action: 'status', request_id: requestId })
     });
     const pd = await pr.json();
-    const stat = String(pd.status || pd.state || '').toUpperCase();
-    if (stat === 'COMPLETED' || stat === 'SUCCESS' || stat === 'SUCCEEDED') {
+    const stat = mhNormalizeVideoStatus(pd.status || pd.state || (pd.data && pd.data.status));
+    if (stat === 'COMPLETED') {
       const rr = await fetch(sbVideoProxy(), {
         method: 'POST',
         headers: h,
         body: JSON.stringify({ action: 'result', request_id: requestId })
       });
       const rd = await rr.json();
-      const videoUrl = rd.video_url || rd.url || (rd.video && rd.video.url);
+      const videoUrl = rd.video_url || rd.url || (rd.video && rd.video.url) || pickVideoUrl(rd);
       if (!videoUrl) throw new Error('completed but no video URL returned');
-      return { videoUrl, provider: rd.provider || null };
+      return { videoUrl, provider: rd.provider || pd.provider || 'wavespeed' };
     }
-    if (stat === 'FAILED' || stat === 'ERROR') {
-      throw new Error(pd.error || pd.message || 'provider failed');
+    if (stat === 'FAILED') {
+      throw new Error(pd.error || pd.message || (pd.data && pd.data.error) || 'provider failed');
     }
+    // Belt-and-suspenders: some providers expose the URL on /result while status still says processing
+    try {
+      const rr = await fetch(sbVideoProxy(), {
+        method: 'POST',
+        headers: h,
+        body: JSON.stringify({ action: 'result', request_id: requestId })
+      });
+      const rd = await rr.json();
+      const earlyUrl = rd.video_url || rd.url || pickVideoUrl(rd);
+      if (earlyUrl && mhNormalizeVideoStatus(rd.status) === 'COMPLETED') {
+        return { videoUrl: earlyUrl, provider: rd.provider || pd.provider || 'wavespeed' };
+      }
+    } catch (e) { /* keep polling */ }
   }
   throw new Error('timed out waiting for video');
 }
@@ -7212,8 +7233,8 @@ function mhSwitchTab(tab) {
       const vidSel = document.getElementById('videoModelSelect');
       if (vidSel && vidSel.options.length === 0) {
         populateModelSelect('videoModelSelect', VIDEO_MODELS);
-        // default to grok-imagine (the XAI one per user list)
-        if (VIDEO_MODELS['grok-imagine']) vidSel.value = 'grok-imagine';
+        // default to Seedance (WaveSpeed) for live investor demo renders
+        if (VIDEO_MODELS['seedance-2.0-turbo']) vidSel.value = 'seedance-2.0-turbo';
         else vidSel.selectedIndex = 0;
         updateVideoOptions();
       }
@@ -8725,7 +8746,7 @@ Throughout the full 6s clip enforce (WIND, HAIR, CLOTHING & LEATHER DETAIL EXPER
 
   // Build payload with the chosen video model + model-filtered resolution/aspect/duration from settings grid
   const vidModelSel = document.getElementById('videoModelSelect');
-  const videoModel = (vidModelSel ? vidModelSel.value : 'grok-imagine');
+  const videoModel = (vidModelSel ? vidModelSel.value : 'seedance-2.0-turbo');
   const resSel = document.getElementById('videoResolutionSelect');
   const aspSel = document.getElementById('videoAspectSelect');
   const durSel = document.getElementById('videoDurationSelect');
@@ -8933,7 +8954,7 @@ setTimeout(() => {
     const vSel = document.getElementById('videoModelSelect');
     if (vSel && vSel.options.length === 0) {
       populateModelSelect('videoModelSelect', VIDEO_MODELS);
-      vSel.value = 'grok-imagine';
+      vSel.value = 'seedance-2.0-turbo';
       updateVideoOptions();
     }
     const pSel = document.getElementById('photoModelSelect');

@@ -279,12 +279,19 @@ def video_status(request_id: str, provider: str | None = None) -> dict[str, Any]
     if _has_wavespeed_key():
         res = _http_json(
             "api.wavespeed.ai",
-            f"/api/v3/predictions/{request_id}",
+            f"/api/v3/predictions/{request_id}/result",
             method="GET",
             bearer=get_key("WAVESPEED_API_KEY") or "",
         )
-        st = (res.get("data") or {}).get("status") or res.get("status") or "processing"
-        return {"request_id": request_id, "status": str(st).upper(), "provider": "wavespeed"}
+        raw = (res.get("data") or {}).get("status") or res.get("status") or "processing"
+        s = str(raw).lower()
+        if s in ("completed", "succeeded", "success", "done", "finished"):
+            st = "COMPLETED"
+        elif s in ("failed", "error", "cancelled", "canceled"):
+            st = "FAILED"
+        else:
+            st = "PROCESSING"
+        return {"request_id": request_id, "status": st, "provider": "wavespeed"}
 
     raise ApiBridgeError("No API keys configured")
 

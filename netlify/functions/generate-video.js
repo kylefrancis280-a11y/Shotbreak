@@ -38,9 +38,11 @@ function callWaveSpeed(path, body, method = 'POST') {
       res.on('data', chunk => buf += chunk);
       res.on('end', () => {
         try {
-          resolve(JSON.parse(buf));
+          const parsed = JSON.parse(buf);
+          parsed.httpStatus = res.statusCode;
+          resolve(parsed);
         } catch (e) {
-          resolve({ raw: buf, status: res.statusCode, code: res.statusCode });
+          resolve({ raw: buf, status: res.statusCode, code: res.statusCode, httpStatus: res.statusCode });
         }
       });
     });
@@ -48,6 +50,37 @@ function callWaveSpeed(path, body, method = 'POST') {
     if (data) req.write(data);
     req.end();
   });
+}
+
+// WaveSpeed v3 uses GET /predictions/{id}/result for status + outputs.
+// GET /predictions/{id} alone returns 404 on current API — do not use it.
+function normalizeWaveSpeedStatus(st) {
+  const s = String(st || '').toLowerCase();
+  if (['completed', 'succeeded', 'success', 'done', 'finished'].includes(s)) return 'COMPLETED';
+  if (['failed', 'error', 'cancelled', 'canceled'].includes(s)) return 'FAILED';
+  return 'PROCESSING';
+}
+
+function isFakeWaveSpeedId(request_id) {
+  if (!request_id) return true;
+  if (request_id.includes('demo_')) return true;
+  if (request_id.startsWith('ws_')) return true;
+  return false;
+}
+
+async function fetchWaveSpeedPrediction(request_id) {
+  return callWaveSpeed('/api/v3/predictions/' + request_id + '/result', null, 'GET');
+}
+
+function extractWaveSpeedOutput(result) {
+  const data = result && result.data;
+  const out = (data && data.outputs && data.outputs[0])
+    || (result.outputs && result.outputs[0])
+    || result.video_url
+    || result.url
+    || (data && data.video_url);
+  if (!out) return null;
+  return typeof out === 'string' ? out : (out.url || null);
 }
 
 // --- Grok Imagine helpers (for when user chooses Grok native for pictures or video) ---
@@ -453,13 +486,24 @@ exports.handler = async function (event) {
           ...(location && { location_context: location })
         };
         const result = await callWaveSpeed(wsPath, wavespeedBody);
-        const rid = (result.data && result.data.id) || result.id || result.request_id || ('ws_' + Date.now());
-        const st = (result.data && result.data.status) || result.status || 'SUBMITTED';
-        return {
-          statusCode: 200,
-          headers: CORS,
-          body: JSON.stringify({ request_id: rid, status: st, model: videoModel, raw: result })
-        };
+        const rid = (result.data && result.data.id) || result.id || result.request_id || null;
+        const apiOk = result && result.httpStatus < 400 && (!result.code || result.code === 200) && rid;
+        if (!apiOk) {
+          return jsonResponse(event, 502, {
+            error: 'WaveSpeed submit failed for model ' + videoModel,
+            detail: (result && (result.message || result.error || result.raw)) || 'no job id returned',
+            provider: 'wavespeed',
+            raw: result
+          });
+        }
+        const st = normalizeWaveSpeedStatus((result.data && result.data.status) || result.status || 'created');
+        return jsonResponse(event, 200, {
+          request_id: rid,
+          status: st,
+          model: videoModel,
+          provider: 'wavespeed',
+          raw: result
+        });
       }
     } catch (err) {
       return {
@@ -473,24 +517,23 @@ exports.handler = async function (event) {
   if (action === 'status' && request_id) {
     const isGrokJob = request_id.startsWith('grok_');
     if ((isGrokJob && ! (process.env.XAI_API_KEY || process.env.GROK_API_KEY)) || (!isGrokJob && !process.env.WAVESPEED_API_KEY) || request_id.includes('demo_')) {
-      return {
-        statusCode: 200,
-        headers: CORS,
-        body: JSON.stringify({ request_id, status: 'COMPLETED', provider: isGrokJob ? 'grok-imagine' : 'wavespeed' })
-      };
+      return jsonResponse(event, 200, { request_id, status: 'COMPLETED', provider: isGrokJob ? 'grok-imagine' : 'wavespeed' });
+    }
+    if (!isGrokJob && isFakeWaveSpeedId(request_id)) {
+      return jsonResponse(event, 400, { request_id, status: 'FAILED', error: 'Invalid WaveSpeed job id — submit did not reach WaveSpeed', provider: 'wavespeed' });
     }
     try {
       if (isGrokJob) {
         const r = await getGrokImagineVideoStatus(request_id);
-        return { statusCode: 200, headers: CORS, body: JSON.stringify(r) };
+        return jsonResponse(event, 200, r);
       } else {
-        // WaveSpeed uses the unified predictions endpoint for status
-        const result = await callWaveSpeed('/api/v3/predictions/' + request_id, null, 'GET');
-        const st = (result.data && result.data.status) || result.status || 'processing';
-        return { statusCode: 200, headers: CORS, body: JSON.stringify({ request_id, status: st, raw: result }) };
+        const result = await fetchWaveSpeedPrediction(request_id);
+        const rawSt = (result.data && result.data.status) || result.status || 'processing';
+        const st = normalizeWaveSpeedStatus(rawSt);
+        return jsonResponse(event, 200, { request_id, status: st, provider: 'wavespeed', raw: result });
       }
     } catch (err) {
-      return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: err.message }) };
+      return jsonResponse(event, 500, { error: err.message });
     }
   }
 
@@ -498,28 +541,24 @@ exports.handler = async function (event) {
     const isGrokJob = request_id.startsWith('grok_');
     if ((isGrokJob && !(process.env.XAI_API_KEY || process.env.GROK_API_KEY)) || (!isGrokJob && !process.env.WAVESPEED_API_KEY) || request_id.includes('demo_')) {
       const seed = (isGrokJob ? 'grokdemo' : 'wsdemo') + (request_id || '') + (body && body.shotKey ? body.shotKey.replace(/[^a-z0-9]/gi,'') : '');
-      return {
-        statusCode: 200,
-        headers: CORS,
-        body: JSON.stringify({ request_id, video_url: 'https://picsum.photos/seed/' + seed + '/1280/720', status: 'COMPLETED', provider: isGrokJob ? 'grok-imagine' : 'wavespeed', note: 'demo result (configure the corresponding key for real)' })
-      };
+      return jsonResponse(event, 200, { request_id, video_url: 'https://picsum.photos/seed/' + seed + '/1280/720', status: 'COMPLETED', provider: isGrokJob ? 'grok-imagine' : 'wavespeed', note: 'demo result (configure the corresponding key for real)' });
+    }
+    if (!isGrokJob && isFakeWaveSpeedId(request_id)) {
+      return jsonResponse(event, 400, { request_id, status: 'FAILED', error: 'Invalid WaveSpeed job id — submit did not reach WaveSpeed', provider: 'wavespeed' });
     }
     try {
       if (isGrokJob) {
         const r = await getGrokImagineVideoResult(request_id);
-        return { statusCode: 200, headers: CORS, body: JSON.stringify(r) };
+        return jsonResponse(event, 200, r);
       } else {
-        // Prefer the /result subpath; fallback to the prediction record which often contains outputs
-        let result = await callWaveSpeed('/api/v3/predictions/' + request_id + '/result', null, 'GET');
-        if (!result || (result.code && result.code !== 200) || !result.data) {
-          result = await callWaveSpeed('/api/v3/predictions/' + request_id, null, 'GET');
-        }
-        const out = (result.data && result.data.outputs && result.data.outputs[0]) || result.outputs && result.outputs[0] || result.video_url || result.url || (result.data && result.data.video_url);
-        const st = (result.data && result.data.status) || result.status || 'COMPLETED';
-        return { statusCode: 200, headers: CORS, body: JSON.stringify({ request_id, video_url: out, status: st, raw: result }) };
+        const result = await fetchWaveSpeedPrediction(request_id);
+        const rawSt = (result.data && result.data.status) || result.status || 'processing';
+        const st = normalizeWaveSpeedStatus(rawSt);
+        const out = extractWaveSpeedOutput(result);
+        return jsonResponse(event, 200, { request_id, video_url: out, status: st, provider: 'wavespeed', raw: result });
       }
     } catch (err) {
-      return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: err.message }) };
+      return jsonResponse(event, 500, { error: err.message });
     }
   }
 
