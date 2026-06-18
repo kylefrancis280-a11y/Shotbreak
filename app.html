@@ -273,9 +273,8 @@ function safeSignIn() {
   try {
     const errEl = document.getElementById('loginErr');
     if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
-    if (typeof customerLogin === 'function') {
-      // Call the real one (it is async but we fire and forget; it will set red box itself on problems)
-      customerLogin();
+    if (typeof window.customerLogin === 'function') {
+      window.customerLogin();
     } else {
       if (errEl) {
         errEl.textContent = 'Login not ready yet — page still loading or a script error occurred (press F12, look in Console for red errors). Hard refresh (Ctrl+Shift+R) and try again.';
@@ -1173,6 +1172,137 @@ window.safeSignIn = safeSignIn;
 })();
 </script>
 
+<!-- Early auth bootstrap: Sign In works even if the large app script below is slow or errors -->
+<script>
+(function () {
+  function earlyEnterApp(user) {
+    if (!user) return;
+    document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('active'); });
+    var app = document.getElementById('appScreen');
+    if (app) app.classList.add('active');
+    var av = document.getElementById('uAv');
+    var nm = document.getElementById('uNm');
+    if (av && user.name) av.textContent = user.name.charAt(0);
+    if (nm) nm.textContent = user.name;
+    var hub = document.getElementById('mediaView');
+    if (hub) hub.style.display = 'block';
+    document.querySelectorAll('#dashView, #fwdView, #revView, #charView').forEach(function (el) {
+      if (el) el.style.display = 'none';
+    });
+    if (typeof window.mhSwitchTab === 'function') {
+      try { window.mhSwitchTab('script'); } catch (e) {}
+    }
+  }
+
+  function restoreEarlyOwnerSession() {
+    try {
+      var tk = window.SB_OWNER_TOKEN || localStorage.getItem('SB_OWNER_TOKEN');
+      var nm = window.SB_OWNER_NAME || localStorage.getItem('SB_OWNER_NAME');
+      var exp = parseInt(String(window.SB_OWNER_EXPIRES || localStorage.getItem('SB_OWNER_EXPIRES') || '0'), 10);
+      var parts = (tk || '').split(':');
+      if (!tk || !nm || !exp || exp <= Date.now() || parts.length !== 4 || parts[0] !== 'owner') return false;
+      var verifyName = parts[1] || nm;
+      var meta = (window.OWNER_META && window.OWNER_META[verifyName]) || { name: nm, color: '#d4a843' };
+      var loginEmail = (window.SHORT_TO_FULL_EMAIL && window.SHORT_TO_FULL_EMAIL[verifyName]) || (verifyName + '@shotbreak.io');
+      window._sbEarlyCurUser = {
+        name: meta.name,
+        email: loginEmail,
+        tier: 'owner',
+        isOwner: true,
+        uid: 'owner-' + verifyName,
+        color: meta.color
+      };
+      if (typeof window.touchOwnerToken === 'function') window.touchOwnerToken();
+      earlyEnterApp(window._sbEarlyCurUser);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  window.customerLogin = async function () {
+    var emailEl = document.getElementById('loginEmail');
+    var pwEl = document.getElementById('loginPw');
+    var email = emailEl ? emailEl.value.trim() : '';
+    var pw = pwEl ? pwEl.value : '';
+    var err = document.getElementById('loginErr');
+    if (err) { err.style.display = 'none'; err.textContent = ''; }
+    if (!email || !pw) {
+      if (err) { err.textContent = 'Enter email and password'; err.style.display = 'block'; }
+      return;
+    }
+    var emailLc = email.toLowerCase().trim();
+    var loginEmail = email;
+    var short = emailLc.split('@')[0].replace(/[^a-z]/g, '');
+    if (window.SHORT_TO_FULL_EMAIL && window.SHORT_TO_FULL_EMAIL[short]) {
+      loginEmail = window.SHORT_TO_FULL_EMAIL[short];
+    }
+    var ownerEmails = window.OWNER_EMAILS || new Set();
+    var isOwnerAttempt = ownerEmails.has(loginEmail.toLowerCase()) || ownerEmails.has(emailLc) ||
+      !!(window.SHORT_TO_FULL_EMAIL && window.SHORT_TO_FULL_EMAIL[short]);
+    if (isOwnerAttempt) {
+      try {
+        var verifyName = short || emailLc.split('@')[0].replace(/[^a-z]/g, '');
+        var vresp = await fetch('/.netlify/functions/verify-owner', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: verifyName, password: pw })
+        });
+        var vdata = await vresp.json().catch(function () { return {}; });
+        if (vresp.ok && vdata && vdata.token) {
+          var token = vdata.token;
+          var exp = vdata.expires || (Date.now() + 12 * 60 * 60 * 1000);
+          var ownerName = vdata.name || verifyName;
+          try {
+            localStorage.setItem('SB_OWNER_TOKEN', token);
+            localStorage.setItem('SB_OWNER_NAME', ownerName);
+            localStorage.setItem('SB_OWNER_EXPIRES', String(exp));
+          } catch (e) {}
+          window.SB_OWNER_TOKEN = token;
+          window.SB_OWNER_NAME = ownerName;
+          window.SB_OWNER_EXPIRES = exp;
+          var ownerMeta = (window.OWNER_META && window.OWNER_META[verifyName]) || { name: ownerName, color: '#d4a843' };
+          window._sbEarlyCurUser = {
+            name: ownerMeta.name,
+            email: loginEmail,
+            tier: 'owner',
+            isOwner: true,
+            uid: 'owner-' + verifyName,
+            color: ownerMeta.color
+          };
+          if (err) { err.style.display = 'none'; err.textContent = ''; }
+          earlyEnterApp(window._sbEarlyCurUser);
+          return;
+        }
+        if (vresp.status === 401 || (vdata && String(vdata.error || '').toLowerCase().indexOf('invalid') >= 0)) {
+          if (err) {
+            err.textContent = 'Owner password rejected. Email: kylef or stevec. Password: your OWNER_PW_* value from Netlify.';
+            err.style.display = 'block';
+          }
+          return;
+        }
+      } catch (ve) {
+        if (err) {
+          err.textContent = 'Network error: ' + (ve.message || ve);
+          err.style.display = 'block';
+        }
+        return;
+      }
+    }
+    if (err) {
+      err.textContent = 'Use owner short (kylef / stevec) + OWNER_PW password, or wait for page to finish loading for Firebase login.';
+      err.style.display = 'block';
+    }
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', restoreEarlyOwnerSession);
+  } else {
+    restoreEarlyOwnerSession();
+  }
+})();
+</script>
+
 <script>
 // Re-export so the rest of the large file can keep using the old variable names
 const auth = window.auth;
@@ -1210,7 +1340,8 @@ if (typeof window.SBVideo === 'undefined') {
 // Agents stripped — prompts are user-authored per shot; server Grok polish only in generate-video.js
 
 // ===================== AUTH STATE (minimal) =====================
-let curUser = null; // {name,email,tier,isOwner,uid,color}
+let curUser = window._sbEarlyCurUser || null; // {name,email,tier,isOwner,uid,color}
+if (curUser) window._sbEarlyCurUser = null;
 
 function isLocalOnly() {
   return !!(window.SHOTBREAK_CONFIG && window.SHOTBREAK_CONFIG.localOnly);

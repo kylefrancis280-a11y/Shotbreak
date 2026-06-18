@@ -1,5 +1,6 @@
 # Secrets and local ops (never publish)
 my-owner-pws.txt
+TEST_OWNER_LOGINS.local.txt
 *.latest-backup
 .env
 .env.*
