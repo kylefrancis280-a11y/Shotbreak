@@ -260,8 +260,8 @@ header{padding:14px 0;border-bottom:1px solid var(--border);position:sticky;top:
     <div style="margin-top:18px;padding:12px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;line-height:1.4;color:var(--dim);text-align:center">
       New here? <span class="form-link" onclick="showTab('register')">Create an account</span> to start your first project.
     </div>
-    <div id="ownerLoginDevNote" style="display:none;margin-top:10px;padding:10px 12px;background:#1a140a;border:1px solid #d4a84344;border-radius:8px;font-size:11px;line-height:1.35;color:#d4c8a8">
-      <strong style="color:#f0d9a0">Local dev:</strong> owner short + OWNER_PW from Netlify env, or Firebase email/password.
+    <div id="ownerLoginHint" style="margin-top:10px;padding:10px 12px;background:#1a140a;border:1px solid #d4a84344;border-radius:8px;font-size:11px;line-height:1.4;color:#d4c8a8;text-align:left">
+      <strong style="color:#f0d9a0">Owner login:</strong> type your short in the email field (<code style="color:#e8c36a">kylef</code>, <code style="color:#e8c36a">stevec</code>, <code style="color:#e8c36a">scottd</code>) and your <code style="color:#e8c36a">OWNER_PW_*</code> value from Netlify in the password field. Sessions last ~12 hours — sign in again when expired.
     </div>
 
   </div>
@@ -292,11 +292,7 @@ function safeSignIn() {
   }
 }
 window.safeSignIn = safeSignIn;
-(function () {
-  const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.protocol === 'file:';
-  const devNote = document.getElementById('ownerLoginDevNote');
-  if (devNote && isLocal) devNote.style.display = 'block';
-})();
+
 </script>
 </div>
 
@@ -1192,6 +1188,7 @@ const OWNER_META = (window.SHOTBREAK_CONFIG && window.SHOTBREAK_CONFIG.OWNER_MET
   scottd: { name: "Scott D", color: "#60a5fa" },
   stevek: { name: "Steve K", color: "#a78bfa" }
 };
+window.OWNER_META = OWNER_META;
 
 // ===================== LEGACY STUBS (defensive against old deploy remnants) =====================
 // Prevents "SB_Tutorial is not defined" and similar ReferenceErrors if any stray
@@ -1318,6 +1315,56 @@ function bootstrapLocalSession() {
   setTimeout(sbInitLocalStatus, 100);
 }
 
+// Re-enter app when a valid owner HMAC token is already in localStorage (owner login path has no Firebase user).
+function restoreOwnerSessionFromStorage() {
+  if (curUser) return false;
+  try {
+    const tk = window.SB_OWNER_TOKEN || localStorage.getItem('SB_OWNER_TOKEN');
+    const nm = window.SB_OWNER_NAME || localStorage.getItem('SB_OWNER_NAME');
+    const exp = parseInt(String(window.SB_OWNER_EXPIRES || localStorage.getItem('SB_OWNER_EXPIRES') || '0'), 10);
+    const parts = (tk || '').split(':');
+    if (!tk || !nm || !exp || exp <= Date.now() || parts.length !== 4 || parts[0] !== 'owner') {
+      if (exp && exp <= Date.now()) {
+        try {
+          localStorage.removeItem('SB_OWNER_TOKEN');
+          localStorage.removeItem('SB_OWNER_NAME');
+          localStorage.removeItem('SB_OWNER_EXPIRES');
+        } catch (e) {}
+        window.SB_OWNER_TOKEN = null;
+        window.SB_OWNER_NAME = null;
+        window.SB_OWNER_EXPIRES = null;
+        const err = document.getElementById('loginErr');
+        if (err) {
+          err.textContent = 'Owner session expired. Sign in again with your short (kylef) + OWNER_PW password.';
+          err.style.display = 'block';
+        }
+      }
+      return false;
+    }
+    const verifyName = parts[1] || nm;
+    const ownerMeta = (window.OWNER_META && window.OWNER_META[verifyName]) || { name: nm, color: '#d4a843' };
+    const loginEmail = (window.SHORT_TO_FULL_EMAIL && window.SHORT_TO_FULL_EMAIL[verifyName]) || (verifyName + '@shotbreak.io');
+    window.SB_OWNER_TOKEN = tk;
+    window.SB_OWNER_NAME = nm;
+    window.SB_OWNER_EXPIRES = exp;
+    if (typeof window.touchOwnerToken === 'function') window.touchOwnerToken();
+    curUser = {
+      name: ownerMeta.name,
+      email: loginEmail,
+      tier: 'owner',
+      isOwner: true,
+      uid: 'owner-' + verifyName,
+      color: ownerMeta.color,
+    };
+    console.log('[Shotbreak] Restored owner session for', verifyName);
+    enterApp();
+    return true;
+  } catch (e) {
+    console.warn('[Shotbreak] restoreOwnerSessionFromStorage failed:', e);
+    return false;
+  }
+}
+
 // Tab switching (no more Team tab)
 function showTab(t){
   ['tabLogin','tabRegister','tabForgot'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none'});
@@ -1400,13 +1447,11 @@ async function customerLogin(){
           try { if (typeof window.showToast === 'function') window.showToast('Owner signed in', 'ok'); } catch (e) {}
           return;
         } else if (vresp.status === 401 || (vdata && String(vdata.error || '').toLowerCase().includes('invalid'))) {
-          // Specific guidance for the most common owner pw failure (missing/wrong OWNER_PW_* in Netlify)
-          // Keep this visible — do NOT auto-hide. User sees exact instruction.
           if (err) {
-            err.textContent = 'Owner verify failed (wrong password or OWNER_PW_* not set in Netlify yet). Set OWNER_PW_* env vars, clear cache and deploy, then retry. Will now try Firebase fallback...';
+            err.textContent = 'Owner password rejected. Use short kylef/stevec/scottd in email + the exact OWNER_PW_* value from Netlify (Site settings → Environment variables). After changing env vars, clear cache and deploy.';
             err.style.display = 'block';
           }
-          // Do not hide — let the message stay; Firebase fallback will overwrite with its own message if it runs.
+          return;
         }
       } catch (ve) {
         console.warn('[Shotbreak] verify-owner attempt failed (will try Firebase fallback):', ve);
@@ -1661,6 +1706,12 @@ document.addEventListener('click',e=>{if(!e.target.closest('.user-pill'))documen
 
 // Check for returning Stripe user
 auth.onAuthStateChanged(async user=>{if(user&&!curUser)await loadUser(user)});
+
+function sbBootstrapSession() {
+  if (curUser) return;
+  if (restoreOwnerSessionFromStorage()) return;
+  bootstrapLocalSession();
+}
 
 // ===================== TIER CHECKS =====================
 function canUse(feature){
@@ -8362,9 +8413,9 @@ setTimeout(() => {
 })();
 
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', bootstrapLocalSession);
+  document.addEventListener('DOMContentLoaded', sbBootstrapSession);
 } else {
-  setTimeout(bootstrapLocalSession, 0);
+  setTimeout(sbBootstrapSession, 0);
 }
 </script>
 <!-- Tutorial system removed from app.html — it was blocking clicks on the
