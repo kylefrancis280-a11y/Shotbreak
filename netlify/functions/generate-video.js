@@ -192,11 +192,40 @@ async function generateGrokImagineImage({ prompt, model, aspect_ratio, resolutio
   return { url, prompt, grok: true, raw: res };
 }
 
+function isKlingModel(modelId) {
+  return (modelId || '').toLowerCase().includes('kling');
+}
+
+function getKlingTier(modelId) {
+  const m = (modelId || '').toLowerCase();
+  if (m.includes('turbo') || m === 'kling-pro') return 'kling-v3-turbo-pro';
+  return 'kling-v3.0-pro';
+}
+
+function clampKlingDuration(d) {
+  const n = Number(d) || 5;
+  return Math.min(15, Math.max(3, Math.round(n)));
+}
+
+function pickRefImageUrl(body) {
+  if (body.character_image_url && isSafeUrl(body.character_image_url)) return body.character_image_url;
+  if (Array.isArray(body.reference_images)) {
+    for (const r of body.reference_images) {
+      if (r && isSafeUrl(r)) return r;
+    }
+  }
+  return null;
+}
+
 // Map client model ids (exact user list) to WaveSpeed /api/v3/ path slugs.
 // These are derived from WaveSpeed docs + model library (bytedance/ for Seedance, alibaba/ or wavespeed-ai/ for Wan, etc).
 // For I2V prefer image-to-video variants when refs present (client passes character_image_url / reference_image).
 function getWaveSpeedPath(modelId, hasRefImage = false) {
   const m = (modelId || '').toLowerCase();
+  if (m.includes('kling')) {
+    const tier = getKlingTier(modelId);
+    return hasRefImage ? `kwaivgi/${tier}/image-to-video` : `kwaivgi/${tier}/text-to-video`;
+  }
   if (m.includes('seedance') || m.includes('seedance-2.0-turbo')) {
     return hasRefImage ? 'bytedance/seedance-2.0/image-to-video-turbo' : 'bytedance/seedance-2.0/text-to-video-turbo';
   }
@@ -215,6 +244,32 @@ function getWaveSpeedPath(modelId, hasRefImage = false) {
   if (m.includes('gpt-image') || m.includes('gpt-2.0')) return 'openai/gpt-image-2';
   // fallback — many models live under wavespeed-ai/ or bytedance/ etc; the model id in body helps platform route
   return `wavespeed-ai/${modelId || 'flux-dev'}`;
+}
+
+function buildWaveSpeedBody(videoModel, fields, hasRef) {
+  if (isKlingModel(videoModel)) {
+    const wsBody = {
+      prompt: fields.prompt,
+      duration: clampKlingDuration(fields.duration),
+      aspect_ratio: fields.aspect_ratio || '16:9',
+      cfg_scale: 0.5,
+      sound: false,
+    };
+    const refUrl = pickRefImageUrl(fields);
+    if (hasRef && refUrl) wsBody.image = refUrl;
+    if (fields.negative_prompt) wsBody.negative_prompt = sanitizeField(fields.negative_prompt, 500);
+    return wsBody;
+  }
+  return {
+    prompt: fields.prompt,
+    duration: fields.duration || 6,
+    aspect_ratio: fields.aspect_ratio || '16:9',
+    ...(fields.resolution && { resolution: fields.resolution }),
+    ...(fields.character_image_url && { reference_image: fields.character_image_url }),
+    ...(fields.reference_images && { reference_images: fields.reference_images }),
+    ...(fields.shotKey && { shot_key: fields.shotKey }),
+    ...(fields.location && { location_context: fields.location }),
+  };
 }
 
 // Shared Grok caller so picture + video prompt stages go thru the same brain as the 82 agents.
@@ -494,21 +549,22 @@ exports.handler = async function (event) {
           body: JSON.stringify({ ...grokRes, model: videoModel, note: 'Direct via XAI Grok Imagine' })
         };
       } else {
-        // WaveSpeed for all other video models (Seedance 2.0 Turbo, Wan 2.7, Sora 2, Veo 3.1 per exact user list)
+        // WaveSpeed for all other video models (Seedance 2.0 Turbo, Wan 2.7, Sora 2, Veo 3.1, Kling 3.0 Pro, etc.)
         // User-selected resolution/duration/aspect/refs forwarded as-is (no client pre-filtering).
-        const hasRef = !!(character_image_url || body.reference_images);
+        const refUrl = pickRefImageUrl({ character_image_url, reference_images: body.reference_images });
+        const hasRef = !!refUrl;
         const wsPath = '/api/v3/' + getWaveSpeedPath(videoModel, hasRef);
-        const wavespeedBody = {
+        const wavespeedBody = buildWaveSpeedBody(videoModel, {
           prompt: finalPrompt,
-          duration: duration || 6,
-          aspect_ratio: aspect_ratio || '16:9',
-          ...(body.resolution && { resolution: body.resolution }),
-          ...(character_image_url && { reference_image: character_image_url }),
-          // pass multiple refs if provided for models that support (WaveSpeed handles)
-          ...(body.reference_images && { reference_images: body.reference_images }),
-          ...(shotKey && { shot_key: shotKey }),
-          ...(location && { location_context: location })
-        };
+          duration,
+          aspect_ratio,
+          resolution: body.resolution,
+          character_image_url: refUrl || character_image_url,
+          reference_images: body.reference_images,
+          shotKey,
+          location,
+          negative_prompt: body.negative_prompt,
+        }, hasRef);
         const result = await callWaveSpeed(wsPath, wavespeedBody);
         const rid = (result.data && result.data.id) || result.id || result.request_id || null;
         const apiOk = result && result.httpStatus < 400 && (!result.code || result.code === 200) && rid;

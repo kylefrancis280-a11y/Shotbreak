@@ -953,6 +953,7 @@ window.safeSignIn = safeSignIn;
               <option value="wan-2.7">Wan 2.7</option>
               <option value="sora-2">Sora 2</option>
               <option value="veo-3.1">Veo 3.1</option>
+              <option value="kling-3.0-pro">Kling 3.0 Pro</option>
               <option value="grok-imagine">Grok Imagine (XAI)</option>
             </select>
           </div>
@@ -1967,6 +1968,15 @@ const VIDEO_MODELS = {
     supportsReferences: true,
     maxRefImages: 7,
     description: 'XAI Grok Imagine native - excellent ref coherence + audio'
+  },
+  'kling-3.0-pro': {
+    label: 'Kling 3.0 Pro',
+    resolutions: ['720p', '1080p'],
+    aspectRatios: ['16:9', '9:16', '1:1'],
+    durations: [3, 5, 8, 10, 15],
+    supportsReferences: true,
+    maxRefImages: 1,
+    description: 'Kling 3.0 Pro — cinematic T2V/I2V via WaveSpeed'
   }
 };
 
@@ -2264,7 +2274,7 @@ if(curUser.tier==='free')h+='<div class="locked-msg"><p>Free tier: TXT & copy ex
 // Video Generation toolbar
 if(typeof SBVideo!=='undefined'&&(curUser.isOwner||curUser.tier==='enterprise'||curUser.tier==='studio'||curUser.tier==='production')){
 h+='<div class="vg-toolbar" id="vg-toolbar"><div id="vg-error" class="vg-error"></div>';
-h+='<select class="vg-sel" id="vg-model" onchange="SBVideo.model=this.value"><option value="seedance-2.0-turbo" selected>Seedance 2.0 Turbo</option><option value="wan-2.7">Wan 2.7</option><option value="sora-2">Sora 2</option><option value="veo-3.1">Veo 3.1</option><option value="grok-imagine">Grok Imagine (XAI)</option></select>';
+h+='<select class="vg-sel" id="vg-model" onchange="SBVideo.model=this.value"><option value="seedance-2.0-turbo" selected>Seedance 2.0 Turbo</option><option value="wan-2.7">Wan 2.7</option><option value="sora-2">Sora 2</option><option value="veo-3.1">Veo 3.1</option><option value="kling-3.0-pro">Kling 3.0 Pro</option><option value="grok-imagine">Grok Imagine (XAI)</option></select>';
 h+='<button class="b b-gold b-s" onclick="SBVideo._onBatch()">▶ GENERATE ALL SHOTS</button>';
 h+='<button class="b b-g b-s" onclick="SBVideo._openGallery()">🎥 Gallery</button>';
 h+='<button class="b b-gold b-s" onclick="SBVideo._openStitch()">🎬 Stitch & Edit</button>';
@@ -2361,7 +2371,7 @@ function dL(n,c,t){const a=document.createElement('a');a.href=c instanceof Blob?
 "use strict";
 // ─── SHOTBREAK Video Module v5 (WaveSpeedAI-aware, verbose logging) ───
 const PROXY=sbVideoProxy(),BATCH="/.netlify/functions/batch-generate";
-const MP={"seedance-2.0-turbo":{l:"Seedance 2.0 Turbo",c:60},"wan-2.7":{l:"Wan 2.7",c:80},"sora-2":{l:"Sora 2",c:120},"veo-3.1":{l:"Veo 3.1",c:150},"grok-imagine":{l:"Grok Imagine (XAI)",c:90}};
+const MP={"seedance-2.0-turbo":{l:"Seedance 2.0 Turbo",c:60},"wan-2.7":{l:"Wan 2.7",c:80},"sora-2":{l:"Sora 2",c:120},"veo-3.1":{l:"Veo 3.1",c:150},"kling-3.0-pro":{l:"Kling 3.0 Pro",c:100},"grok-imagine":{l:"Grok Imagine (XAI)",c:90}};
 const V=window.SBVideo={model:"seedance-2.0-turbo",jobs:new Map(),polls:new Map(),balance:0,tier:"free"};
 
 function vlog(){const a=["[SBVideo]"].concat([].slice.call(arguments));console.log.apply(console,a)}
@@ -5675,7 +5685,7 @@ function mhGetBibleCharacters(){
 }
 
 // ───────── STEP 4: Generate + Stitch ─────────
-const MH_MODEL_COST={'seedance-2.0-turbo':60,'wan-2.7':80,'sora-2':120,'veo-3.1':150,'grok-imagine':90};
+const MH_MODEL_COST={'seedance-2.0-turbo':60,'wan-2.7':80,'sora-2':120,'veo-3.1':150,'kling-3.0-pro':100,'grok-imagine':90};
 function mhRenderGenerate(){
   const p=projectLoad();if(!p)return;
   // Tier gate — video generation requires Studio+ (unlocked in local-only mode)

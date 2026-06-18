@@ -30,26 +30,38 @@ exports.handler = async (event) => {
   const MODEL_CONFIG = {
     'kling-3.0': {
       key: WAVESPEED_KEY,
-      endpoint: 'https://api.wavespeed.ai/api/v3/kwaivgi/kling-v2.1-t2v-master',
-      allowedDurations: [5, 10],
+      endpoint: 'https://api.wavespeed.ai/api/v3/kwaivgi/kling-v3.0-pro/text-to-video',
+      allowedDurations: [3, 5, 8, 10, 15],
       buildBody: (p, d) => ({
         prompt: p,
         duration: d,
         aspect_ratio: '16:9',
-        mode: 'std',
-        cfg_scale: 0.5
+        cfg_scale: 0.5,
+        sound: false
+      })
+    },
+    'kling-3.0-pro': {
+      key: WAVESPEED_KEY,
+      endpoint: 'https://api.wavespeed.ai/api/v3/kwaivgi/kling-v3.0-pro/text-to-video',
+      allowedDurations: [3, 5, 8, 10, 15],
+      buildBody: (p, d) => ({
+        prompt: p,
+        duration: d,
+        aspect_ratio: '16:9',
+        cfg_scale: 0.5,
+        sound: false
       })
     },
     'kling-pro': {
       key: WAVESPEED_KEY,
-      endpoint: 'https://api.wavespeed.ai/api/v3/kwaivgi/kling-v2.6-pro-text-to-video',
-      allowedDurations: [5, 10],
+      endpoint: 'https://api.wavespeed.ai/api/v3/kwaivgi/kling-v3-turbo-pro/text-to-video',
+      allowedDurations: [3, 5, 8, 10, 15],
       buildBody: (p, d) => ({
         prompt: p,
         duration: d,
         aspect_ratio: '16:9',
-        mode: 'pro',
-        cfg_scale: 0.5
+        cfg_scale: 0.5,
+        sound: false
       })
     },
     'veo-3.1': {
