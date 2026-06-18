@@ -7492,12 +7492,7 @@ async function mhParseBox(entityBoxId) {
   outEl.innerHTML = '<div style="color:var(--dim)">Building clean prompt from your notes...</div>';
   outEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
-  const finalText = points.join('
-
-') +
-    '
-
-Edit and relock your version below.';
+  const finalText = points.join('\n\n') + '\n\nEdit and relock your version below.';
 
   mhRenderParsedPromptBox(outEl, entityBoxId, finalText, { live: false, local: true });
 }
