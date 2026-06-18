@@ -1365,15 +1365,32 @@ function sbHealthUrl() {
   if (proxy.includes('/generate-video')) return proxy.replace('/generate-video', '/health');
   return 'http://localhost:3456/health';
 }
-function sbMaxPollMs() {
+const SB_MODEL_POLL_SEC = {
+  'kling-3.0-pro': 3600,
+  'kling-3.0': 3600,
+  'kling-pro': 3600,
+  'veo-3.1': 1200,
+  'sora-2': 1200
+};
+function sbIsKlingModel(model) {
+  return (model || '').toLowerCase().includes('kling');
+}
+function sbMaxPollMs(model) {
   if (window._sbLocalHealth && window._sbLocalHealth.max_wait_sec) {
     return window._sbLocalHealth.max_wait_sec * 1000;
   }
   const cfg = window.SHOTBREAK_CONFIG || {};
-  if (cfg.localGeneration && cfg.localGeneration.maxPollSec) {
+  if (cfg.localGeneration && cfg.localGeneration.enabled && cfg.localGeneration.maxPollSec) {
     return cfg.localGeneration.maxPollSec * 1000;
   }
-  return isLocalOnly() ? (30 * 60 * 1000) : (8 * 60 * 1000);
+  const m = (model || '').toLowerCase();
+  if (m.includes('kling')) return 3600 * 1000;
+  if (SB_MODEL_POLL_SEC[m]) return SB_MODEL_POLL_SEC[m] * 1000;
+  return isLocalOnly() ? (30 * 60 * 1000) : (15 * 60 * 1000);
+}
+function sbPollIntervalMs(model, polls) {
+  if (sbIsKlingModel(model)) return polls < 3 ? 5000 : 10000;
+  return polls < 2 ? 3000 : 5000;
 }
 const SB_PROVIDER_LABELS = {
   'xai-imagine': { label: 'Grok Imagine', color: '#a78bfa', tip: 'Real pixels via XAI Grok Imagine API' },
@@ -1390,10 +1407,13 @@ function sbProviderBadge(provider) {
   const p = SB_PROVIDER_LABELS[provider] || { label: provider, color: '#888', tip: provider };
   return '<span title="'+esc(p.tip)+'" style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:#1a1a1a;color:'+p.color+';border:1px solid '+p.color+';margin-left:4px;white-space:nowrap">'+esc(p.label)+'</span>';
 }
-function sbPollTimeoutMsg(scene, shot) {
-  const maxMin = Math.round(sbMaxPollMs() / 60000);
+function sbPollTimeoutMsg(scene, shot, model) {
+  const maxMin = Math.round(sbMaxPollMs(model) / 60000);
   if (isLocalOnly()) {
     return 'Shot '+scene+'.'+shot+' timed out after '+maxMin+' min. Bridge may still be processing — check http://localhost:3456/health or refresh.';
+  }
+  if (sbIsKlingModel(model)) {
+    return 'Shot '+scene+'.'+shot+' still rendering after '+maxMin+' min (Kling often takes 30–45 min). Stay on this tab or refresh — WaveSpeed may still be processing.';
   }
   return 'Shot '+scene+'.'+shot+' timed out after '+maxMin+' min. Provider may still be processing — refresh in a few minutes.';
 }
@@ -2574,16 +2594,16 @@ V._onBatch=async function(){
 // Polls every 5s. Always also tries to fetch video_url — sometimes the
 // status endpoint says IN_PROGRESS while result already has the URL.
 // On COMPLETED, retries result fetch up to 3 times before giving up.
-// Poll timeout synced with bridge max_wait_sec (30 min local, 8 min cloud default).
+// Poll timeout synced with bridge max_wait_sec (30 min local; cloud model-aware — Kling up to 60 min).
 V._startPoll=function(rid,model){
   if(V.polls.has(rid))return;
   vlog("Starting poll for",rid);
   const startTime=Date.now();
-  const MAX_POLL_MS=sbMaxPollMs();
+  const MAX_POLL_MS=sbMaxPollMs(model);
   const iv=setInterval(async()=>{
     if(Date.now()-startTime>MAX_POLL_MS){
       clearInterval(iv);V.polls.delete(rid);
-      const job=V.jobs.get(rid);if(job){job.status="FAILED";V._showErr(sbPollTimeoutMsg(job.scene,job.shot));V._updateUI()}
+      const job=V.jobs.get(rid);if(job){job.status="PROCESSING";V._showErr(sbPollTimeoutMsg(job.scene,job.shot,model));V._updateUI()}
       return;
     }
     try{
@@ -5850,10 +5870,10 @@ async function mhRunSingleJob(j,model){
       console.error('[mh submit fail]',r.status,d);
       mhRenderGenProgress();return;
     }
-    j.requestId=d.request_id;j.status='poll';mhRenderGenProgress();
-    // Poll loop — synced with bridge max_wait_sec (30 min local).
+    j.requestId=d.request_id;j.status='poll';j.model=model;j.startedAt=Date.now();mhPersistPendingJobs();mhRenderGenProgress();
+    // Poll loop — model-aware (Kling up to 60 min on cloud).
     const started=Date.now();
-    const MAX_WAIT=sbMaxPollMs();
+    const MAX_WAIT=sbMaxPollMs(model);
     while(Date.now()-started<MAX_WAIT){
       await new Promise(res=>setTimeout(res,5000));
       try{
@@ -5867,7 +5887,7 @@ async function mhRunSingleJob(j,model){
           j.videoUrl=rd.video_url||rd.url||(rd.video&&rd.video.url);
           if(rd.provider)j.provider=rd.provider;
           if(j.videoUrl){
-            j.status='done';mhPersistClips();
+            j.status='done';mhPersistClips();mhPersistPendingJobs();
             // Expose to the Editor — push to window.SB_Generated + localStorage.
             try{
               const clipRecord={
@@ -5904,7 +5924,8 @@ async function mhRunSingleJob(j,model){
         // Continue polling — transient errors shouldn't kill the job
       }
     }
-    j.status='fail';j.error=sbPollTimeoutMsg(j.sceneIdx+1,j.shotIdx+1);mhRenderGenProgress();
+    j.status='poll';j.error=sbPollTimeoutMsg(j.sceneIdx+1,j.shotIdx+1,model);mhPersistPendingJobs();
+    mhStartBackgroundPoll(j.sceneIdx+'-'+j.shotIdx,j.requestId,model);mhRenderGenProgress();
   }catch(e){
     console.error('[mh job exception]',e);
     j.status='fail';j.error=e.message||String(e);mhRenderGenProgress();
@@ -6096,16 +6117,17 @@ function mhIsRealVideoUrl(url, job) {
 
 function mhIsJobGenerating(j) {
   if (!j || j.videoUrl) return false;
-  if (j.status === 'fail' || j.error) return false;
+  if (j.status === 'fail') return false;
   return j.status === 'submit' || j.status === 'poll' || j.status === 'queue';
 }
 
 function mhGeneratingClipHtml(j) {
   const model = j && j.model ? esc(j.model) : 'video';
+  const eta = sbIsKlingModel(j && j.model) ? 'typically 20–45 min' : 'typically 1–5 min';
   return '<div style="margin-top:8px;padding:14px;background:var(--surface2);border:1px solid var(--gold-border);border-radius:8px;text-align:center">' +
     '<span style="display:inline-block;font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;background:rgba(251,191,36,0.15);color:#fbbf24;border:1px solid rgba(251,191,36,0.35)">GENERATING</span>' +
     '<div style="color:var(--gold);font-size:13px;font-weight:700;margin-top:10px">⚙ Rendering video…</div>' +
-    '<div style="color:var(--dim);font-size:10px;margin-top:6px;line-height:1.4">' + model + ' · WaveSpeed/XAI · typically 1–5 min<br>Stay on this tab — preview appears here when done.</div></div>';
+    '<div style="color:var(--dim);font-size:10px;margin-top:6px;line-height:1.4">' + model + ' · WaveSpeed/XAI · ' + eta + '<br>Stay on this tab — preview appears here when done.</div></div>';
 }
 
 function mhSetShotGenButton(key, state, detail) {
@@ -6890,13 +6912,13 @@ function mhNormalizeVideoStatus(st) {
   return 'PROCESSING';
 }
 
-async function mhPollVideoUntilDone(requestId, headers, shotKey) {
+async function mhPollVideoUntilDone(requestId, headers, shotKey, model) {
   const h = headers || (window.hdrs ? await window.hdrs() : { 'Content-Type': 'application/json' });
   const started = Date.now();
-  const maxWait = sbMaxPollMs();
+  const maxWait = sbMaxPollMs(model);
   let polls = 0;
   while (Date.now() - started < maxWait) {
-    await new Promise(res => setTimeout(res, polls < 2 ? 3000 : 5000));
+    await new Promise(res => setTimeout(res, sbPollIntervalMs(model, polls)));
     polls++;
     if (shotKey) {
       const [psi, pshi] = shotKey.split('-').map(Number);
@@ -6946,6 +6968,94 @@ async function mhPollVideoUntilDone(requestId, headers, shotKey) {
     }
   }
   throw new Error('timed out waiting for video (waited ' + Math.round((Date.now() - started) / 1000) + 's)');
+}
+
+const _mhBgPolls = new Set();
+async function mhStartBackgroundPoll(key, requestId, model) {
+  const pollKey = requestId + ':' + key;
+  if (_mhBgPolls.has(pollKey)) return;
+  _mhBgPolls.add(pollKey);
+  const [si, shi] = key.split('-').map(Number);
+  try {
+    const h = window.hdrs ? await window.hdrs() : { 'Content-Type': 'application/json' };
+    const polled = await mhPollVideoUntilDone(requestId, h, key, model);
+    mhUpsertGenJob(si, shi, {
+      status: 'done',
+      videoUrl: polled.videoUrl,
+      provider: polled.provider,
+      error: null,
+      requestId
+    });
+    mhPersistClips();
+    mhPersistPendingJobs();
+    mhRefreshGenUI(key);
+    mhSetShotGenButton(key, 'done', '✅ Video ready');
+  } catch (e) {
+    console.warn('[mhBgPoll]', key, e.message || e);
+    mhUpsertGenJob(si, shi, {
+      status: 'poll',
+      error: sbPollTimeoutMsg(si + 1, shi + 1, model),
+      requestId,
+      model
+    });
+    mhPersistPendingJobs();
+    mhRenderShotClipPreview(key);
+    mhSetShotGenButton(key, 'generating', '⏳ Still rendering…');
+  } finally {
+    _mhBgPolls.delete(pollKey);
+  }
+}
+
+function mhPersistPendingJobs() {
+  try {
+    const p = projectLoad();
+    if (!p) return;
+    const storeKey = 'sb_pending_' + ((curUser && (curUser.uid || curUser.name)) || 'anon');
+    const pending = (_mhGenState.jobs || [])
+      .filter(j => j.requestId && !j.videoUrl && (j.status === 'poll' || j.status === 'submit'))
+      .map(j => ({
+        sceneIdx: j.sceneIdx,
+        shotIdx: j.shotIdx,
+        requestId: j.requestId,
+        model: j.model || null,
+        prompt: j.prompt || '',
+        startedAt: j.startedAt || Date.now()
+      }));
+    localStorage.setItem(storeKey, JSON.stringify({ projectCreatedAt: p.createdAt, pending, savedAt: Date.now() }));
+  } catch (e) {
+    console.warn('[mh] pending persist failed', e);
+  }
+}
+
+function mhResumePendingPolls() {
+  try {
+    const p = projectLoad();
+    if (!p) return;
+    const storeKey = 'sb_pending_' + ((curUser && (curUser.uid || curUser.name)) || 'anon');
+    const raw = localStorage.getItem(storeKey);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (data.projectCreatedAt && data.projectCreatedAt !== p.createdAt) return;
+    if (!Array.isArray(data.pending)) return;
+    data.pending.forEach(item => {
+      if (!item || !item.requestId) return;
+      const key = item.sceneIdx + '-' + item.shotIdx;
+      const existing = mhGetShotJob(item.sceneIdx, item.shotIdx);
+      if (existing && existing.videoUrl) return;
+      mhUpsertGenJob(item.sceneIdx, item.shotIdx, {
+        status: 'poll',
+        requestId: item.requestId,
+        model: item.model,
+        prompt: item.prompt || (existing && existing.prompt) || '',
+        error: null
+      });
+      mhRenderShotClipPreview(key);
+      mhSetShotGenButton(key, 'generating', '⏳ Resuming render…');
+      mhStartBackgroundPoll(key, item.requestId, item.model);
+    });
+  } catch (e) {
+    console.warn('[mh] pending resume failed', e);
+  }
 }
 
 // Quality / Upscale / Sizing / Downloader panel (final tab in the exact flow the user described)
@@ -7190,6 +7300,7 @@ function mhSwitchTab(tab) {
       mhSyncScenesFromScript(p);
     }
     mhLoadPersistedClips();
+    mhResumePendingPolls();
     mhWirePhotoRemoveHandlers();
     mhRefreshBaselineShotSelect(projectLoad());
     if (typeof buildPerShotDetailBoxes === 'function') buildPerShotDetailBoxes();
@@ -8316,21 +8427,25 @@ async function generateVideoForShot(key, btn, opts) {
   mhUpsertGenJob(si, shi, { prompt: finalPromptForVideo, status: 'submit', model: videoModel, error: null, localGenerated: false });
   mhRenderShotClipPreview(key);
 
+  let submittedRequestId = null;
   try {
     const h = (window.hdrs ? await window.hdrs() : {'Content-Type':'application/json'});
     const r = await fetch(sbVideoProxy(), {method:'POST', headers:h, body:JSON.stringify(payload)});
     const d = await r.json();
     if (r.ok && (d.request_id || d.video_url)) {
       const modelUsed = payload.model || 'unknown';
+      submittedRequestId = d.request_id || null;
       const job = mhUpsertGenJob(si, shi, {
         prompt: finalPromptForVideo,
         status: d.video_url ? 'done' : 'poll',
-        requestId: d.request_id || null,
+        requestId: submittedRequestId,
         videoUrl: d.video_url || null,
         model: modelUsed,
         localGenerated: false,
-        error: null
+        error: null,
+        startedAt: Date.now()
       });
+      if (submittedRequestId && !d.video_url) mhPersistPendingJobs();
       if (window.SBVideo && d.request_id && !waitForDone) {
         SBVideo.jobs.set(d.request_id, {scene:si+1, shot:shi+1, status:'IN_QUEUE', videoUrl:null, model:payload.model});
         if (typeof SBVideo._startPoll === 'function') SBVideo._startPoll(d.request_id, payload.model);
@@ -8340,7 +8455,7 @@ async function generateVideoForShot(key, btn, opts) {
         mhSetShotGenButton(key, 'generating', '⚙ Generating… (' + modelUsed + ')');
         job.status = 'poll';
         mhRenderShotClipPreview(key);
-        const polled = await mhPollVideoUntilDone(d.request_id, h, key);
+        const polled = await mhPollVideoUntilDone(d.request_id, h, key, videoModel);
         mhUpsertGenJob(si, shi, {
           status: 'done',
           videoUrl: polled.videoUrl,
@@ -8350,6 +8465,7 @@ async function generateVideoForShot(key, btn, opts) {
           requestId: d.request_id
         });
         mhPersistClips();
+        mhPersistPendingJobs();
         mhRefreshGenUI(key);
         mhSetShotGenButton(key, 'done', '✅ Video ready');
       } else if (d.video_url) {
@@ -8365,6 +8481,20 @@ async function generateVideoForShot(key, btn, opts) {
     }
   } catch (e) {
     console.warn('[Shot video] Remote submit failed:', e.message || e);
+    if (submittedRequestId && String(e.message || '').indexOf('timed out') >= 0) {
+      mhUpsertGenJob(si, shi, {
+        status: 'poll',
+        requestId: submittedRequestId,
+        model: videoModel,
+        error: sbPollTimeoutMsg(si + 1, shi + 1, videoModel),
+        localGenerated: false
+      });
+      mhPersistPendingJobs();
+      mhStartBackgroundPoll(key, submittedRequestId, videoModel);
+      mhRenderShotClipPreview(key);
+      mhSetShotGenButton(key, 'generating', '⏳ Still rendering…');
+      return;
+    }
     if (isLocalOnly()) {
       generateLocalClipForShot(key, finalPromptForVideo, charRefUrl, charRefName, btn, payload.model);
     } else {
