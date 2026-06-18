@@ -67,10 +67,10 @@ exports.handler = async (event) => {
     'veo-3.1': {
       key: WAVESPEED_KEY,
       endpoint: 'https://api.wavespeed.ai/api/v3/google/veo3.1/text-to-video',
-      allowedDurations: [8],
+      allowedDurations: [4, 6, 8],
       buildBody: (p, d) => ({
         prompt: p,
-        duration: 8,
+        duration: d,
         aspect_ratio: '16:9',
         resolution: '720p',
         generate_audio: false

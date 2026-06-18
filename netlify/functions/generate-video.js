@@ -196,6 +196,37 @@ function isKlingModel(modelId) {
   return (modelId || '').toLowerCase().includes('kling');
 }
 
+function isVeoModel(modelId) {
+  return (modelId || '').toLowerCase().includes('veo');
+}
+
+function clampVeoDuration(d) {
+  const allowed = [4, 6, 8];
+  const n = Number(d) || 8;
+  if (allowed.includes(n)) return n;
+  return allowed.reduce((best, v) => (Math.abs(v - n) < Math.abs(best - n) ? v : best), 8);
+}
+
+function clampVeoAspect(ar) {
+  return ar === '9:16' ? '9:16' : '16:9';
+}
+
+function clampVeoResolution(res) {
+  return res === '1080p' ? '1080p' : '720p';
+}
+
+function collectRefImageUrls(fields) {
+  const urls = [];
+  const primary = pickRefImageUrl(fields);
+  if (primary) urls.push(primary);
+  if (Array.isArray(fields.reference_images)) {
+    for (const r of fields.reference_images) {
+      if (r && isSafeUrl(r) && !urls.includes(r)) urls.push(r);
+    }
+  }
+  return urls.slice(0, 3);
+}
+
 function getKlingTier(modelId) {
   const m = (modelId || '').toLowerCase();
   if (m.includes('turbo') || m === 'kling-pro') return 'kling-v3-turbo-pro';
@@ -237,7 +268,9 @@ function getWaveSpeedPath(modelId, hasRefImage = false) {
     return 'wavespeed-ai/sora-2'; // or openai/sora-2 equivalent on platform
   }
   if (m.includes('veo') || m === 'veo-3.1') {
-    return hasRefImage ? 'google/veo-3.1/i2v' : 'google/veo-3.1/t2v';
+    return hasRefImage
+      ? 'google/veo3.1-fast/reference-to-video'
+      : 'google/veo3.1/text-to-video';
   }
   // photo models that go WS
   if (m.includes('nano-banana')) return 'wavespeed-ai/' + (m.includes('pro') ? 'nano-banana-pro' : 'nano-banana');
@@ -257,6 +290,22 @@ function buildWaveSpeedBody(videoModel, fields, hasRef) {
     };
     const refUrl = pickRefImageUrl(fields);
     if (hasRef && refUrl) wsBody.image = refUrl;
+    if (fields.negative_prompt) wsBody.negative_prompt = sanitizeField(fields.negative_prompt, 500);
+    return wsBody;
+  }
+  if (isVeoModel(videoModel)) {
+    const wsBody = {
+      prompt: fields.prompt,
+      aspect_ratio: clampVeoAspect(fields.aspect_ratio),
+      resolution: clampVeoResolution(fields.resolution),
+      generate_audio: false,
+    };
+    const refUrls = collectRefImageUrls(fields);
+    if (hasRef && refUrls.length) {
+      wsBody.images = refUrls;
+    } else {
+      wsBody.duration = clampVeoDuration(fields.duration);
+    }
     if (fields.negative_prompt) wsBody.negative_prompt = sanitizeField(fields.negative_prompt, 500);
     return wsBody;
   }

@@ -1974,11 +1974,11 @@ const VIDEO_MODELS = {
   'veo-3.1': {
     label: 'Veo 3.1',
     resolutions: ['720p', '1080p'],
-    aspectRatios: ['16:9', '9:16', '1:1'],
-    durations: [4, 5, 6, 8, 10, 12],
+    aspectRatios: ['16:9', '9:16'],
+    durations: [4, 6, 8],
     supportsReferences: true,
-    maxRefImages: 2,
-    description: 'Google Veo 3.1 Fast'
+    maxRefImages: 3,
+    description: 'Google Veo 3.1 — 1080p T2V/R2V via WaveSpeed (4/6/8s)'
   },
   'grok-imagine': {
     label: 'Grok Imagine (done through XAI API)',
@@ -6121,9 +6121,12 @@ function mhIsJobGenerating(j) {
   return j.status === 'submit' || j.status === 'poll' || j.status === 'queue';
 }
 
+function sbIsVeoModel(model) {
+  return (model || '').toLowerCase().includes('veo');
+}
 function mhGeneratingClipHtml(j) {
   const model = j && j.model ? esc(j.model) : 'video';
-  const eta = sbIsKlingModel(j && j.model) ? 'typically 20–45 min' : 'typically 1–5 min';
+  const eta = sbIsKlingModel(j && j.model) ? 'typically 20–45 min' : (sbIsVeoModel(j && j.model) ? 'typically 2–5 min' : 'typically 1–5 min');
   return '<div style="margin-top:8px;padding:14px;background:var(--surface2);border:1px solid var(--gold-border);border-radius:8px;text-align:center">' +
     '<span style="display:inline-block;font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;background:rgba(251,191,36,0.15);color:#fbbf24;border:1px solid rgba(251,191,36,0.35)">GENERATING</span>' +
     '<div style="color:var(--gold);font-size:13px;font-weight:700;margin-top:10px">⚙ Rendering video…</div>' +

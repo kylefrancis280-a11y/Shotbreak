@@ -83,7 +83,11 @@ def get_wavespeed_path(model_id: str, has_ref: bool = False) -> str:
     if "sora" in m:
         return "wavespeed-ai/sora-2"
     if "veo" in m:
-        return "google/veo-3.1/i2v" if has_ref else "google/veo-3.1/t2v"
+        return (
+            "google/veo3.1-fast/reference-to-video"
+            if has_ref
+            else "google/veo3.1/text-to-video"
+        )
     if "nano-banana" in m:
         return f"wavespeed-ai/{'nano-banana-pro' if 'pro' in m else 'nano-banana'}"
     if "gpt-image" in m or "gpt-2" in m:
@@ -233,15 +237,30 @@ def submit_video(body: dict[str, Any]) -> dict[str, Any]:
     if _has_wavespeed_key():
         has_ref = bool(ref)
         ws_path = "/api/v3/" + get_wavespeed_path(model, has_ref)
-        ws_body: dict[str, Any] = {
-            "prompt": prompt[:2000],
-            "duration": duration,
-            "aspect_ratio": aspect,
-        }
-        if body.get("resolution"):
-            ws_body["resolution"] = body["resolution"]
-        if ref:
-            ws_body["reference_image"] = ref
+        ws_body: dict[str, Any] = {"prompt": prompt[:2000]}
+        if "veo" in (model or "").lower():
+            ws_body["aspect_ratio"] = "9:16" if aspect == "9:16" else "16:9"
+            ws_body["resolution"] = "1080p" if body.get("resolution") == "1080p" else "720p"
+            ws_body["generate_audio"] = False
+            ref_urls: list[str] = []
+            if ref:
+                ref_urls.append(ref)
+            for item in body.get("reference_images") or []:
+                u = _ref_for_api(item if isinstance(item, str) else (item or {}).get("url"))
+                if u and u not in ref_urls:
+                    ref_urls.append(u)
+            if has_ref and ref_urls:
+                ws_body["images"] = ref_urls[:3]
+            else:
+                allowed = [4, 6, 8]
+                ws_body["duration"] = duration if duration in allowed else min(allowed, key=lambda v: abs(v - duration))
+        else:
+            ws_body["duration"] = duration
+            ws_body["aspect_ratio"] = aspect
+            if body.get("resolution"):
+                ws_body["resolution"] = body["resolution"]
+            if ref:
+                ws_body["reference_image"] = ref
         if body.get("shotKey"):
             ws_body["shot_key"] = body["shotKey"]
         res = _http_json("api.wavespeed.ai", ws_path, payload=ws_body, bearer=get_key("WAVESPEED_API_KEY") or "")
