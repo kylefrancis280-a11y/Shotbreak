@@ -321,15 +321,15 @@ window.safeSignIn = safeSignIn;
 <div class="container">
 <!-- DASHBOARD -->
 <div id="dashView" class="ws">
-  <!-- PRIMARY PATH the user explicitly wants: Scripts straight into Generation Hub Generate with visible point-form agents + final prose + clean tabs to Editor + Quality -->
+  <!-- PRIMARY PATH: Scripts straight into Generation Hub → per-shot video generation → Editor + Quality -->
   <div onclick="openMediaHubGenerate()" style="cursor:pointer;margin-bottom:18px;padding:20px 22px;background:linear-gradient(135deg,var(--gold-bg),rgba(212,168,67,0.06));border:2px solid var(--gold);border-radius:14px;transition:all 160ms;box-shadow:0 4px 20px rgba(212,168,67,0.15)" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='none'">
     <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
       <div style="flex:1;min-width:280px">
         <div style="font-family:var(--mono);font-size:10px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:var(--gold);margin-bottom:2px">THE MAIN PRODUCTION EXPERIENCE</div>
         <div style="font-family:var(--display);font-size:21px;font-weight:800;color:#fff;margin-bottom:3px">Generation Hub — Script • Characters • Generate • Edit/Upscale</div>
-        <div style="color:#ddd;font-size:13.5px;line-height:1.35">Scripts feed straight here → Character bible + descriptions → Specialist agents in clear <strong>point form</strong> (you see exactly what each did) → Location, time of day, mood etc. → One final agent turns it all into nice paragraphs → Big Generate button. Then Editor tab, then Quality/Upscale/Sizing/Downloader.</div>
+        <div style="color:#ddd;font-size:13.5px;line-height:1.35">Scripts feed straight here → Character bible + descriptions → Location, time of day, mood etc. → Per-shot video prompts → Big Generate button. Then Editor tab, then Quality/Upscale/Sizing/Downloader.</div>
       </div>
-      <div style="background:#000;color:var(--gold);font-family:var(--body);font-size:15px;font-weight:800;padding:13px 26px;border-radius:8px;white-space:nowrap;border:2px solid var(--gold)">Open Generate with Agents →</div>
+      <div style="background:#000;color:var(--gold);font-family:var(--body);font-size:15px;font-weight:800;padding:13px 26px;border-radius:8px;white-space:nowrap;border:2px solid var(--gold)">Open Generation Hub →</div>
     </div>
   </div>
 
@@ -359,7 +359,7 @@ window.safeSignIn = safeSignIn;
     <div id="dashProjectsList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px"></div>
     <div id="dashProjectsEmpty" style="display:none;padding:60px 24px;text-align:center;border:1px dashed var(--border2);border-radius:14px;color:var(--text2);background:linear-gradient(180deg,rgba(212,168,67,0.02),transparent)">
       <div style="font-family:var(--display);font-size:22px;color:var(--text);margin-bottom:8px;font-weight:700;letter-spacing:-0.01em">No projects yet</div>
-      <div style="font-size:14px;line-height:1.55;margin-bottom:16px;max-width:420px;margin-left:auto;margin-right:auto">Click below to go straight into the exact flow: scripts → Generation Hub Generate with agents in point form, final prose paragraphs, then Editor and Quality tools.</div>
+      <div style="font-size:14px;line-height:1.55;margin-bottom:16px;max-width:420px;margin-left:auto;margin-right:auto">Click below to go straight into the flow: script → characters & locations → per-shot video generation → Editor and Quality tools.</div>
       <button onclick="openMediaHubGenerate()" style="display:inline-block;padding:11px 22px;background:var(--gold);color:#000;border-radius:6px;font-family:var(--body);font-weight:700;font-size:13px;border:none;cursor:pointer">Open Generation Hub — Script • Characters • Generate • Edit/Upscale →</button>
     </div>
   </div>
@@ -639,8 +639,6 @@ window.safeSignIn = safeSignIn;
 .big-prompt { width: 100%; min-height: 110px; background: #0a0a0f; color: #fff; border: 1px solid var(--gold-border); border-radius: 6px; padding: 10px; font-family: var(--mono); font-size: 12.5px; resize: vertical; line-height: 1.4; }
 .jot-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; padding-top: 8px; border-top: 1px dashed var(--border); }
 .jot-bar select { background: var(--bg); color: var(--text2); border: 1px solid var(--border); border-radius: 4px; padding: 3px 6px; font-size: 10px; min-width: 110px; }
-.agent-contrib { background: #0a0a0f; border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-size: 12px; line-height: 1.35; max-height: 160px; overflow: auto; white-space: pre-wrap; }
-.agent-contrib .ag { color: var(--gold); font-weight: 700; }
 
 /* Loosen up the Generation Hub so it doesn't feel "jammed / zoomed in" */
 .mh-tab-pane { padding: 4px 2px 12px; }
@@ -682,16 +680,13 @@ window.safeSignIn = safeSignIn;
         <div class="mh-panel">
           <div id="mhScriptBox" style="margin-top:12px">
             <textarea id="mhScriptMain" rows="8" style="width:100%;background:#0a0a0f;border:1px solid var(--border);color:#fff;padding:12px;font-family:var(--mono);font-size:13px" placeholder="Paste or lock your script here..."></textarea>
-            <button class="b b-gold b-s" onclick="mhRunScriptAgents()" style="margin-top:8px">Run Script Agents → Point Form Suggestions</button>
-            <div id="mhScriptSuggestions" style="margin-top:12px"></div>
             <div class="point-list" id="points_script" style="display:none;margin-top:8px"></div>
             <div style="margin-top:8px">
-              <button class="b b-gold" onclick="mhParseBox('script')" style="font-size:12px">Parse Approved Points → Clean Prompt</button>
+              <button class="b b-gold" onclick="mhParseBox('script')" style="font-size:12px">Build Clean Script Prompt</button>
             </div>
             <div style="margin-top:8px">
               <button class="b b-g b-s" onclick="mhLockScriptAndExtract()">🔒 Lock Script & Send to Characters + Locations</button>
             </div>
-            <div id="localModeNote" style="font-size:10px;color:#666;margin-top:4px;display:block">HIGH-QUALITY LOCAL SIMS for all 82-GOD agents (detailed point-form, photo-anchored, continuity-aware). Owners use real tokens or set XAI_API_KEY + deploy functions for live Grok agents on https://shotbreak.io/app. File: or localhost = sims by design.</div>
             <div id="parsed_script"></div>
             <div id="mhScriptParsed" style="margin-top:8px;background:#111;border:1px solid var(--gold-border);padding:10px;font-size:13px;white-space:pre-wrap;display:none"></div>
           </div>
@@ -760,7 +755,7 @@ window.safeSignIn = safeSignIn;
               </div>
               <button class="b b-gold b-s" onclick="generateBaselineVideo()">Generate Baseline Clip Now</button>
             </div>
-            <div style="font-size:9px;color:#555;margin-top:2px">Baseline also prefers per-shot edited prompt (Grok-enriched) when available.</div>
+            <div style="font-size:9px;color:#555;margin-top:2px">Baseline uses per-shot edited prompts when available.</div>
             <div style="font-size:10px;color:var(--dim);margin-top:4px">This lets you see what the software is doing early. Results will appear organized in the entity boxes below by model → scene/shot → take.</div>
           </div>
 
@@ -1215,79 +1210,7 @@ if (typeof window.SBVideo === 'undefined') {
   window.SBVideo = { initFromResult: function(){} };
 }
 
-// ===================== ROBUST AGENT INVOKE HELPER =====================
-// This is the single place we call real agents. It does retries and surfaces real errors.
-window.SB_InvokeAgent = async function(agentId, input, maxRetries = 2) {
-  if (!window.SB_Agents || typeof window.SB_Agents.invoke !== 'function') {
-    throw new Error('SB_Agents not available (self-contained agent layer missing in this build)');
-  }
-
-  let lastError;
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      const res = await window.SB_Agents.invoke(agentId, input);
-      if (res && res.fallback) {
-        throw new Error(res.detail || res.error || 'Agent fallback on server');
-      }
-      if (res && res.error && !res.output && !res.result) {
-        throw new Error(res.detail || res.error || 'Agent failed on server');
-      }
-      const out = res && (res.output != null ? res.output : res.result);
-      if (out != null && String(out).trim()) {
-        return res;
-      }
-      throw new Error('Agent returned empty response — sign in as owner or check XAI_API_KEY on Netlify');
-    } catch (e) {
-      lastError = e;
-      console.warn(`[Agent] ${agentId} attempt ${attempt + 1} failed:`, e.message || e);
-      if (attempt < maxRetries) {
-        await new Promise(r => setTimeout(r, 800 * (attempt + 1))); // backoff
-      }
-    }
-  }
-  throw lastError;
-};
-
-// Provide SB_Agents so that SB_InvokeAgent does real calls to the Netlify function (instead of always throwing and falling back to sim).
-// This makes the 82 agents actually fire when the site is deployed with XAI_API_KEY set.
-window.SB_Agents = window.SB_Agents || {
-  invoke: async function(agentId, input) {
-    try {
-      const h = await (window.hdrs ? window.hdrs() : Promise.resolve({
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + ( (window.SB_OWNER_TOKEN && window.SB_OWNER_TOKEN.split(':').length===4 && window.SB_OWNER_TOKEN.startsWith('owner:')) ? window.SB_OWNER_TOKEN : (localStorage.getItem('sb_token') || '') )
-      }));
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 90000);
-      let r;
-      try {
-        r = await fetch('/.netlify/functions/agent-invoke', {
-          method: 'POST',
-          headers: h,
-          body: JSON.stringify({ agent_id: agentId, input: input || {} }),
-          signal: ctrl.signal
-        });
-      } finally {
-        clearTimeout(timer);
-      }
-      if (!r.ok) {
-        const txt = await r.text().catch(() => '');
-        if (r.status === 401) {
-          throw new Error('Not signed in — use Sign In with owner short (kylef) + OWNER_PW from Netlify env');
-        }
-        throw new Error('agent-invoke ' + r.status + ' ' + txt);
-      }
-      const data = await r.json();
-      if (data && data.fallback) {
-        throw new Error(data.detail || data.error || 'Agent fallback — server error');
-      }
-      return data;
-    } catch (e) {
-      // Let the caller (SB_InvokeAgent) catch and fall back to the high-quality local sim
-      throw e;
-    }
-  }
-};
+// Agents stripped — prompts are user-authored per shot; server Grok polish only in generate-video.js
 
 // ===================== AUTH STATE (minimal) =====================
 let curUser = null; // {name,email,tier,isOwner,uid,color}
@@ -2163,8 +2086,8 @@ h+='<select class="vg-sel" id="vg-model" onchange="SBVideo.model=this.value"><op
 h+='<button class="b b-gold b-s" onclick="SBVideo._onBatch()">▶ GENERATE ALL SHOTS</button>';
 h+='<button class="b b-g b-s" onclick="SBVideo._openGallery()">🎥 Gallery</button>';
 h+='<button class="b b-gold b-s" onclick="SBVideo._openStitch()">🎬 Stitch & Edit</button>';
-// Direct path to the exact experience the user wants: point-form agents + final prose + generate
-h+='<button class="b b-gold b-big" style="margin-left:8px" onclick="sendFwdToMediaHubAgents()">→ Generation Hub: Run Agents in Point Form + Final Prose + Generate</button>';
+// Direct path to Generation Hub from forward breakdown view
+h+='<button class="b b-gold b-big" style="margin-left:8px" onclick="sendFwdToMediaHubAgents()">→ Generation Hub</button>';
 h+='<div class="vg-badge"><span class="vg-tier" id="vg-tier">—</span> Balance: <b id="vg-bal">—</b></div>';
 h+='<div style="width:100%;display:none" id="vg-prog-wrap"><div class="vg-prog"><div class="vg-prog-fill" id="vg-prog-bar" style="width:0%"></div></div><div style="font-size:10px;color:var(--dim);margin-top:3px" id="vg-prog-lbl"></div></div>';
 h+='</div>';}
@@ -5978,10 +5901,7 @@ function mhGeneratingClipHtml(j) {
 function mhSetShotGenButton(key, state, detail) {
   const btn = document.getElementById('gen-shot-btn-' + key);
   if (!btn) return;
-  if (state === 'enriching') {
-    btn.disabled = true;
-    btn.textContent = detail || 'Grok enriching…';
-  } else if (state === 'submitting') {
+  if (state === 'enriching' || state === 'submitting') {
     btn.disabled = true;
     btn.textContent = detail || 'Submitting…';
   } else if (state === 'generating') {
@@ -6707,250 +6627,21 @@ async function mhStitchRun(mode){
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// EXACT USER FLOW IMPLEMENTATION — Generation Hub Generate with Point-Form Agents
-// Character bible/desc → Specialist agents in clear point form (one card per agent)
-// → Location / Time of Day / etc. → Final prose synthesizer agent → Generate button
-// Then Editor tab, then Quality/Upscale/Sizing/Downloader
-// ═══════════════════════════════════════════════════════════════════════════
-
-let _mhAgentPointsData = [];
-
-async function mhRunAgentPromptBuilder(){
-  const p = projectLoad();
-  if(!p || !p.script){ alert('Lock a script first in Step 1.'); return; }
-
-  const container = document.getElementById('mhAgentPointsContainer');
-  const pointsEl = document.getElementById('mhAgentPoints');
-  const detailsEl = document.getElementById('mhSceneDetails');
-  const charSum = document.getElementById('mhGenCharSummary');
-  if(!container || !pointsEl) return;
-
-  container.style.display = 'block';
-  pointsEl.innerHTML = '<div style="padding:12px;color:var(--dim)">Running specialist agents (Character • Psychological • Environment • Atmospherics • Prompt)... this takes 30-90s total.</div>';
-  detailsEl.innerHTML = '';
-
-  // Populate quick character bible / description summary
-  let charHtml = '<strong>Character Bible + Descriptions (from your script):</strong><br>';
-  if(p.characterBible && p.characterBible.length){
-    charHtml += p.characterBible.map(c => `• <b>${esc(c.name||'Character')}</b>: ${esc((c.description||'').slice(0,120))}${c.locked?' 🔒':''}`).join('<br>');
-  }else{
-    charHtml += '• No locked characters yet — run Step 2 first for best results (or agents will infer).';
+// buildShotVideoPrompt — direct per-shot prompts (no agent layer)
+function buildShotVideoPrompt(cleanPrompt, ui, p, si, shi) {
+  const parts = [];
+  const shotText = (p.scenes && p.scenes[si] && p.scenes[si].shots && p.scenes[si].shots[shi] && (p.scenes[si].shots[shi].text || p.scenes[si].shots[shi].description)) || '';
+  if (shotText) parts.push(shotText);
+  if (cleanPrompt) parts.push(cleanPrompt);
+  if (ui && ui.loc && ui.loc.name) {
+    parts.push('Location: ' + ui.loc.name + (ui.loc.tod ? ', ' + ui.loc.tod : '') + (ui.loc.weather ? ', ' + ui.loc.weather : '') + (ui.loc.busy ? ', ' + ui.loc.busy : '') + '.');
   }
-  if(charSum) charSum.innerHTML = charHtml;
-
-  _mhAgentPointsData = [];
-
-  // Full 82 GOD agents broken out by the 4 tabs (Script, Characters, Generate, Edit/Upscale) as the ONLY UI.
-// Per user: agents for the entity (character or scene) go into that box for ALL activity.
-  const specialists = [
-    // Characters tab agents (photo matching coherence)
-    {id:'visual-character-builder', label:'Visual Character Builder (GOD)'},
-    {id:'psychological-builder',    label:'Psychological Builder (GOD)'},
-    {id:'voice-builder',            label:'Voice Builder (GOD)'},
-    {id:'character-sculptor',       label:'Character Sculptor (GOD)'},
-    {id:'wardrobe-continuity',      label:'Wardrobe Continuity (GOD)'},
-    // Generate tab — per-shot specialists (the 82 crew visible here)
-    {id:'environment-builder',      label:'Environment Builder (GOD)'},
-    {id:'atmospherics-builder',     label:'Atmospherics Builder (GOD)'},
-    {id:'lighting-designer',        label:'Lighting Designer (GOD)'},
-    {id:'cinematographer',          label:'Cinematographer (GOD)'},
-    {id:'vfx-supervisor',           label:'VFX Supervisor (GOD)'},
-    {id:'sound-design-lead',        label:'Sound Design Lead (GOD)'},
-    {id:'prompt-writer',            label:'Prompt Writer (GOD)'},
-    {id:'animation-smoother',       label:'Animation Smoother (GOD - realistic motion & vehicle physics for Clip 8 bus departure: doors close both, pull away sep., merge traffic, cam track to Montreal skyline)'},
-    {id:'scene-architect',          label:'Scene Architect (GOD)'},
-    {id:'executive-producer',       label:'Executive Producer (GOD - final gate)'},
-    {id:'showrunner',               label:'Showrunner (GOD - orchestrator)'},
-    {id:'continuity-supervisor',    label:'Continuity Supervisor (GOD)'},
-    {id:'head-editor',              label:'Head Editor (GOD)'},
-    {id:'colorist',                 label:'Colorist (GOD)'},
-    {id:'production-designer',      label:'Production Designer (GOD)'},
-    {id:'dolly-grip-lead',          label:'Camera Operator / Dolly (GOD)'},
-    {id:'fx-artist',                label:'Practical FX Artist (GOD)'},
-    {id:'storyboard-supervisor',    label:'Storyboard Supervisor (GOD)'},
-    {id:'final-vfx-deliverer',      label:'Final VFX Deliverer (GOD)'},
-    // Full 82 available via registry; these are the ones surfaced per tab/entity so you SEE exactly who did what.
-  ];
-
-  const sceneContext = (p.scenes && p.scenes[0]) ? (p.scenes[0].text || p.script.slice(0,800)) : p.script.slice(0,1200);
-
-  for(const spec of specialists){
-    let card = document.createElement('div');
-    card.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-left:4px solid var(--gold);border-radius:8px;padding:12px 14px';
-    card.innerHTML = `<div style="font-weight:700;color:var(--gold);font-size:12px;margin-bottom:4px">${spec.label}</div><div style="font-size:12px;color:var(--dim)">Running...</div>`;
-    pointsEl.appendChild(card);
-
-    let outputText = 'No structured output';
-    let usedReal = false;
-    try{
-      const res = await window.SB_InvokeAgent(spec.id, {
-        script: p.script,
-        scene: sceneContext,
-        characters: p.characterBible || [],
-        project: { title: p.name || 'Untitled' }
-      });
-      const out = res.output || res.result || res;
-      outputText = (typeof out === 'string') ? out : JSON.stringify(out, null, 2);
-      usedReal = true;
-    }catch(e){
-      const isLocal = (location.protocol === 'file:') || (location.hostname === 'localhost') || (location.hostname === '127.0.0.1');
-      console.error(`[Agent] ${isLocal ? 'LOCAL SIM' : 'REAL CALL FAILED'} for ${spec.id}:`, e);
-      outputText = getSimulatedAgentOutput(spec.id, p);
-    }
-
-    // Turn whatever we got into clean bullet points (Grok markdown-safe)
-    const bullets = mhExtractBullets(outputText, 6);
-    const bulletHtml = bullets.length ? bullets.map(b=>`<div style="margin:2px 0">• ${esc(b)}</div>`).join('') : `<div style="font-size:12px;white-space:pre-wrap">${esc(outputText.slice(0,600))}</div>`;
-
-    const note = usedReal ? '' : ' <span style="color:#c8a25f;font-size:9px;">(local sim)</span>';
-    card.innerHTML = `<div style="font-weight:700;color:var(--gold);font-size:12px;margin-bottom:4px">${spec.label}${note}</div>${bulletHtml}`;
-
-    _mhAgentPointsData.push({ agent: spec.label, points: bullets.length ? bullets : [outputText.slice(0,300)] });
+  if (ui && ui.chars && ui.chars.length) {
+    parts.push('Characters in shot: ' + ui.chars.map(c => c.name).filter(Boolean).join(', ') + '.');
   }
-
-  // Pre-fill editable Location / Time / etc from CINE or agents
-  detailsEl.innerHTML = `
-    <div><label style="font-size:10px;color:var(--muted)">Primary Location</label><input id="mhLocIn" value="${esc((p.scenes&&p.scenes[0]&&p.scenes[0].location)||'Warehouse / Urban Night Street')}" style="width:100%;background:var(--bg);color:#fff;border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px"></div>
-    <div><label style="font-size:10px;color:var(--muted)">Time of Day</label><select id="mhTodIn" style="width:100%;background:var(--bg);color:#fff;border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px">${CINE.tod.o.map(o=>`<option ${o==='Night'?'selected':''}>${o}</option>`).join('')}</select></div>
-    <div><label style="font-size:10px;color:var(--muted)">Dominant Mood / Tone</label><input id="mhMoodIn" value="Tense, cold, neon reflections" style="width:100%;background:var(--bg);color:#fff;border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px"></div>
-    <div><label style="font-size:10px;color:var(--muted)">Camera Language (from agents)</label><input id="mhCamIn" value="Telephoto 85mm, subtle handheld, low angles" style="width:100%;background:var(--bg);color:#fff;border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px"></div>
-  `;
+  return parts.join(' ').replace(/\s{2,}/g, ' ').trim();
 }
 
-function getSimulatedAgentOutput(agentId, proj){
-  // Always use high-quality local sims as the default nice experience.
-  // Real calls only happen (and set usedReal=true with no (sim) note) when the backend
-  // successfully returns from a configured XAI_API_KEY + deployed agent-invoke.
-  // On live without key, or any failure: beautiful high-quality point-form GOD sims (photo-anchored, continuity, etc.).
-  return getHighQualityLocalAgentOutput(agentId, proj);
-}
-
-function getHighQualityLocalAgentOutput(agentId, proj) {
-  const script = (proj && proj.script) ? proj.script.slice(0, 800) : '';
-  let base = script ? `Drawing from script: "${script.substring(0,220)}..."` : 'Drawing from current project state.';
-
-  // Incorporate approved script points + locked assets for superior local coherence
-  if (window._mhApprovedPoints && window._mhApprovedPoints.script && window._mhApprovedPoints.script.length) {
-    const scriptPoints = mhNormalizePoints(window._mhApprovedPoints.script).slice(0, 3).join(' | ');
-    base += ` | Script lock: ${scriptPoints}.`;
-  }
-  const chars = (proj && proj.characterBible) ? proj.characterBible.map(c => c.name).join(', ') : 'the main characters';
-  const loc = (proj && proj.location && proj.location.name) ? proj.location.name : 'the primary location';
-  const lower = agentId.toLowerCase();
-
-  // All outputs are high-quality, labeled point-form (4-8 bullets). 
-  // Explicitly reference locked photos, continuity, practical sources, tactile details, and exact visual matching when refs supplied.
-  // Designed to feel like top-tier Grok agent output even in pure local mode.
-
-  if (lower.includes('visual-character') || lower.includes('character-builder') || lower.includes('character-sculptor') || lower.includes('wardrobe')) {
-    return `• ${base}\n• Physical signature for ${chars}: late 30s, weathered ex-military posture, signature scar over left eye (exact shape/angle/sheen must match any supplied reference photo 1:1).\n• Wardrobe locked: worn leather jacket with specific creases and wear on left shoulder, dark tactical pants, heavy boots — always practical, never flashy. Match exact jacket texture, scuff marks, and button details from locked photo.\n• Strict visual rule: Never give a clean full-face hero shot in the first three beats. Use shadow, extreme close-up on hands/eyes/scar, or profile against neon reflections.\n• Consistency anchor: The scar geometry + jacket wear pattern + stubble density must read identically in every scene the character appears (cross-reference all prior locked shots and photos).\n• Reference discipline: When reference photos are provided, every description/prompt locks to *exact* visible traits (precise scar shape/angle/sheen, exact stubble density/distribution, specific jacket creases/wear, hairline, ear shape, lighting signature on skin from the photo).`;
-  }
-
-  if (lower.includes('psych') || lower.includes('psychological')) {
-    return `• ${base}\n• Internal engine for ${chars}: guilt-driven protector. Will burn relationships and rules to keep one specific person alive.\n• Voice and behavior: Low, controlled, almost flat — cracks only on very specific names or objects from the past (tied to locked character history).\n• Fatal flaw: Cannot trust anyone. Any offer of help is treated as a potential threat to the protected person.\n• Arc seed: The only thing that can crack the armor is direct evidence that the protected person is better off without them — visible in micro-expressions and practical lighting on face.\n• Continuity: Psychological state must evolve visibly across shots (tension in jaw, eye movement) while keeping core physical anchors (scar, jacket) locked from photos.`;
-  }
-
-  if (lower.includes('environment') || lower.includes('atmospherics') || lower.includes('environment-builder') || lower.includes('production-designer')) {
-    return `• ${base}\n• Location grammar for ${loc}: cold rainy night on wet reflective ground under harsh overhead lights. Brutalist concrete, rusted metal; the slick mirror-like tarmac, puddles and ground sheen reflect stark overhead illumination and figures departing with disciplined purpose. Every frame contains strong reflective wet surfaces (puddles, slick asphalt, glass) to sell the cinematic departure atmosphere and sense of resolve — match exact surfaces, puddle geometry, ground reflectivity, and light reflections from any locked location plate photo.\n• Spatial + tactile layer (Environmental Interaction Specialist enhanced for hyper-realism): Cold rain streaking faces/gear with visible individual droplet impact and run-off physics, boots splashing through shallow water films on pavement producing accurate upward water spray plumes, mist, and secondary droplet arcs with real-world momentum and gravity; fine rain visible as light-refracting streaks and particles in air; water beading, coalescing into rivulets and absorbing into fabric causing precise wet-darkening, clinging and specular highlight roll-off on clothing/gear; deep hyper-realistic reflections on wet pavement — rippled/distorted mirror images of figures, lights and structures with correct perspective, anisotropic wet sheen, propagating concentric ripples and wakes from every footstep/boot impact and tire roll, caustics and light scatter in varying puddle depths, debris/leaf interaction in water; vapor/mist rising where rain meets warmer surfaces or breath under harsh lights. Wet surfaces must reflect the exact harsh overhead practical light sources and disciplined silhouettes visible in reference photos with optical fidelity.\n• Cinematic departure DNA: Atmosphere of cold, unyielding resolve. Rain and harsh lights underscore discipline and forward intent; no hesitation, only departure into the night with clear purpose. Recurring motifs (reflections in wet ground as mirrors of determination, rain as rhythmic punctuation to the march) must be consistent with prior shots and locked assets.\n• When location plates supplied: every new description must acknowledge the precise cold light temperature, harsh overhead source quality, surface wetness/reflectivity, puddle placement, and ground texture visible in the photo.`;
-  }
-
-  if (lower.includes('lighting') || lower.includes('cinematographer') || lower.includes('lighting-designer') || lower.includes('dolly')) {
-    return `• ${base}\n• Lighting ratio: 85-90% practical only. Harsh overhead lights (cold, stark, industrial) cutting sharp beams through the cold rainy night onto wet reflective ground, creating high-contrast pools, long shadows, and bright specular reflections of lights and departing figures in puddles and slick surfaces. Match the exact harsh quality, beam spread, color temperature, and ground reflection interactions of light falling on characters from any supplied reference photos.\n• Color war: Cold steely blues, harsh whites, desaturated tones; minimal warm if any. No gelled beauty lights or soft diffusion. Skin tones rendered cool and stark; highlights clip sharply on the overhead sources and their mirror reflections in the wet ground. Lighting projects discipline, order, and unemotional purpose.\n• Shadow and reflection as character: Faces half-hidden or glinted by harsh overhead glare and rain; body language/gait convey strong discipline and singular purpose of departure. The wet reflective ground acts as a second plane mirroring the resolve. No fill light — the harsh overheads and voids between define the cinematic mood. Reference photo lighting signature (overhead harshness + ground reflections) must be preserved exactly.\n• Camera: subtle, motivated — slow tracking or push following purposeful departure, angles emphasizing ground reflections and stature. 35mm or 50mm; steady, disciplined camera moves that echo the characters' resolve. The camera observes the cold purpose atmosphere.`;
-  }
-
-  if (lower.includes('prompt-writer') || lower.includes('vision-director') || lower.includes('scene-architect') || lower.includes('executive') || lower.includes('showrunner')) {
-    return `• ${base}\n• Token discipline: Under 220 tokens per shot prompt. Every word must justify its existence. End every shot description with one concrete, tactile detail (temperature on skin, smell of wet concrete, sound of rain on metal).\n• DNA lock: Maintain the established neo-noir rules — moral gray, practical sources only, rain as recurring emotional punctuation, no clean resolutions. Reference at least one locked anchor (character scar from photo, location reflection, color grade) in every new prompt.\n• Vision ref discipline (when photos supplied): The prompt MUST contain precise visual matching language for the *exact* details visible in the reference images (e.g. "match the precise scar angle and reflectivity from the provided photo of LEAD, the specific creasing and wear on the leather jacket left shoulder, the exact 3-day stubble pattern and density visible on the cheekbones in the reference, the exact light fall on skin from the location plate"). Per-shot edited prompts + char photos + location breakdown are primary source of truth.\n• Sensory + story: Every beat must deliver one piece of story information through light, weather, or a locked physical detail.`;
-  }
-
-  if (lower.includes('animation') || lower.includes('smoother') || lower.includes('motion') || lower.includes('physics')) {
-    return `• ${base}\n• ANIMATION SMOOTHER (Clip 8 London Calling bus departure focus - TECHNICAL & QUALITY MANDATORY): Enforce EXACTLY 6 seconds duration. Perfectly smooth natural motion with realistic bus physics. BUS PHYSICS INSTRUCTION (STRICT REALISM FOR TWO SEPARATE WHITE BUSES - BUS PHYSICS EXPERT & PHYSICS VALIDATOR MANDATE - CLIP 8): EXACTLY TWO SEPARATE DISTINCT IDENTICAL white airport shuttle buses (real 12m coach proportions), never merge/overlap/interpenetrate at any time or in reflections/parallax, maintain clear separation + independent rigid-body physics/parallax/speed/trajectory. Hyper-realistic 8K bus with obsessive perfect detail on both (micro-scratches, metallic flecks, rivets/bolts with shadows, panel gaps, chrome Fresnel + layered reflections incl. skyline/other bus, multi-pane glass with refraction/birefringence/rain micro-droplets/streaks with accurate IOR and double views of interior+exterior, tires deep tread + realistic sidewall flex/bulge/deformation under load + correct rotation, lights with caustics, decals sharp). DOORS CLOSE PROPERLY first on BOTH before any movement: perfect mechanical fidelity (roof/floor pneumatics with visible rods/actuators, heavy dual-panel plug/folding on exact hinges/arcs with true kinematics, non-linear damped speed curve, thick black rubber weatherstripping + gaskets visibly compressing/deforming + extruding micro water droplets, zero gaps/light leaks, sub-mm linkages/latches engaging with final clunk + resonant chassis vibration + body micro-settle). Only THEN gradual realistic acceleration (torque ramp overcoming inertia, only after full seal on that bus), correct wheel RPM match to velocity no slip, multi-axle suspension weight transfer/compression/rebound/lean on turns with accurate grip on wet, Newtonian tire spray (rooster-tails, side plumes, mist, droplet arcs, wakes, tracks). Extremely detailed independent dynamic wet pavement reflections of EACH bus separately + lights + passengers + skyline on tarmac/puddles (ripples/wakes/caustics/anisotropic sheen from tire contact). Use attached previous clip as STRONGEST primary visual reference for exact style/continuity: match end-state of buses (wetting, reflections, positioning), rain droplet physics/behavior/streaks, wet ground sheen/puddles/ripples exactly; seamless no-reset evolution. End motion reveals hyper-detailed accurate Montreal skyline (Place Ville Marie cross/sloped profile + beacon, 1000 de La Gauchetière cruciform tallest, high-rises correct fenestration/HVAC/antennas/strobes, proper haze/aerial perspective/glints, skyline reflected correctly on bus glass/chrome). All motion obeys real-world mass/momentum/inertia/wet friction/damping for heavy vehicles; 6s exact smooth continuous unbroken fluid take. ADDITIONAL VALIDATION: buses hyper-real 8K photoreal indistinguishable from live footage of real YUL shuttles; doors full 3D volume no artifacts; skyline correctly scaled distant with haze; previous clip rain/wet/lighting/bus state locked 1:1. TWO CLEARLY SEPARATE BUSES must be visible, distinct and physically independent AT ALL TIMES — never merge, overlap, interpenetrate or reduce to one vehicle; maintain accurate spatial separation, independent wheel/steering/suspension physics and parallax between the pair in every single frame. Hyper-realistic 8K detail required throughout. Logical scene progression ONLY for the departure: doors visibly and fully closing on BOTH buses first (complete seal action on each), THEN the two buses pull away separately from the curb with realistic gradual acceleration (torque ramp, subtle engine, wheel spin-up, suspension compression/bounce on tarmac), THEN buses merge into traffic. Medium-wide tracking shot: starting focused on the buses as doors close, smoothly tracking both buses pulling away and merging (keeping them separate and visible), ending with wider view to Montreal skyline. One smooth continuous shot with natural motion. All vehicles, visible passengers, background traffic and elements follow real-world mass, momentum, inertia and occlusion rules. STRICTLY one unbroken fluid cinematic take over exact 6s duration. Hyper-realistic 8K photorealism, physically accurate separate bus dynamics for the two buses enforced at every moment. Match any locked refs for bus livery, wet surfaces, reflections, passenger silhouettes. CONTINUITY AND REFERENCE MATCHER + REFERENCE VIDEO INTEGRATOR: Use the attached previous clip as strong visual reference for characters, lighting, rain, wet ground, and style. ADDITIONAL MOTION SMOOTHER PHRASES (CLIP 8 - MONTREAL SKYLINE BUS DEPARTURE): ADDITIONAL MOTION CONTINUITY FOR 6S CLIP: The entire sequence exhibits perfect frame-to-frame temporal coherence and velocity continuity across all 6 seconds — bus bodies, door mechanisms, wheels, suspension, rain elements, reflections, and camera position/angle all follow smooth, physically-plausible, continuous trajectories with no pops, jumps, stutters, velocity discontinuities, or element teleportation between frames; motion is governed by real inertia, momentum, and damping for heavy vehicles on wet surface; camera tracking is one unbroken motivated move with consistent speed profile and natural optical breathing. PREVIOUS CLIP STYLE REFERENCE: Use the attached previous clip as the primary style and continuity reference — match exactly the photoreal rendering quality, rain droplet physics and distribution, wet tarmac reflection intensity and ripple propagation, bus surface water beading and sheen response to light, character uniform wet fabric behavior and micro-motions, harsh overhead lighting temperature and specular bloom, overall cinematic atmosphere and color grading for seamless logical flow and no visual reset at clip start or during the departure progression. SKYLINE REVEAL MOTION: As the medium-wide tracking shot smoothly widens to the Montreal skyline at the end of the 6s clip, the iconic buildings (Place Ville Marie with its precise cross/sloped roof profile, 1000 de La Gauchetière's cruciform massing, surrounding glass high-rises with accurate fenestration patterns, rooftop HVAC units, antennas and mechanical equipment) are revealed with perfect continuous perspective shift, consistent atmospheric haze and aerial perspective that scales naturally with camera movement, window glints and reflections that update continuously without popping or artificial sharpening; no distortion, no toy-like scaling, full 8K detail fidelity maintained on skyline elements throughout the continuous take with correct parallax relative to the independently moving buses in foreground. HYPER-REALISTIC BUS WITH PERFECT DETAIL IN MOTION: The two separate white airport buses render with obsessive hyper-realistic 8K detail on every component under dynamic motion: body panels show micro-scratches, metallic flecks, grime, clearcoat depth and orange-peel that catch and move light accurately with rigid body translation/rotation; every rivet and fastener casts moving cast shadows and speculars; multi-pane safety glass exhibits accurate evolving refractions of interior (seats, men silhouettes) and exterior (skyline, rain, lights) as viewpoint and bus orientation change continuously; tires demonstrate precise tread bite, sidewall flex, load deformation, and continuous rotation matching speed with no slip or stutter; chrome trim and mirrors provide layered, curvature-correct, motion-updating environmental reflections including of the other bus, men, skyline and wet ground. BUS DOORS CLOSING WITH PERFECT MECHANICAL AND MOTION FIDELITY: Doors on both buses close with flawless non-linear physics-accurate motion curves (inertia-overcoming slow start, mid acceleration, damped deceleration to stop), sub-millimeter alignment of panels at closure with no gaps, light leaks, interpenetration or floating; gaskets compress and recover elastically with visible uniform deformation and micro-droplet expulsion that evolves frame-by-frame realistically; all linkages, actuators, pivots show correct rigid body kinematics and parallax from the tracking camera; seal completion and latch clunk produce a single natural chassis vibration that damps smoothly into the subsequent pull-away acceleration without any artifact or discontinuity. CONTINUOUS LOGICAL FLOW AND SEPARATE BUS PHYSICS: Strict causal order — both buses' doors reach full visible sealed and latched state before either begins any forward motion or acceleration; the two buses remain distinctly separate physical objects with constant safe lateral separation, independent suspension responses, wheel speeds, trajectories and parallax at all times; pull-aways are gradual realistic torque-driven with natural weight transfer and wet surface interaction; merge into traffic is smooth with believable inertia; no merging of buses, no speed pops, no camera cuts — one fluid 6-second cinematic take. ters, lighting, rain, wet ground, and style. SPECIFIC LANGUAGE FOR PROMPT: exact match to characters (faces, hair, sunglasses, expressions, proportions, dark blue jackets' wet fabric texture/cling/sway/ribbing/reflections/nametags as seen at end of previous clip); lighting (color temperature, source quality, shadows, speculars exactly from previous); rain (density, angle, droplet physics, surface interactions identical); wet ground (sheen, puddle geometry and reflections of buses/figures/lights/sky, water physics, disturbances matching previous clip); buses/surfaces (streaks, beading, reflections); style (photoreal cinematic, lens, DOF, grade, grain, atmosphere). Action continues seamlessly with no state reset from previous clip's final visuals. Weight previous clip ref frame highest when using reference_to_video or i2v refs. — explicitly reference and match the previous clip's characters (appearances, details), lighting, rain, wet ground (reflections/sheen/puddles), and style/grading/atmosphere 1:1 in the output for perfect continuity.`;
-  }
-
-  if (lower.includes('continuity') || lower.includes('continuity-supervisor') || lower.includes('head-editor')) {
-    return `• ${base}\n• Wardrobe and scar continuity across all scenes with ${chars}: exact position, wear, and light interaction on the scar and jacket must match every prior locked shot and reference photo.\n• Rain intensity, lighting temperature, and reflective surface placement must match the previous beat unless a clear time jump is stated in the script (and even then, carry forward the core anchors). • For Clip 8 specifically (using attached previous clip): enforce use of previous clip as strong visual reference locking exact characters, lighting, rain, wet ground (puddles/reflections/sheen), and style with the detailed continuity language from Continuity Expert + Style Matcher sub-agent: VORSANGER CONSISTENCY INSTRUCTION (CHARACTER DNA LOCK - VORSANGER & IDENTICAL MEN): 90 men identical clones (Vorsanger same face/hair/build/clothing/sunglasses as others, only prominent white "VORSANGER" nametag as leader); no drift even through windows/boarding complete/skyline focus. characters (exact likenesses, wet dark blue jacket fabric cling/sway/stretch, German nametags e.g. Vorsanger from prev end state), lighting (harsh overhead beams through rain, speculars, color temp), rain physics (droplets, beading, spray, wind angle), wet tarmac/puddles/sheen/ripples/reflectivity exactly, overall cinematic style/atmosphere; match previous clip for hyper-detailed Montreal skyline (Place Ville Marie cross roof profile, 1000 de La Gauchetière cruciform, high-rises fenestration/HVAC/antennas with haze/aerial perspective/glints, accurate reflections in bus glass/puddles), bus hyper-realism with perfect detail (paint, glass, tires, rivets, suspension, rain beading/caustics), and bus doors closing properly (dual-panel plug/folding with pneumatic actuators, visible linkages, rubber gaskets compressing to perfect zero-gap seal, latch clunk, chassis vibration, synchronized on both buses before pull-away); seamless evolution of the departure action (doors close both buses first, pull away sep., merge, skyline) without any visual reset. End visual state of prev clip = precise start state of this clip. \n• No accidental full-face reveals or location details that contradict previous locked assets. Time of day, weather, and busy level must be consistent unless explicitly jumped.\n• Editor note: Suggest cuts that preserve practical lighting, rain motifs, and tactile details (hands on wet jacket, reflections in puddles) to sell isolation. Pace tense — hold on micro-expressions and practical sources.`;
-  }
-
-  if (lower.includes('colorist') || lower.includes('color')) {
-    return `• ${base}\n• Grade locked to cold steely tones under harsh overhead lights, desaturated cool palette with sharp specular highlights on wet reflective ground for the cinematic departure. Skin tones slightly crushed and cool; highlights clip on the harsh overhead sources and their mirror-like reflections in puddles and slick tarmac only.\n• Rain and wet reflective ground get a subtle cold blue-white lift to sell the chill of the night and the purposeful reflections — match the exact wetness, ground reflectivity, and light bounce from locked location plates.\n• No Hollywood teal-orange or romantic rain — this is mean, disciplined, grounded neo-noir for departure scenes. Preserve the exact harsh color temperature, stark contrast, and reflective ground interactions visible on character skin, gear, and environment in the reference photos.`;
-  }
-
-  if (lower.includes('vfx-supervisor') || lower.includes('fx-artist')) {
-    return `• ${base}\n• VFX / practical FX must serve the practical world — enhance rain, add distant neon bleed, create perfect reflections in puddles without looking digital. Any added elements must match the existing practical sources, color temperature, and light quality visible in the supplied reference photos.\n• Blood, impacts, smoke, steam: messy and real, never polished. Match the exact surface and lighting conditions from locked assets.`;
-  }
-
-  if (lower.includes('sound-design-lead')) {
-    return `• ${base}\n• Soundscape: distant traffic hum, rain on metal, boots on concrete, low electrical hum of neon signs. Dialogue intimate and close-mic'd against the environmental noise.\n• No non-diegetic music unless the script explicitly calls for it — the world itself is the score. Match acoustic feel to the wet, reflective, practical environment in the photos.`;
-  }
-
-  if (lower.includes('storyboard-supervisor')) {
-    return `• ${base}\n• Storyboards must lock the visual language early: consistent use of reflections, shadow faces, rain as punctuation, practical light sources.\n• Every panel must show at least one locked anchor (scar from photo, jacket wear, specific puddle or neon reflection from location plate). Camera and lighting notes must be actionable for the cinematographer and lighting designer.`;
-  }
-
-  // Strong generic high-quality fallback for any other of the 82
-  return `• ${base}\n• ${loc} and ${chars} must feel connected through recurring visual motifs (reflections in wet reflective ground under harsh overheads, practical light signatures, cold rain as emotional punctuation of purpose) that match any supplied reference photos and prior locked shots exactly.\n• Every beat must deliver one clear piece of story or character information through light, weather, texture, or a locked physical detail (scar, jacket crease, specific surface wear). For departure beats, emphasize cold rainy night atmosphere, wet ground reflections, and strong sense of discipline and purpose.\n• Maintain the tone: neo-noir, practical-only sources, emotionally cold but visually rich and photo-anchored with cinematic departure resolve. No generic "cinematic" language. When reference photos exist, every output must call out precise matching requirements for visible details in those images.`;
-}
-
-async function mhSynthesizeFinalPrompts(){
-  const outDiv = document.getElementById('mhSynthesizedPrompts');
-  const outBody = document.getElementById('mhSynthesizedOutput');
-  if(!outDiv || !outBody) return;
-
-  outDiv.style.display = 'block';
-  outBody.innerHTML = 'Final prose agent is condensing every point into clean, cinematic paragraphs...';
-
-  const p = projectLoad() || {};
-  const loc = document.getElementById('mhLocIn')?.value || 'urban night location';
-  const tod = document.getElementById('mhTodIn')?.value || 'Night';
-  const mood = document.getElementById('mhMoodIn')?.value || 'tense';
-  const cam = document.getElementById('mhCamIn')?.value || 'cinematic';
-
-  // Build a clean context block from all agent points
-  let pointsBlock = _mhAgentPointsData.map(a => `${a.agent}:\n${a.points.map(pt=>`• ${pt}`).join('\n')}`).join('\n\n');
-
-  const synthInput = {
-    task: 'final_prose_synthesis',
-    script: (p.script||'').slice(0,1500),
-    all_agent_points: pointsBlock,
-    user_overrides: { location: loc, time_of_day: tod, mood, camera_language: cam },
-    instruction: 'Turn the bullet points from every specialist into 2-4 beautiful, concise cinematic paragraphs per major scene/shot. No bullet points in the final output. Pure evocative prose ready to be sent to the video model.'
-  };
-
-  let finalText = '';
-  try{
-    if(window.SB_Agents && typeof window.SB_Agents.invoke === 'function'){
-      const res = await window.SB_Agents.invoke('prompt-writer', synthInput);
-      const out = res.output || res.result || '';
-      finalText = (typeof out === 'string') ? out : JSON.stringify(out);
-    }else{
-      finalText = `Cold rain falls steadily on the wet reflective ground of the departure zone under harsh overhead lights. The slick tarmac and puddles mirror the stark beams and the disciplined figures moving with singular purpose and resolve into the cinematic night. Cold, unyielding atmosphere of departure — every reflection and rain streak underscores iron discipline and forward intent. Hyper-realistic rain details: fine droplets streaking through the harsh overhead glow with visible refraction, water spray from purposeful footsteps on the reflective ground creating transient mist, hyper-detailed reflections on wet pavement showing rippled distorted images of the overhead lights and departing figures with realistic ripple dynamics, water beading and running on surfaces with accurate physics.\n\n${cam} — the camera tracks the purposeful strides across the mirror-like ground, catching rain on collars, the hard set of jaws under harsh light, and the doubled silhouettes in the wet reflections. Every practical source is motivated; the lighting and reflections sell the discipline and forward intent. Nothing soft, nothing wasted.`;
-    }
-  }catch(e){
-    finalText = 'Agent synthesis unavailable right now. Using strong fallback based on your points.\n\n' + pointsBlock.slice(0,800);
-  }
-
-  outBody.textContent = finalText;
-
-  // Persist so Generate step can use it
-  try{
-    p.synthesizedPrompt = finalText;
-    p.agentPoints = _mhAgentPointsData;
-    projectSave(p);
-  }catch(e){}
-}
-
-function mhProceedToVideoGeneration(){
-  // Jump to the actual Generate step (Step 4) which has the model selector + big Generate All button
-  // The synthesized text is already saved on the project and mhRenderGenerate / mhStartGeneration can pick it up.
-  mhGoto(4);
-  // Optional: pre-fill any prompt override textarea if one exists in step 4
-  setTimeout(()=>{
-    const ta = document.querySelector('#mhShotQueue textarea, #mhGenList textarea');
-    if(ta && projectLoad().synthesizedPrompt){
-      ta.value = projectLoad().synthesizedPrompt;
-    }
-  }, 400);
-}
 
 // Helper already used above
 function esc(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]||c)); }
@@ -7145,7 +6836,7 @@ function mhShowQualityPanel(){
       </div>
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px">
         <div style="font-weight:700;font-size:13px;margin-bottom:4px">Downloader &amp; Full Deliverable</div>
-        <button class="b b-gold b-s" onclick="alert('ZIP would contain: final MP4 + all locked character refs + agent point logs + EDL + prompts. Available from Editor export too.')">⬇ Download Full Package (ZIP)</button>
+        <button class="b b-gold b-s" onclick="alert('ZIP would contain: final MP4 + all locked character refs + EDL + prompts. Available from Editor export too.')">⬇ Download Full Package (ZIP)</button>
       </div>
     </div>
     <div style="margin-top:10px;text-align:right"><button class="b b-g b-s" onclick="document.getElementById('mhQualityPanel').style.display='none'">Close</button></div>
@@ -7202,26 +6893,17 @@ function sendFwdToMediaHubAgents(){
 
   projectSave(proj);
 
-  // Open Generation Hub and force the agent point-form builder + final prose experience
   openMediaHubGenerate();
 
-  // After it opens, also pre-populate the agent builder area if possible
   setTimeout(() => {
-    const builder = document.getElementById('mhAgentPromptBuilder');
-    if (builder) builder.style.display = 'block';
-
-    // Pre-fill the script textarea inside Generation Hub
-    const ta = document.getElementById('mhScriptIn');
+    const ta = document.getElementById('mhScriptMain');
     if (ta) ta.value = proj.script;
-
-    // If the breakdown already exists, we can hint that they can now run the agents
-    const pointsContainer = document.getElementById('mhAgentPointsContainer');
-    if (pointsContainer) pointsContainer.style.display = 'none';
+    if (typeof mhLockScriptAndExtract === 'function') mhLockScriptAndExtract();
   }, 600);
 }
 
 /* ============================================================
-   NEW 4-TAB + PER-ENTITY AGENT SUGGESTION SYSTEM (user spec)
+   NEW 4-TAB GENERATION HUB (user spec)
    ============================================================ */
 
 let _mhApprovedPoints = { script: [], characters: {}, generate: {} }; // per-entity accumulation
@@ -7278,9 +6960,6 @@ function mhSwitchTab(tab) {
   if (tab === 'script') {
     setTimeout(() => {
       if(typeof wireScriptTab === 'function') wireScriptTab();
-      const isLocal = (location.protocol === 'file:') || (location.hostname === 'localhost') || (location.hostname === '127.0.0.1');
-      const note = document.getElementById('localModeNote');
-      if (note) note.style.display = isLocal ? 'block' : 'none';
     }, 50);
   }
 
@@ -7379,12 +7058,10 @@ function mhRebuildCharAgentBoxes() {
     const key = c.name || ('char' + idx);
     html += `
       <div class="suggestion-box" data-entity="char_${key}">
-        <h5>👤 ${esc(key)} — Character Agents (all activity for this character)</h5>
+        <h5>👤 ${esc(key)}</h5>
         <div style="font-size:12px;color:var(--dim);margin-bottom:6px">${esc((c.description||'').slice(0,140))}</div>
-        <button class="b b-gold b-s" onclick="mhRunEntityAgents('character', '${key}', this)">Run Character + Psychological + Voice Agents → Suggestions</button>
-        <div class="suggestions-go-here" style="margin-top:8px"></div>
         <div style="margin-top:8px">
-          <button class="parse-btn" onclick="mhParseBox('char_${key}')">Parse Approved Points → Clean Character Prompt</button>
+          <button class="parse-btn" onclick="mhParseBox('char_${key}')">Build Clean Character Prompt</button>
         </div>
         <div class="point-list" id="points_char_${key}" style="display:none"></div>
 
@@ -7429,7 +7106,7 @@ function mhRebuildCharAgentBoxes() {
       const note = document.createElement('div');
       note.id = 'charLocalNote';
       note.style.cssText = 'font-size:10px;color:#666;margin:8px 0;padding:4px;background:#1a1408;border:1px solid var(--gold-border);border-radius:4px;';
-      note.textContent = 'Local mode: agents use sims. Photos + video go through the local bridge (Pillow/ffmpeg placeholders until ComfyUI on your GPU box is connected). Status banner above shows bridge + ComfyUI state.';
+      note.textContent = 'Local mode: photos + video go through the local bridge (Pillow/ffmpeg placeholders until ComfyUI on your GPU box is connected). Status banner above shows bridge + ComfyUI state.';
       area.insertBefore(note, area.firstChild);
     }
   }
@@ -7472,16 +7149,11 @@ async function generateCharacterPhotoForBox(charName) {
   const photoAspect = pCfg.aspectRatios[0];
   const photoRes = pCfg.resolutions[0];
 
-  // Build rich prompt from desc + ALL accumulated agent points for this character (the box for all activity)
   let baseDesc = (p.characterBible || []).find(c => c.name === charName)?.description || 'character portrait';
-  const charPoints = (p.assets && p.assets.characterPhotos && p.assets.characterPhotos[charName] && _mhApprovedPoints.characters && _mhApprovedPoints.characters[charName]) || [];
-  const pointsStr = charPoints.length ? ' | key traits from agents: ' + charPoints.slice(0,4).join('; ') : '';
+  const charPoints = (_mhApprovedPoints.characters && _mhApprovedPoints.characters[charName]) || [];
+  const pointsStr = charPoints.length ? ' | key traits: ' + charPoints.slice(0,4).join('; ') : '';
   let promptUsed = baseDesc + pointsStr + ' -- cinematic still, high detail, consistent with locked character bible';
 
-  // === THRU GROK + VISION for picture gen prompt.
-  // When the character already has previous locked photos, we pass their urls so Grok vision can analyze the exact look
-  // and generate a prompt that forces *new* generated refs to match the same person (bone structure, scar, hair, lighting signature).
-  // This is how you get real series coherence when generating multiple angles/wardrobe variants.
   const isLocal = (location.protocol === 'file:') || (location.hostname === 'localhost') || (location.hostname === '127.0.0.1');
   const refImgsForPic = [];
   try {
@@ -7489,14 +7161,6 @@ async function generateCharacterPhotoForBox(charName) {
     Object.keys(existing).forEach(m => {
       (existing[m] || []).slice(0,1).forEach(ph => { if (ph && ph.url) refImgsForPic.push({name: charName, url: ph.url}); });
     });
-    if (window.SB_InvokeAgent) {
-      const ctx = { charName, baseDesc, points: charPoints, location: p.location || {}, lockedPhotos: existing, referenceImages: refImgsForPic };
-      window.SB_InvokeAgent('visual-character-builder', ctx).catch(() => null);
-    }
-    if (isLocal && typeof getSimulatedAgentOutput === 'function') {
-      const g = getSimulatedAgentOutput('visual-character-builder', p) || getSimulatedAgentOutput('prompt-writer', p);
-      if (g) promptUsed = g + (refImgsForPic.length ? ' (MATCHING PREVIOUS LOCKED REFS EXACTLY)' : '') + ' | ' + promptUsed;
-    }
   } catch(e){ /* non-fatal */ }
 
   // Local bridge generates images (ComfyUI T2I when GPU available, else Pillow reference cards).
@@ -7557,17 +7221,7 @@ async function addLocationPhoto() {
   const model = prompt('Model for location plate (flux, sd3, etc)', 'flux') || 'flux';
   let desc = prompt('Short description of this location plate (e.g. wet night street with sodium lamps)', 'wet concrete alley, single sodium lamp, reflective puddles') || 'location plate';
 
-  // === THRU GROK: get a production-grade location plate prompt from the agent system (same as 82 + video)
   const isLocal = (location.protocol === 'file:') || (location.hostname === 'localhost') || (location.hostname === '127.0.0.1');
-  try {
-    if (isLocal && typeof getSimulatedAgentOutput === 'function') {
-      const g = getSimulatedAgentOutput('environment-builder', p) || getSimulatedAgentOutput('prompt-writer', p);
-      if (g) desc = g + ' | plate: ' + desc;
-    } else if (window.SB_InvokeAgent) {
-      // fire and forget best effort; in real it would enrich
-      window.SB_InvokeAgent('environment-builder', {locationDesc:desc, script:p.script, tod:(p.location&&p.location.tod)}).catch(()=>{});
-    }
-  } catch(e){}
 
   const locProviderSel = (document.getElementById('mhProvider') ? document.getElementById('mhProvider').value : 'grok-imagine');
   const locModel = (document.getElementById('photoModelSelect') ? document.getElementById('photoModelSelect').value : 'wan-2.7');
@@ -7625,75 +7279,6 @@ function renderLocationPhotos() {
     </div>`).join('');
 }
 
-async function mhRunEntityAgents(kind, entityKey, btn) {
-  const box = btn.closest('.suggestion-box');
-  if (!box) return;
-  const goHere = box.querySelector('.suggestions-go-here');
-  if (!goHere) return;
-
-  goHere.innerHTML = '<div style="color:var(--dim);font-size:12px">Running relevant agents for ' + esc(entityKey) + '...</div>';
-
-  const p = projectLoad() || {};
-  const relevantAgents = (kind === 'character')
-    ? ['visual-character-builder', 'psychological-builder', 'voice-builder']
-    : ['environment-builder', 'atmospherics-builder', 'prompt-writer', 'animation-smoother'];
-
-  let suggestions = [];
-  let usedFallback = false;
-
-  for (const aid of relevantAgents) {
-    let text = '';
-    let fallback = false;
-    try {
-      const res = await window.SB_InvokeAgent(aid, {
-        entity: entityKey,
-        script: p.script,
-        character: (p.characterBible || []).find(x => (x.name||'') === entityKey),
-        project: p
-      });
-      text = (res.output || res.result || '').toString();
-    } catch(e) {
-      const isLocal = (location.protocol === 'file:') || (location.hostname === 'localhost') || (location.hostname === '127.0.0.1');
-      console.warn(`[Agent] local sim for ${aid}:`, e && e.message);
-      text = getSimulatedAgentOutput(aid, p);
-      fallback = true;
-      usedFallback = true;
-    }
-
-    const bullets = mhExtractBullets(text, 5);
-    bullets.forEach(b => {
-      suggestions.push({ agent: aid, text: b, approved: true, fallback });
-    });
-  }
-
-  // Render suggestion items with checkboxes
-  let html = '';
-  suggestions.forEach((s, i) => {
-    const id = 'sug_' + Date.now() + '_' + i;
-    const isLocal = (location.protocol === 'file:') || (location.hostname === 'localhost') || (location.hostname === '127.0.0.1');
-    const fallbackNote = s.fallback ? (isLocal ? ' <span style="color:#666;font-size:9px;">(local demo)</span>' : ' <span style="color:#c8a25f;font-size:9px;">(sim)</span>') : '';
-    const itemStyle = s.fallback && !isLocal ? 'border-left:3px solid #c8a25f;padding-left:4px;' : '';
-    html += `<div class="suggestion-item" style="${itemStyle}">
-      <input type="checkbox" id="${id}" checked onchange="mhToggleSuggestion(this, '${entityKey}', '${esc(s.text)}')">
-      <label for="${id}" style="flex:1"><span class="ag">${s.agent}:</span> ${esc(s.text)}${fallbackNote}</label>
-    </div>`;
-  });
-
-  if (usedFallback) {
-    const isLocal = (location.protocol === 'file:') || (location.hostname === 'localhost') || (location.hostname === '127.0.0.1');
-    const banner = isLocal 
-      ? `<div style="background:#1a1408;border:1px solid var(--gold-border);color:var(--gold);padding:6px 8px;border-radius:4px;font-size:11px;margin-bottom:8px;">Local Demo Mode — High-quality agent simulations active. Real backend not available when opening the file directly.</div>`
-      : `<div style="background:var(--red-bg);border:1px solid var(--red-border);color:var(--red);padding:6px 8px;border-radius:4px;font-size:11px;margin-bottom:8px;">🔴 REAL AGENT CALLS FAILED. Check browser console for the actual error. These are simulations only.</div>`;
-    html = banner + html;
-  }
-
-  goHere.innerHTML = html || '<div style="color:#666;font-size:12px">No strong suggestions returned.</div>';
-
-  // Seed the approved points
-  if (!_mhApprovedPoints.characters) _mhApprovedPoints.characters = {};
-  if (!_mhApprovedPoints.characters[entityKey]) _mhApprovedPoints.characters[entityKey] = [];
-  suggestions.forEach(s => _mhApprovedPoints.characters[entityKey].push(s.text));
-}
 
 function mhToggleSuggestion(checkbox, entityKey, text) {
   if (entityKey === 'script') {
@@ -7769,9 +7354,7 @@ function mhRenderParsedPromptBox(outEl, entityBoxId, bodyText, meta) {
   const header = entityBoxId === 'script'
     ? 'Clean script prompt:'
     : `Clean prompt for ${entityBoxId}:`;
-  const note = meta && meta.live
-    ? '<div style="font-size:10px;color:#86efac;margin-bottom:6px">Live Grok prompt-writer synthesis</div>'
-    : (meta && meta.local ? '<div style="font-size:10px;color:var(--gold);margin-bottom:6px">Local synthesis (sign in on shotbreak.io for live Grok)</div>' : '');
+  const note = '';
 
   outEl.innerHTML = note;
   outEl.style.cssText = 'margin-top:8px;background:#111;border:1px solid var(--gold-border);padding:8px;font-size:13px;';
@@ -7814,84 +7397,58 @@ function mhRenderParsedPromptBox(outEl, entityBoxId, bodyText, meta) {
 
   outEl.appendChild(ta);
   outEl.appendChild(btn);
-  console.log('[Shotbreak] Parsed clean prompt for', entityBoxId, meta && meta.live ? '(live Grok)' : '(local fallback)', 'build fix-all-20260616');
+  console.log('[Shotbreak] Parsed clean prompt for', entityBoxId);
 }
 
 async function mhParseBox(entityBoxId) {
   const listEl = document.getElementById('points_' + entityBoxId);
-  if (!listEl) {
-    alert('Parse UI not ready for ' + entityBoxId + '. Refresh the page and try again.');
-    return;
-  }
-
-  let points = [];
-  if (entityBoxId.startsWith('char_')) {
-    const key = entityBoxId.replace('char_', '');
-    points = (_mhApprovedPoints.characters && _mhApprovedPoints.characters[key]) || [];
-  } else if (entityBoxId === 'script') {
-    points = _mhApprovedPoints.script || [];
-  } else if (entityBoxId === 'generate') {
-    points = _mhApprovedPoints.generate || [];
-  }
-  points = mhNormalizePoints(points);
-
-  if (points.length === 0) {
-    alert('No approved points yet for this box. Run the agents first and keep at least one checkbox checked.');
-    return;
-  }
-
   const outId = 'parsed_' + entityBoxId;
   let outEl = document.getElementById(outId);
   if (!outEl) {
     outEl = document.createElement('div');
     outEl.id = outId;
     outEl.style.cssText = 'margin-top:8px;background:#111;border:1px solid var(--gold-border);padding:10px;font-size:13px;white-space:pre-wrap';
-    listEl.parentNode.appendChild(outEl);
+    const anchor = listEl || document.getElementById('mhScriptBox') || document.body;
+    if (anchor && anchor.parentNode) anchor.parentNode.appendChild(outEl);
+    else document.body.appendChild(outEl);
+  }
+
+  let points = [];
+  if (entityBoxId.startsWith('char_')) {
+    const key = entityBoxId.replace('char_', '');
+    points = mhNormalizePoints((_mhApprovedPoints.characters && _mhApprovedPoints.characters[key]) || []);
+    if (!points.length) {
+      const p0 = projectLoad() || {};
+      const c = (p0.characterBible || []).find(x => (x.name || '') === key);
+      if (c && c.description) points = [c.description.trim()];
+    }
+  } else if (entityBoxId === 'script') {
+    points = mhNormalizePoints(_mhApprovedPoints.script || []);
+    if (!points.length) {
+      const script = mhScriptFromUI(projectLoad() || {});
+      if (script) points = mhExtractBullets(script, 8);
+    }
+  } else if (entityBoxId === 'generate') {
+    points = mhNormalizePoints(_mhApprovedPoints.generate || []);
+  }
+
+  if (points.length === 0) {
+    alert('Nothing to build yet. Paste a script or add character descriptions first.');
+    return;
   }
 
   outEl.style.display = 'block';
-  outEl.innerHTML = '<div style="color:var(--dim)">Final prose agent (prompt-writer) is synthesizing your approved points...</div>';
+  outEl.innerHTML = '<div style="color:var(--dim)">Building clean prompt from your notes...</div>';
   outEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
-  const p = projectLoad() || {};
-  const isLocal = mhIsLocalHost();
-  const pointsBlock = points.map(pt => '• ' + pt).join('\n');
-  const charName = entityBoxId.startsWith('char_') ? entityBoxId.replace('char_', '') : '';
-  const synthInput = {
-    task: 'final_prose_synthesis',
-    entity: entityBoxId,
-    character: charName || undefined,
-    script: (p.script || '').slice(0, 2000),
-    all_agent_points: pointsBlock,
-    instruction: 'Turn these approved bullet points into 2-4 beautiful, concise cinematic paragraphs. No bullet points in the final output. Pure evocative neo-noir prose, continuity-safe, photo-anchored, ready for video generation.'
-  };
+  const finalText = points.join('
 
-  let finalText = '';
-  let usedLive = false;
+') +
+    '
 
-  if (!isLocal) {
-    const token = await mhWaitForAuthToken(10000);
-    if (!token) {
-      outEl.innerHTML = '<div style="color:#f87171;margin-bottom:8px">Not signed in — using local synthesis. Sign in (kylef + owner password) for live Grok.</div>';
-    }
-  }
+Edit and relock your version below.';
 
-  if (!isLocal && window.SB_InvokeAgent) {
-    try {
-      const res = await window.SB_InvokeAgent('prompt-writer', synthInput);
-      finalText = String(res.output || res.result || '').trim();
-      if (finalText) usedLive = true;
-    } catch (e) {
-      console.warn('[mhParseBox] Grok synthesis failed, using local fallback:', e && e.message);
-    }
-  }
-
-  if (!finalText) {
-    finalText = points.join('\n\n') +
-      '\n\nCold rain and harsh practical light bind every beat. Continuity-safe, no character bleed — location and time locked from the approved points above. (Edit and relock your version below.)';
-  }
-
-  mhRenderParsedPromptBox(outEl, entityBoxId, finalText, { live: usedLive, local: isLocal || !usedLive });
+  mhRenderParsedPromptBox(outEl, entityBoxId, finalText, { live: false, local: true });
 }
 
 // NEW: Lock the script from the Script tab textarea and push extracted characters + location
@@ -7990,7 +7547,7 @@ function extractLocations(script){
   return Array.from(out);
 }
 
-// Wire the script textarea to keep p.script in sync (so agents etc see latest)
+// Wire the script textarea to keep p.script in sync
 function wireScriptTab(){
   const ta = document.getElementById('mhScriptMain');
   if(!ta || ta._wired) return;
@@ -8088,114 +7645,6 @@ function mhExtractBullets(txt, maxN) {
   return bullets;
 }
 
-function mhRenderScriptSuggestions(box, all, usedFallback, isLocal) {
-  let html = '';
-  const liveN = (all || []).filter(x => !x.fallback).length;
-  const simN = (all || []).filter(x => x.fallback).length;
-  if (isLocal) {
-    html += `<div style="background:#1a1408;border:1px solid var(--gold-border);color:var(--gold);padding:6px 8px;border-radius:4px;font-size:11px;margin-bottom:8px;">Local demo sims — use shotbreak.io + sign in for live Grok.</div>`;
-  } else if (liveN > 0 && simN === 0) {
-    html += `<div style="background:#0f1a12;border:1px solid #22c55e;color:#86efac;padding:6px 8px;border-radius:4px;font-size:11px;margin-bottom:8px;">Live Grok agents completed (${liveN} bullets). Parse Approved Points, then open Generate for per-shot video prompts.</div>`;
-  } else if (liveN > 0 && simN > 0) {
-    html += `<div style="background:#0f1a12;border:1px solid #22c55e;color:#86efac;padding:6px 8px;border-radius:4px;font-size:11px;margin-bottom:8px;">${liveN} live + ${simN} sim bullets (tagged below). Your script is fine — partial sim usually means one agent timed out; re-run if needed.</div>`;
-  } else if (simN > 0) {
-    html += `<div style="background:#2a2410;border:1px solid #c8a25f;color:#c8a25f;padding:6px 8px;border-radius:4px;font-size:11px;margin-bottom:8px;">All ${simN} bullets are sim/fallback — hard refresh (Ctrl+Shift+R) and confirm you are signed in as kylef.</div>`;
-  }
-  window._mhScriptSuggestionItems = [];
-  all.forEach((item, i) => {
-    const id = 'scr_' + i;
-    window._mhScriptSuggestionItems.push(item);
-    const fbNote = item.fallback ? (isLocal ? ' <span style="color:#666;font-size:9px;">(local demo)</span>' : ' <span style="color:#c8a25f;font-size:9px;">(sim)</span>') : ' <span style="color:#22c55e;font-size:9px;">(live)</span>';
-    const agentLabel = item.agent ? `<span class="ag" style="margin-right:4px">${item.agent}:</span>` : '';
-    html += `<div class="suggestion-item"><input type="checkbox" id="${id}" checked onchange="mhToggleScriptSuggestion(${i}, this.checked)"><label for="${id}">${agentLabel}${esc(item.text)}${fbNote}</label></div>`;
-  });
-  box.innerHTML = html || '<div style="color:#666">No suggestions returned — try again or check console (F12).</div>';
-  if (!_mhApprovedPoints) window._mhApprovedPoints = { script: [], characters: {}, generate: {} };
-  _mhApprovedPoints.script = all.map(item => item.text).filter(Boolean);
-  mhRefreshPointList('script');
-  console.log('[Shotbreak] Script agents done:', all.length, 'bullets, build fix-all-20260616');
-}
-
-async function mhRunScriptAgents() {
-  const box = document.getElementById('mhScriptSuggestions');
-  if (!box) return;
-
-  const p = projectLoad() || {};
-  const script = mhScriptFromUI(p);
-  if (!script) {
-    alert('Paste your script in the box first (or click Lock Script).');
-    return;
-  }
-  p.script = script;
-  projectSave(p);
-
-  const isLocal = mhIsLocalHost();
-  if (!isLocal) {
-    box.innerHTML = '<div style="color:var(--dim)">Checking sign-in...</div>';
-    const token = await mhWaitForAuthToken(12000);
-    if (!token) {
-      box.innerHTML = '<div style="color:#f87171">Not signed in. Use Sign In (kylef + owner password) then try again.</div>';
-      return;
-    }
-  }
-
-  const agents = ['vision-director', 'story-director', 'action-writer', 'prompt-writer', 'animation-smoother'];
-  box.innerHTML = '<div style="color:var(--dim)">Running 5 script agents (~30s)...</div>';
-
-  let all = [];
-  let usedFallback = false;
-
-  try {
-    for (let i = 0; i < agents.length; i++) {
-      const a = agents[i];
-      box.innerHTML = `<div style="color:var(--dim)">Running <strong>${a}</strong> (${i + 1}/${agents.length})...</div>` +
-        (all.length ? `<div style="font-size:10px;color:#555;margin-top:6px">${all.length} bullets ready so far</div>` : '');
-
-      let txt = getSimulatedAgentOutput(a, p);
-      let fallback = true;
-      if (!isLocal && window.SB_InvokeAgent) {
-        try {
-          const r = await window.SB_InvokeAgent(a, { script: script });
-          if (r && r.fallback) {
-            fallback = true;
-            txt = (r.output || r.detail || txt).toString();
-          } else if (r && (r.output || r.result)) {
-            txt = String(r.output || r.result);
-            fallback = false;
-          }
-        } catch (e) {
-          console.warn('Script agent failed', a, e);
-          fallback = true;
-        }
-      } else if (isLocal) {
-        fallback = true;
-      }
-
-      if (fallback) usedFallback = true;
-      const bullets = mhExtractBullets(txt, 4);
-      bullets.forEach(b => all.push({ text: b, fallback, agent: a }));
-    }
-
-    mhRenderScriptSuggestions(box, all, usedFallback, isLocal);
-    if ((p.script || '').trim()) {
-      mhSyncScenesFromScript(p);
-      const pp = projectLoad() || {};
-      const n = (pp.scenes || []).reduce((a, s) => a + (s.shots || []).length, 0);
-      if (typeof buildPerShotDetailBoxes === 'function') buildPerShotDetailBoxes();
-      if (n > 0) {
-        box.innerHTML += `<div style="margin-top:10px;padding:10px;background:#0f1a12;border:1px solid #22c55e;border-radius:6px;font-size:11px;color:#86efac">
-          ✅ Your script is loaded — ${n} shot(s) ready with per-shot video prompts on the <strong>Generate</strong> tab.
-          <button class="b b-gold b-s" style="margin-top:8px;display:block" onclick="mhSwitchTab('generate')">Open Generate → see shots &amp; prompts</button>
-        </div>`;
-      }
-    }
-  } catch (err) {
-    console.error('[mhRunScriptAgents]', err);
-    box.innerHTML = `<div style="color:#f87171">Script agents error: ${esc(err && err.message ? err.message : String(err))}</div>` +
-      (all.length ? '<div style="margin-top:8px;color:#888">Partial results below:</div>' : '');
-    if (all.length) mhRenderScriptSuggestions(box, all, true, isLocal);
-  }
-}
 
 // ========== NEW PER-SHOT MODULAR BOXES (exact user spec) ==========
 // Each shot gets its own card with:
@@ -8204,7 +7653,6 @@ async function mhRunScriptAgents() {
 // - Location breakdown (photo from Characters tab + time/busy/weather selects)
 // - BIG video prompt textarea (auto-references the above)
 // - 8 jot dropdowns at bottom of prompt that append parseable notes
-// - Agent contributions labeled with exact 82-GOD agent IDs
 
 let _shotUI = {}; // key `${si}-${shi}` => {minimized, prompt, chars:[], loc:{}, jots:[] }
 
@@ -8346,7 +7794,7 @@ function buildPerShotDetailBoxes() {
   if (!scenes.length) {
     area.innerHTML = `<div style="padding:16px;background:#1a0a0a;border:1px solid var(--red-border);border-radius:8px">
       <div style="color:var(--red);font-weight:700;margin-bottom:8px">No shots yet — you need a script first</div>
-      <div style="font-size:12px;color:var(--dim);line-height:1.5;margin-bottom:12px">Go to the <strong>Script</strong> tab → paste your screenplay → run agents → click <strong>Lock Script</strong>. Then come back here — shots and video prompts will appear automatically.</div>
+      <div style="font-size:12px;color:var(--dim);line-height:1.5;margin-bottom:12px">Go to the <strong>Script</strong> tab → paste your screenplay → click <strong>Lock Script</strong>. Then come back here — shots and video prompts will appear automatically.</div>
       <button class="b b-gold b-s" onclick="mhSwitchTab('script')">Go to Script tab →</button>
     </div>`;
     return;
@@ -8359,7 +7807,7 @@ function buildPerShotDetailBoxes() {
   const locBusy = (document.getElementById('locBusy')||{}).value || 'Quiet';
   const locWeather = (document.getElementById('locWeather')||{}).value || 'Light persistent rain';
 
-  let html = `<div style="margin-bottom:8px;font-size:11px;color:var(--dim)">Per-shot detail — ${scenes.reduce((a,s)=>a+(s.shots||[]).length,0)} shots. Use the corner LOCK on each to minimize while you work. All 82-GOD agents feed the points below (visible and labeled).</div>`;
+  let html = `<div style="margin-bottom:8px;font-size:11px;color:var(--dim)">Per-shot detail — ${scenes.reduce((a,s)=>a+(s.shots||[]).length,0)} shots. Use the corner LOCK on each to minimize while you work.</div>`;
 
   const approvedScript = mhNormalizePoints((_mhApprovedPoints && _mhApprovedPoints.script) || []).slice(0, 6).join(' | ');
 
@@ -8386,10 +7834,10 @@ function buildPerShotDetailBoxes() {
         }
         const shotBlock = shotAction ? `SHOT ${shotLabel}: ${shotAction}` : `SHOT ${shotLabel}`;
         const masterBlock = masterPrompt ? masterPrompt.replace(/^Clean script prompt:\s*/i, '').trim().slice(0, 900) : '';
-        const agentBlock = approvedScript ? ('Agent-approved points: ' + approvedScript) : '';
+        const scriptNotes = approvedScript ? ('Script notes: ' + approvedScript) : '';
         ui.prompt = [
           masterBlock,
-          agentBlock,
+          scriptNotes,
           charRef,
           locRef,
           `Time: ${ui.loc.tod}. ${ui.loc.weather}, ${ui.loc.busy}.`,
@@ -8433,12 +7881,6 @@ function buildPerShotDetailBoxes() {
             <div style="font-size:9px;color:var(--dim);margin-top:4px">Locked location photos from Characters tab are referenced automatically in the prompt below.</div>
           </div>
 
-          <!-- AGENT CONTRIBUTIONS (82 visible here) -->
-          <div class="shot-section">
-            <h6>🤖 82-GOD Agent Contributions (point form — labeled by specialist)</h6>
-            <div class="agent-contrib" id="agents-${key}">${renderAgentContribsForShot(key, p)}</div>
-            <button class="b b-gold b-xs" style="margin-top:4px;font-size:10px" onclick="runAgentsForShot('${key}', this)">Run Relevant 82 Agents for this Shot →</button>
-          </div>
 
           <!-- BIG VIDEO PROMPT (references everything) -->
           <div class="shot-section">
@@ -8457,7 +7899,7 @@ function buildPerShotDetailBoxes() {
               <select title="Color" onchange="appendJot('${key}', this, 'color')"><option>Color Grade</option>${CINE.temp.o.slice(0,5).map(o=>`<option>${o}</option>`).join('')}</select>
             </div>
             <div style="font-size:9px;color:#666;margin-top:2px">Selections above append jot notes to the prompt (e.g. [jot: lens=35mm Standard]). Final parse step strips them for the actual API call.</div>
-            <!-- Per-shot generate wired to use this exact edited prompt (jots stripped) + char photos as refs + Grok enrichment for coherence (same provider as the 82 agents) -->
+            <!-- Per-shot generate uses edited prompt (jots stripped) + char photos as refs -->
             <div style="margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
               <button id="gen-shot-btn-${key}" class="b b-gold b-s" style="font-size:11px" onclick="generateVideoForShot('${key}', this)">⚡ Generate This Shot</button>
               <span style="font-size:9px;color:#555">Uses the <strong>Video Model + Resolution/Aspect/Duration</strong> from the settings grid above (only options valid for the selected model). Grok vision enriches the prompt using your locked char + location photos first, then the model + params are sent to WaveSpeed or XAI direct.</span>
@@ -8612,213 +8054,28 @@ function appendJot(key, sel, type) {
   sel.selectedIndex = 0;
 }
 
-function renderAgentContribsForShot(key, p) {
-  // High-quality local sims for the 82-GOD per-shot view. Uses the same enhanced simulator as the main agent flow.
-  // Always labeled, point-form, continuity + photo-ref aware. Feels like real GOD agents even offline.
-  const [si, shi] = key.split('-').map(Number);
-  const scene = (p.scenes || [])[si] || {};
-  const shot = (scene.shots || [])[shi] || {};
-  const base = (shot.text || '').slice(0,40);
-
-  // Use the high-quality local simulator for 6-8 relevant specialists (the full 82 registry is available via Run All).
-  const agentsToShow = ['vision-director','cinematographer','lighting-designer','continuity-supervisor','environment-builder','prompt-writer','animation-smoother','atmospherics-builder','scene-architect'];
-  let html = '';
-  agentsToShow.forEach(aid => {
-    const txt = getSimulatedAgentOutput(aid, p);
-    const bullets = mhExtractBullets(txt, 2);
-    bullets.forEach(b => {
-      html += `<div><span class="ag">${aid}:</span> ${esc(b)}</div>`;
-    });
-  });
-  if (!html) {
-    html = `<div><span class="ag">vision-director:</span> Establish ${base} with neo-noir DNA, practical sources, exact photo match on locked assets.</div>`;
-  }
-  return html;
-}
-
-async function runAgentsForShot(key, btn) {
-  btn.textContent = 'Running 82-GOD specialists...';
-  btn.disabled = true;
-
-  const p = projectLoad() || {};
-  const [si, shi] = key.split('-').map(Number);
-
-  // In production this would fan out to dozens of relevant agents from registry via SB_Agents
-  // Here we simulate + try real if window.SB_Agents exists, and ALWAYS label with agent id.
-  const agentsToRun = ['vision-director','cinematographer','lighting-designer','continuity-supervisor','environment-builder','prompt-writer','animation-smoother','scene-architect'];
-
-  let html = '';
-  for (const aid of agentsToRun) {
-    let txt = '';
-    let fb = false;
-    try {
-      const res = await window.SB_InvokeAgent(aid, {sceneIdx:si, shotIdx:shi, project:p});
-      txt = String(res.output || res.result || '');
-    } catch(e) {
-      const isLocal = (location.protocol === 'file:') || (location.hostname === 'localhost') || (location.hostname === '127.0.0.1');
-      console.warn(`[Agent] using local sim for ${aid} (real call failed or no SB_Agents):`, e && e.message);
-      txt = getSimulatedAgentOutput(aid, p);
-      fb = true;
-    }
-    const bullets = mhExtractBullets(txt, 3);
-    const isLocal = (location.protocol === 'file:') || (location.hostname === 'localhost') || (location.hostname === '127.0.0.1');
-    bullets.forEach(b => {
-      const label = `${aid}`;
-      html += `<div style="margin:2px 0"><span class="ag">${label}:</span> ${esc(b)}</div>`;
-    });
-  }
-
-  const container = document.getElementById('agents-' + key);
-  if (container) {
-    let banner = '';
-    if (fb) {
-      banner = '<div style="font-size:9px;color:#c8a25f;margin-bottom:4px;font-weight:700">HIGH-QUALITY LOCAL SIMS (point-form GOD level). Deploy functions + set XAI_API_KEY in Netlify env for live real 82-GOD agents on https://shotbreak.io/app.</div>';
-    }
-    container.innerHTML = banner + (html || '<div style="color:#555">No new points.</div>');
-  }
-
-  btn.textContent = 'Re-run Agents for Shot';
-  btn.disabled = false;
-}
-
 // Generate video for ONE per-shot box using its exact current prompt (with jots), chars/photos, location.
-// Routes the final creative prompt thru Grok (prompt-writer agent) for enrichment/coherence before hitting the renderer (WaveSpeed or local sim).
-// This is the key consolidation: picture refs + video direction intelligence all "thru grok" like the 82 agents.
+// Sends the per-shot prompt (jots stripped) plus character/location refs to WaveSpeed or local renderer.
 async function generateVideoForShot(key, btn, opts) {
   opts = opts || {};
   const batch = !!opts.batch;
-  // Single-shot clicks must block until the provider returns a URL (investor demo UX).
   const waitForDone = opts.waitForDone !== undefined ? !!opts.waitForDone : !batch;
   if (!btn) return;
   const [si, shi] = key.split('-').map(Number);
-  mhSetShotGenButton(key, 'enriching');
-  if (btn && btn.id !== 'gen-shot-btn-' + key) { btn.disabled = true; btn.textContent = 'Grok enriching…'; }
-
   const ui = _shotUI[key] || {prompt:'', chars:[], loc:{}};
   const p = projectLoad() || {};
   const rawPrompt = ui.prompt || '';
   const cleanPrompt = stripJots(rawPrompt);
-
-  // Prefer a real http url for remote ref; data: urls are great for local canvas fallbacks
   let charRefUrl = null;
   let charRefName = null;
   if (ui.chars && ui.chars.length > 0) {
     const c0 = ui.chars[0];
-    if (c0.photo) {
-      if (c0.photo.startsWith('http')) { charRefUrl = c0.photo; charRefName = c0.name; }
-      else if (c0.photo.startsWith('data:')) { charRefUrl = c0.photo; charRefName = c0.name; } // local will use it
+    if (c0.photo && (c0.photo.startsWith('http') || c0.photo.startsWith('data:'))) {
+      charRefUrl = c0.photo;
+      charRefName = c0.name;
     }
   }
-
-  // === THRU GROK + VISION (the real source of superior cohesiveness):
-  // We now pass the *actual* locked reference photo URLs (http preferred; data: ok for local) inside the agent call.
-  // The backend callGrok will turn them into image_url parts in the Grok request so the model *literally sees*
-  // the pixels of your character photos and location plates when writing the final video prompt.
-  // Result: prompts that say things like "exact same scar angle and sheen as in the reference, same leather crease pattern on left shoulder, same 5-o'clock shadow density and distribution" etc.
-  // This beats "only send the image to the renderer" because the brain that crafts the language instructions has seen the refs too.
-  let finalPromptForVideo = cleanPrompt;
-  const isLocal = (location.protocol === 'file:') || (location.hostname === 'localhost') || (location.hostname === '127.0.0.1');
-  // Build reference images array for vision (only usable ones; http is best for deployed, data: works in local sim too)
-  const referenceImages = (ui.chars || []).map(c => (c.photo && (c.photo.startsWith('http') || c.photo.startsWith('data:'))) ? {name: c.name, url: c.photo} : null).filter(Boolean);
-  // Also include any global location photos if present (they help environment/atmosphere anchoring)
-  if (p.assets && p.assets.locationPhotos && p.assets.locationPhotos.length) {
-    p.assets.locationPhotos.slice(0,2).forEach(ph => { if (ph && ph.url) referenceImages.push({name: 'location-plate', url: ph.url}); });
-  }
-
-  try {
-    if (window.SB_InvokeAgent) {
-      const context = {
-        shotKey: key,
-        rawUserPrompt: rawPrompt,
-        cleanPrompt,
-        location: ui.loc,
-        charactersInShot: (ui.chars || []).map(c => ({name: c.name, hasPhoto: !!c.photo, photo: (c.photo && (c.photo.startsWith('http')||isLocal)? c.photo : null) })),
-        referenceImages, // <--- the magic for vision-based photo matching
-        jots: (rawPrompt.match(/\[jot:[^\]]+\]/g) || []),
-        scriptAction: (p.scenes && p.scenes[si] && p.scenes[si].shots && p.scenes[si].shots[shi] && (p.scenes[si].shots[shi].text || p.scenes[si].shots[shi].description)) || ''
-      };
-      const res = await window.SB_InvokeAgent('prompt-writer', context);
-      if (res && (res.output || res.result)) {
-        finalPromptForVideo = String(res.output || res.result).trim();
-        if (finalPromptForVideo.length < 40) finalPromptForVideo = cleanPrompt; // guard
-      }
-    } else if (isLocal && typeof getSimulatedAgentOutput === 'function') {
-      const sim = getSimulatedAgentOutput('prompt-writer', p);
-      const extra = (referenceImages.length ? ` (VISION REFS SEEN: ${referenceImages.map(r=>r.name).join(', ')})` : '') + (referenceImages.length ? '' : ((context && context.jots && context.jots.length ? ' Jots: ' + context.jots.join(' ') : '') + (context && context.location ? ' | loc ' + JSON.stringify(context.location) : '')));
-      finalPromptForVideo = sim + extra + ' | ' + cleanPrompt;
-    }
-  } catch (e) {
-    console.warn('[generateVideoForShot] Grok enrich failed, using raw cleaned prompt:', e.message || e);
-  }
-
-  // === ANIMATION SMOOTHER (specialist for realistic video gen, esp. Clip 8 London Calling bus sequence) ===
-  // This is the Animation Smoother role: post-process / augment the prompt to guarantee smooth natural motion,
-  // realistic vehicle physics, no jumps, and logical action flow for the 6s clip per scene progression:
-  // doors closing on both buses, then buses pulling away separately, merging into traffic, camera tracking smoothly to wider Montreal skyline view.
-  try {
-    const isClip8 = key && (key.endsWith('-8') || key.includes('.8') || key.includes('-8') || /clip.?8| S8|shot.?8/i.test(key));
-    const hasVehicleAction = /bus|double.?decker|door|clos|depart|pull|away|accelerat|turn|corner|drive|vehicle|car|truck/i.test((cleanPrompt + ' ' + rawPrompt + ' ' + (ui.loc && ui.loc.name || '')).toLowerCase());
-    if (isClip8 || hasVehicleAction) {
-      const smootherSim = (typeof getSimulatedAgentOutput === 'function') ? getSimulatedAgentOutput('animation-smoother', p) : '';
-      const clip8Note = isClip8 ? ' [CLIP 8 - LONDON CALLING BUS DEPARTURE - MONTREAL SKYLINE WIDE - PRIORITY SMOOTHING]' : '';
-      const BUS_PHYSICS_INSTRUCTION = `BUS PHYSICS INSTRUCTION (STRICT REALISM FOR TWO SEPARATE WHITE BUSES - BUS PHYSICS EXPERT & DOOR MECHANICS EXPERT MANDATE - CLIP 8 LONDON CALLING): EXACTLY TWO SEPARATE, DISTINCT, IDENTICAL white airport shuttle buses that remain 100% physically independent and spatially separated at all times (clear visible lateral clearance and gap between them in every frame; independent trajectories, speeds if offset, wheel/door/suspension actions, and true binocular parallax). They must NEVER visually merge, fuse, overlap, clip, interpenetrate, reduce to one vehicle, or show any distortion/glitching between the pair — enforce accurate real-world physical separation, independent rigid-body dynamics, and differential motion for the pair of buses throughout the entire 6-second clip. 
-
-HYPER-REALISTIC BUS WITH PERFECT 8K DETAIL (for both white buses independently): obsessive photoreal surface and mechanical fidelity — white exterior paint with micro-scratches, embedded metallic particle flecks, road dust/grime accumulation, deep clearcoat layering, authentic orange-peel texture, and dynamic specular highlights varying with wet rain film and viewing angle; precise body panel gaps and alignment with consistent crisp shadow lines; individual rivets, bolts, and fastener heads with realistic bevels, wear, cast shadows, and paint chipping; chrome bumpers, grilles, trim, and side mirrors exhibiting true Fresnel effects, layered environmental reflections (skyline, terminal, rain, lights, other bus), and polished metal micro-imperfections; multi-pane laminated safety glass windows with accurate optical refraction, birefringence, internal reflections, faint manufacturing waves/distortion, cleaning streaks, smudges and water beading; rain-on-glass micro-physics: individual droplets of varying sizes adhere, coalesce, streak downward or horizontally under combined gravity + vehicle acceleration + aerodynamic shear (thicker/slower on lee side of bus, thinner/faster on windward leading edges), each producing complex double-refraction (exterior scene + layered cabin interior visible through), plus secondary reflections of the rain itself and the bus's own chrome/paint; subtle water sheeting at window bases; black rubber tires with deep aggressive tread grooves, realistic sidewall flex/bulge under heavy load, scuff marks, embedded road grit, manufacturer sidewall markings, and physically correct deformation + rotation during all phases of motion; headlights/taillights with multi-layer glass lenses, internal reflector bowls, filament/LED detail, realistic caustics, bloom, and light falloff; destination signs, route numbers, fleet decals, and license plates with crisp legible micro-detail even under rain and motion; undercarriage, brake components, suspension arms, and wheel wells with accurate mechanical detail visible during motion and compression.
-
-- REALISTIC DOOR CLOSING PROPERLY (Bus Door and Mechanics Expert - absolute priority, both buses): For the two separate white buses, doors close fully and visibly with perfect mechanical fidelity BEFORE any pull-away begins on that bus. Dual-panel plug/folding (or plug-style) doors of substantial mass, each with large safety-glass windows. Actuated by roof- and floor-mounted pneumatic cylinders with visible polished stainless actuator rods, pivots, bellcranks, and linkages exhibiting true rigid-body kinematics, exact hinge radii/arcs, and realistic damped non-linear motion curves. Sequence per bus (synchronized phase-matched across both for the 6s take, or tiny natural human-timed offset for organic realism): starts with faint metallic valve click and audible building air pressure; doors begin to swing/fold inward on their precise arcs with slow heavy start (overcoming inertia of heavy panels); accelerate smoothly to mid-closing speed then ease to controlled stop under damping; thick multi-lip black rubber weatherstripping and bulb-style gaskets compress and visibly deform uniformly and elastically against the mating white body frame and opposing panel, squeezing out micro water droplets that bead and run down vertical surfaces; achieve perfect continuous dark seal with ZERO gaps, ZERO light leaks, and accurate elastic recovery at full 8K resolution; internal linkages, rollers, guides, and latch hardware articulate with sub-millimeter fidelity and correct perspective/parallax as camera tracks; final seating produces solid mechanical lock. Implied authentic sound design for video realism: sustained low-level pneumatic hiss during actuation, rubber compression squeak/scrape, culminating in soft final 'thunk' of panels mating followed by sharp but damped metallic clunk of latch pins/strikers engaging with over-center lock and subtle resonant vibration propagating through the bus chassis and body panels. Subtle suspension reaction on each bus: faint body settle + micro-bounce on air-ride suspension as door mass shifts and the latched structure rigidifies the side. Window rain streaks, interior passenger silhouettes/views, and all reflections update continuously and naturally with door motion and final seal. Seal must be visibly complete and final on BOTH buses (full close + latch + no gaps) with no premature movement.
-
-- SUSPENSION: Accurate heavy-vehicle suspension physics (air-ride preferred for airport shuttles) on both buses independently. As doors close and latch: visible chassis micro-settle, compression, and faint rebound/micro-bounce from the shift in door mass and structural rigidification. As each bus accelerates from standstill on wet pavement: realistic longitudinal weight transfer (slight nose dip or drive-axle squat), lateral load transfer during any steering, subtle rocking or pitching over pavement joints/puddles, damped rebound after initial compression; body line and wheel-well clearances show the compression/settle naturally. No floating or rigid body motion.
-
-- WHEEL MOVEMENT: Physically correct wheel rotation for each bus independently — rotational speed (RPM) and direction exactly match the instantaneous linear velocity and acceleration of that bus at every frame (no wheel slip unless brief realistic wet-traction breakaway, no locked wheels, no incorrect rates or sliding). Deep tread patterns roll and bite visibly into the wet surface; rubber deforms and sidewall flexes/bulges under the bus's full loaded weight and dynamic cornering/accel loads; accurate steering geometry (including any Ackermann effect) during directional changes or slight arcing paths; visible brake rotors/drums, calipers, and suspension components in the wells articulate correctly with wheel motion and body compression. Tires leave temporary disturbed tracks in the water film.
-
-- ACCELERATION: Strictly after full door close, seal, and latch confirmation on THAT specific bus only. Gradual, torque-driven, inertia-respecting pull-away from the curb on wet tarmac: natural slow initial ramp-up (overcoming the enormous static inertia and friction of a heavily loaded large bus), building speed smoothly and believably with implied diesel/electric drive effort visible only through motion subtlety; slight initial tire scrub or spray initiation on the slick surface as drive wheels overcome grip threshold. Independent per bus. No sudden lurch, no instant velocity jump, no teleporting, no unnatural curves.
-
-- TURNING: Smooth, inertia-consistent arcing or gentle turning paths for the buses (as they pull away and merge into traffic) with believable yaw and real-world vehicle dynamics. Slight realistic body lean/roll into the direction of turn via outer/inner suspension compression; tires maintain plausible grip with visible slip-angle feedback on wet pavement (subtle scrubbing, no cartoonish over-skid or instantaneous grip loss/pops); continuous, fluid trajectory without positional or angular discontinuities or jumps. The pair of buses maintain their strict separation and independent but coordinated paths during any merge/turn phase.
-
-- RAIN AND WATER SPRAY FROM TIRES: As the buses move across the wet reflective pavement in steady cold drizzle/rain, tires dynamically displace standing water and surface film with accurate Newtonian physics. Prominent realistic dynamic spray: lateral side sprays fanning from tire contact patches, prominent rear rooster-tail water plumes and dense fine mist clouds kicked upward and rearward by the rear tires (volumetric, with correct momentum, gravity drop-off, air resistance, and speed/density matching the bus velocity); secondary splashes and mist from undercarriage interaction and tire wake; individual droplets and droplet arcs refract light realistically, catch specular highlights from overhead lights and sky, and dissipate in air consistent with cold wet conditions and vehicle speed. Spray must interact with bus wheel wells, lower body panels, and the road surface. Tire passage creates visible disturbed wakes, ripples, and temporary cleared tracks in the water film that alter local reflections. Consistent across both buses independently.
-
-- WET PAVEMENT REFLECTIONS: Extremely detailed, photorealistic, dynamic, and perspective-accurate reflections of BOTH buses (treated as fully separate entities) on the slick tarmac and in all puddles — full bus forms, headlights/taillights, multi-pane windows, chrome trim, paint sheen, passenger silhouettes inside if visible, overhead practical lights, terminal architecture, and the Montreal skyline elements. Reflections move independently with each bus's position, speed, and angle (true parallax and differential motion); exhibit realistic ripple/wake distortion and surface disturbance exactly where tires contact and spray lands; anisotropic wet-surface sheen that intensifies at grazing angles; correct caustics, subsurface light scatter, and refraction through thin water films and puddle depths. Bus body surfaces themselves (wet white paint, chrome, glass) carry accurate moving reflections of the environment, rain, other bus, and lights that update continuously with motion and changing rain streaks/droplets. Disturbed water from tires shows authentic surface tension recovery and reflection breakup.
-
-Emphasize throughout: every element of bus motion, doors, wheels, suspension, and water interaction strictly obeys real-world physics of large heavy vehicles — mass, momentum, friction (significantly reduced on wet road), inertia, damping, and tire/road contact mechanics. No artifacts of any kind, no unnatural timing/speed curves, no discontinuous or floating animations for any mechanical component. All updates are continuous, coherent, and hyper-detailed at 8K native fidelity. 
-
-REFERENCE STYLE & CONTINUITY FROM PREVIOUS CLIP: Use the attached previous clip (the prior S1 clip or locked reference video for this London Calling sequence) as the PRIMARY and strongest visual reference for exact style, continuity, and photorealism. Precisely match the appearance and end-state of the two white buses (exact livery/weathering/wet water beading on paint and glass, any residual loading details, chrome condition, lighting response on surfaces), rain droplet size/density/behavior/physics, wet tarmac and puddle geometry/sheen/ripples/disturbance/reflectivity, harsh overhead lighting cutting through rain, cold late-February Pierre Trudeau airport atmosphere and color temperature, disciplined passenger silhouettes inside, and overall cinematic live-action photoreal style. Ensure seamless evolution of the departure action directly continuing from the exact end state of the previous clip with zero visual reset, discontinuity, or lighting/pop mismatch.
-
-MONTREAL SKYLINE FOCUS (hyper-detailed reveal as camera tracks wider at end of motion): As the smooth tracking shot progresses and widens during/after the buses' pull-away and merge, prominently and accurately reveal the hyper-detailed photorealistic Montreal skyline in the background and distance with perfect 8K fidelity and scale. Accurate low-angle perspective from arrivals curb level: iconic Place Ville Marie with its characteristic cross/sloped roof profile and massing, the distinctive cruciform tower form of 1000 de La Gauchetière, surrounding glass-and-steel high-rises with correct fenestration density/patterns, rooftop HVAC equipment, antennas, mechanical penthouses, and aircraft warning lights; proper atmospheric haze, aerial perspective, subtle cool color shift and reduced contrast/falloff with distance, realistic glints and speculars on distant wet or glazed windows from overcast/rainy daylight and terminal lights; no distortion, no toy-like miniaturization or flattening. Physically accurate multi-layered reflections and refractions of the skyline, terminal building, jet elements, rain, lights, and the two separate departing buses on ALL bus glass (both exterior and faint interior transmission), chrome, paint, and side mirrors — with correct curvature-induced distortion, double-bounce reflections, and environmental integration. The skyline must read as a real, distant, massive urban environment anchoring the Montreal/Pierre Trudeau location.
-
-ADDITIONAL BUS PHYSICS & HYPER-REALISM VALIDATION (Physics Validator sub-agent - Clip 8 London Calling - STRICT): The buses must appear as genuine live-action 8K captures of real heavy airport shuttle coaches (accurate real-world proportions for 12m-class white transit/coach shuttles common at YUL: correct overall length/height/width, wheelbase, roofline curvature, window beltline, front mask/grille treatment, bumper design, side mirror placement and shape). Every surface and mechanism holds obsessive perfect detail under all motion and lighting: paint exhibits true metallic flake and clearcoat depth with rain sheeting that flows and beads at physically correct rates (faster on angled/leading surfaces under velocity); every rivet, seam, and panel line casts accurate moving hard/soft shadows and speculars that shift with bus attitude, camera track, and rain; glass has real thickness, edge seals, and optical properties producing correct perspective distortion and light bending of cabin contents + receding skyline/terminal as viewpoint changes; tires show load-appropriate sidewall bulge, tread block deformation and water displacement at the contact patch that evolves frame-to-frame with speed/steering/suspension travel. Doors close properly with full 3D mechanical fidelity: panels have volume and thickness, hinges and actuators have correct occlusion and pivot geometry with no clipping/stretching/floating; rubber gaskets compress with visible elastic deformation and micro-droplet expulsion without interpenetration or gaps at seal; final latch produces visible micro body shake through the entire side structure. Suspension and wheels obey heavy-vehicle dynamics exactly: multi-axle (steer + drive + tag) with independent but linked motion; visible brake/suspension components move in correct relation to body compression and wheel rotation; no wheel spin or speed mismatch. Spray and water interaction follows real fluid dynamics (droplet size, velocity, gravity, drag, secondary atomization) without disappearing, popping, or non-physical arcs. Two buses maintain independent rigid-body integrity, accurate inter-bus parallax (differential distance and angle as camera moves), and safe separation at all times including during merge phase. As framing widens to skyline, buses recede with correct perspective scaling, motion blur coherence, and diminishing but still sharp detail while skyline elements (Place Ville Marie beacon housing if visible, 1000 de La Gauchetière copper roof elements, window grids, rooftop arrays, strobes) remain razor-resolved with proper distance haze and no scale error. All reflections (pavement, bus glass/chrome, puddles) incorporate the skyline, the other bus, rain, lights, and terminal with multi-surface bounces and correct distortion from water surface tension/wakes. Previous clip reference integration (style lock): rain intensity/droplet physics/streaks/beading on bus and ground, wet tarmac anisotropic reflection and ripple response, harsh overhead light beams and specular quality, cold desaturated palette, disciplined passenger micro-movements and wet jacket behavior, exact bus surface wetting/weathering state, and overall photoreal cinematic quality must continue identically and seamlessly from the precise end-frame visual state of the attached previous clip (e.g. S1.6 or latest London Calling prior clip) with zero reset, lighting pop, or continuity break. The finished clip must deliver indistinguishable-from-reality hyper-realistic buses, perfectly executed door closures, accurate independent bus physics, and a compelling, correctly scaled, haze-and-detail-rich Montreal skyline reveal.`;
-      const motionRules = ` ANIMATION SMOOTHER DIRECTIVE${clip8Note} - CRITICAL TECHNICAL REQUIREMENTS (STRICTLY ENFORCE FOR QUALITY): This is EXACTLY a 6-second clip. MUST deliver perfectly smooth natural motion and realistic bus physics. ${BUS_PHYSICS_INSTRUCTION} TWO CLEARLY SEPARATE BUSES must remain clearly distinct, visible and physically independent AT ALL TIMES in every frame — no merging, no overlapping, no interpenetration, no collapse to single bus; preserve accurate distance, independent realistic suspension/steering/wheel rotation/speed/trajectory and parallax for both buses throughout the entire clip. Hyper-realistic 8K ultra-detailed photorealism enforced. 6-second clip must exhibit perfectly smooth, continuous, natural motion with no jumps, pops, stutters, or sudden changes in speed/position/framing. Logical progression: doors must visibly and fully close first on BOTH buses as the start of action (complete close and seal visible on each); only THEN do the buses begin to pull away separately from the curb with realistic gradual acceleration (torque ramp, engine note implied, suspension settle, wheel rotation physics). Buses then merge smoothly into traffic. CAMERA (exact for medium-wide tracking shot in Clip 8 - Continuous Shot & Camera Tracking Expert): Exactly 6-second one smooth, continuous, unbroken fluid take with perfectly smooth natural motion, no jumping, no pops, no stutters, no framing jumps, no speed pops, no element discontinuities or teleporting. Medium-wide tracking shot starting tightly focused on the two separate white airport shuttle buses at curb level as their doors visibly and fully close on both vehicles. Camera then executes a single fluid, motivated tracking movement in perfect synchronization with the buses' realistic gradual acceleration and independent paths: smoothly follows both buses as they pull away separately from the curb (preserving strict visible lateral separation with clear gap between the two distinct buses in every frame, true binocular parallax, independent wheel rotation, suspension, and trajectories at all times), continuing the track as the buses arc and merge smoothly into traffic while keeping both buses fully in frame, distinctly separate and visible without cropping or overlap throughout the entire duration. Framing changes are gradual and continuous: initial medium-wide composition centered on the buses and closing doors; as buses depart and merge over the middle portion of the clip the camera performs a slow, steady, natural widening (subtle continuous dolly/crane-back combined with slight upward angle adjustment or natural perspective shift from subject recession) at a constant deliberate cinematic pace matched to the vehicles' speed, progressively revealing more of the distant hyper-detailed Montreal skyline in the background without any abrupt reframing. By the final 1.5-2 seconds the composition naturally shifts emphasis to end on a wider skyline view, with the two separate buses smaller but still clearly visible, separate, and in the lower third/foreground as they continue departing into the distance, the skyline now dominating the upper and middle frame with accurate scale, haze, and architectural detail. All camera motion obeys real-world inertia and smoothness; logical action progression timed precisely for 6 seconds total with door closures completing before significant bus movement begins; one single continuous shot only. Match any locked refs for exact bus livery, wet surfaces, reflections, passenger silhouettes inside. REFERENCE VIDEO INTEGRATOR (Continuity Expert for Clip 8): Use the attached previous clip as strong visual reference for characters, lighting, rain, wet ground, and style. ADDITIONAL MOTION SMOOTHER PHRASES (CLIP 8 - MONTREAL SKYLINE BUS DEPARTURE): ADDITIONAL MOTION CONTINUITY FOR 6S CLIP: The entire sequence exhibits perfect frame-to-frame temporal coherence and velocity continuity across all 6 seconds — bus bodies, door mechanisms, wheels, suspension, rain elements, reflections, and camera position/angle all follow smooth, physically-plausible, continuous trajectories with no pops, jumps, stutters, velocity discontinuities, or element teleportation between frames; motion is governed by real inertia, momentum, and damping for heavy vehicles on wet surface; camera tracking is one unbroken motivated move with consistent speed profile and natural optical breathing. PREVIOUS CLIP STYLE REFERENCE: Use the attached previous clip as the primary style and continuity reference — match exactly the photoreal rendering quality, rain droplet physics and distribution, wet tarmac reflection intensity and ripple propagation, bus surface water beading and sheen response to light, character uniform wet fabric behavior and micro-motions, harsh overhead lighting temperature and specular bloom, overall cinematic atmosphere and color grading for seamless logical flow and no visual reset at clip start or during the departure progression. SKYLINE REVEAL MOTION: As the medium-wide tracking shot smoothly widens to the Montreal skyline at the end of the 6s clip, the iconic buildings (Place Ville Marie with its precise cross/sloped roof profile, 1000 de La Gauchetière's cruciform massing, surrounding glass high-rises with accurate fenestration patterns, rooftop HVAC units, antennas and mechanical equipment) are revealed with perfect continuous perspective shift, consistent atmospheric haze and aerial perspective that scales naturally with camera movement, window glints and reflections that update continuously without popping or artificial sharpening; no distortion, no toy-like scaling, full 8K detail fidelity maintained on skyline elements throughout the continuous take with correct parallax relative to the independently moving buses in foreground. HYPER-REALISTIC BUS WITH PERFECT DETAIL IN MOTION: The two separate white airport buses render with obsessive hyper-realistic 8K detail on every component under dynamic motion: body panels show micro-scratches, metallic flecks, grime, clearcoat depth and orange-peel that catch and move light accurately with rigid body translation/rotation; every rivet and fastener casts moving cast shadows and speculars; multi-pane safety glass exhibits accurate evolving refractions of interior (seats, men silhouettes) and exterior (skyline, rain, lights) as viewpoint and bus orientation change continuously; tires demonstrate precise tread bite, sidewall flex, load deformation, and continuous rotation matching speed with no slip or stutter; chrome trim and mirrors provide layered, curvature-correct, motion-updating environmental reflections including of the other bus, men, skyline and wet ground. BUS DOORS CLOSING WITH PERFECT MECHANICAL AND MOTION FIDELITY: Doors on both buses close with flawless non-linear physics-accurate motion curves (inertia-overcoming slow start, mid acceleration, damped deceleration to stop), sub-millimeter alignment of panels at closure with no gaps, light leaks, interpenetration or floating; gaskets compress and recover elastically with visible uniform deformation and micro-droplet expulsion that evolves frame-by-frame realistically; all linkages, actuators, pivots show correct rigid body kinematics and parallax from the tracking camera; seal completion and latch clunk produce a single natural chassis vibration that damps smoothly into the subsequent pull-away acceleration without any artifact or discontinuity. CONTINUOUS LOGICAL FLOW AND SEPARATE BUS PHYSICS: Strict causal order — both buses' doors reach full visible sealed and latched state before either begins any forward motion or acceleration; the two buses remain distinctly separate physical objects with constant safe lateral separation, independent suspension responses, wheel speeds, trajectories and parallax at all times; pull-aways are gradual realistic torque-driven with natural weight transfer and wet surface interaction; merge into traffic is smooth with believable inertia; no merging of buses, no speed pops, no camera cuts — one fluid 6-second cinematic take. d previous clip as the STRONGEST PRIMARY VISUAL REFERENCE for characters, lighting, rain, wet ground, and style, ensuring PERFECT CONTINUITY with the previous clip. Match exact character likenesses (90 men, dark blue jackets, nametags e.g. Vorsanger, wet fabric), lighting (harsh overhead through rain, speculars on wet ground), rain physics and behavior (droplets, beading, spray), wet ground (tarmac sheen, puddle geometry/ripples/reflectivity) and overall cinematic style/atmosphere exactly from the previous clip so action evolves seamlessly with no visual reset. End state of previous clip (rain, wetness, characters, lights, ground) is the exact start state here.  REFERENCE VIDEO INTEGRATION (PREVIOUS CLIP) + CONTINUITY AND REFERENCE MATCHER (Clip 8 MANDATORY): Use the attached previous clip as a STRONG VISUAL REFERENCE for characters (exact likenesses, expressions, posture, wardrobe details and micro-movements), lighting (quality, direction, harsh overheads, specular highlights, color temperature), rain (intensity, droplet physics, streaking, spray, mist and interactions with surfaces), wet ground (puddles, reflections, sheen, ripples from footsteps/tires, tarmac wetness and specular response), and overall style (cinematic neo-noir treatment, color grading, atmosphere, camera language, photoreal fidelity). SPECIFIC CONTINUITY LANGUAGE TO ENFORCE PERFECT MATCH FROM PREVIOUS CLIP: exact character continuity (faces, haircuts, sunglasses with reflections, disciplined expressions, body proportions, dark blue jacket wet fabric cling/sway/stretch/ribbing/stitching/reflections/nametags exactly as they appear at the conclusion of the attached previous clip); lighting continuity (precise match to color temperature, intensity, practical overhead and ambient sources, shadow softness, specular quality on wet surfaces from the prior clip); rain continuity (identical drizzle density, fall angle and velocity, droplet size and physics, beading on fabric/glass/chrome, spray/mist interactions); wet ground continuity (exact wetness sheen and saturation level, specific puddle locations shapes and water depth, reflection fidelity and mirrored content (buses, men, skyline, lights) with correct distortion/ripples/wakes, tire and foot interaction physics); bus and environment (wet paint streaks, water droplets/beading, accurate updating reflections on body and glass); style continuity (identical photoreal live-action cinematic look, 35mm lens with breathing, shallow DOF, motion characteristics, color grade, film grain, overall cold late-February airport atmosphere and mood). Zero visual discontinuity or reset between clips — the bus door closing and departure must pick up as a direct, seamless continuation in time, space, weather state, ground condition, lighting, and character appearance from the final frame/visual state of the attached previous clip. When a frame or reference derived from the previous clip is available for reference_to_video or as i2v input, use it as the highest-priority anchor for all listed elements.. Explicitly match and transfer the visual details, lighting signature, rain behavior, ground wetness/reflectivity, character consistency, and stylistic elements 1:1 from the provided reference previous clip for seamless visual continuity across the sequence. ADDITIONAL QUALITY EMPHASIS: hyper-realistic 8K textures and fidelity on buses, wet surfaces, motion; zero tolerance for any violation of the two separate buses rule or non-smooth physics.`;
-      finalPromptForVideo = (finalPromptForVideo || cleanPrompt) + ' ' + smootherSim + motionRules;
-    } else if (typeof getSimulatedAgentOutput === 'function') {
-      // Always lightly apply animation smoother rules to all clips for general quality
-      const smootherSim = getSimulatedAgentOutput('animation-smoother', p);
-      if (smootherSim && smootherSim.length > 20) {
-        finalPromptForVideo = (finalPromptForVideo || cleanPrompt) + ' ' + smootherSim;
-      }
-    }
-
-    // === WIND, HAIR, CLOTHING & LEATHER DETAIL EXPERT (20-agent team specialist - Clip 12 London Calling clifftop continuation) ===
-    // Strong cold wind blows throughout. Natural wind on hair and clothing. Hyper-detailed leather, realistic fabric movement.
-    // From refs: warriors in heavy leather vests/cuts with patches, chains, boots, jeans; Ramsey and Brant in rugged jackets.
-    // Current keyframe 48.jpg shows strong wind already (hair flying wildly on all, especially Ramsey center and warriors).
-    // For image_edit: instructions to preserve/enhance the exact wind snapshot at the start of Clip 12 (direction, intensity on specific hair strands, jacket/vest flaps, collar, pants) matching end of Clip 11 video, while ensuring it continues consistently and intensifies naturally if needed during the knee action in video.
-    // For image_to_video prompt: detailed wind behavior over 6s - constant strong cold wind gusting, hair whipping, leather creasing and shifting with body movement and wind, clothing reacting to the knee force + wind, dust/particles kicked up by impact also affected by wind. Hyper realistic individual strands, fabric physics.
-    // Ensures natural, non-stiff movement. Applied automatically for cliff/Brant/Ramsey/rocky/knee strike shots (set duration ~6s). Uses end-state of Clip 11 + keyframe 48.jpg + refs/clip11/* for continuity.
-    const hasCliffAction = /cliff|rocky|clifftop|brant|ramsey|warrior#|edge of the cliff|launches from the cliff|grabs him by his collar|forcing|rocky terrain|clifftop.*night|knee strike|knee action/i.test((cleanPrompt + ' ' + rawPrompt + ' ' + (ui.loc && ui.loc.name || '') + ' ' + (p.script || '')).toLowerCase());
-    if (hasCliffAction) {
-      const WIND_PHYSICS_INSTRUCTION = `WIND & PHYSICS INSTRUCTION (WIND, HAIR, CLOTHING & LEATHER DETAIL EXPERT - STRICT REALISM MANDATE FOR 6S CLIFF EDGE CONFRONTATION CLIP 12 - COLD WIND ON ROCKY TERRAIN - CONTINUITY FROM CLIP 11 END STATE + KEYFRAME 48.jpg): Strong cold wind blows constantly throughout the entire clip. Natural wind on hair and clothing. Hyper-detailed leather, realistic fabric movement. From character refs: warriors in heavy leather vests/cuts with patches, chains, boots, jeans; Ramsey and Brant in rugged jackets. Current keyframe 48.jpg shows strong wind already (hair flying wildly on all, especially Ramsey center and warriors) — this exact wind snapshot must be the precise starting state.
-
-IMAGE_EDIT WIND SNAPSHOT PRESERVATION & ENHANCEMENT INSTRUCTIONS (pasteable for image_edit on keyframe 48.jpg to produce starting frame for Clip 12 video): Preserve and enhance the EXACT wind snapshot at the start of Clip 12 exactly as visible in keyframe 48.jpg (direction, intensity, specific effects on individual hair strands — especially the wildly flying hair on Ramsey in center and on the warriors — jacket/vest flaps, collars, pants, leather creases and folds). Match 1:1 the wind state from the very end of Clip 11 video for perfect seamless continuity (use Clip 11 end frame + refs/clip11/michael_ramsey.jpg, brant.jpg, warrior1.jpg, warrior2.jpg, prev_ref_00*.jpg as absolute visual lock for wind direction, hair positions/strands, flap angles, collar lift, fabric tension, leather detail at this instant). Do NOT change the core wind direction, gust intensity, specific strand positions, flap states, or overall snapshot from 48.jpg — only enhance hyper-detail and photorealism: render individual hyper-realistic hair strands with correct light interaction and chaotic flutter; hyper-detailed leather textures, wear, patches, chains, stitching, creases and subtle shifts on heavy warrior vests/cuts and rugged jackets; realistic fabric movement and physics on jeans, pants, collars, hems, boots. Maintain exact character appearances, poses, framing, lighting, and rocky terrain from the keyframe. The enhanced output must support consistent continuation of this precise wind state into the 6s video, allowing natural intensification or variation only as driven by the knee action/force, body struggles, and gusts during the clip. Hyper-realistic photoreal leather, cold wind on all clothing elements, maximum fabric and strand fidelity. No alteration to wind snapshot baseline.
-
-IMAGE_TO_VIDEO WIND/CLOTHING/LEATHER SECTIONS (detailed 6s wind behavior - pasteable text for wind/clothing sections of the image_to_video prompt, append after base action description and keyframe lock): Strong cold wind blows constantly throughout the entire 6 seconds with natural gusting. Natural wind on hair and clothing. Hyper-detailed leather, realistic fabric movement and physics. The exact wind snapshot (direction, intensity on specific hair strands, jacket/vest flaps, collar, pants) from the input starting keyframe image (enhanced 48.jpg matching Clip 11 end) continues consistently at the start and evolves naturally. Constant strong cold wind gusting across the high rocky clifftop at night in late February; wind compounds every action and secondary motion. Hair whipping: individual hyper-realistic strands on all characters (especially wildly flying on Ramsey center and both warriors) continuously lift, whip, lash, and flutter chaotically across faces, temples, foreheads, eyes with realistic inertia, air resistance, lag behind head/body turns/struggles/knee force; loose strands and fine vellus hairs on necks, sideburns, hairlines blow visibly and independently, catching light; hair blown into eyes/mouths intermittently prompting natural head tilts/squints/shakes. Leather creasing and shifting: hyper-detailed leather on warriors' heavy vests/cuts (with patches, chains) and rugged jackets on Ramsey and Brant creases, stretches, shifts, ripples and reacts with every body movement, wind pressure, and physical force (collar grips, shoves, knee strike impact); realistic leather weight, stiffness, folding, surface texture and wear visible under dynamic tension and gusts. Clothing reacting to the knee force + wind: during the knee action/strike and struggles, fabric on jackets, vests, jeans, pants, collars and hems billows, snaps, flaps sharply (leeward ballooning and windward taut creases/tension lines), tugs and ripples; secondary fabric and leather motions lag correctly after primary knee force/body impacts with correct mass/air resistance/inertia; wind adds tangible resistance making movements, grips and balance require extra effort and realistic bracing. Dust/particles kicked up by impact: fine dirt, dust, small rock particles and debris from footwork, knee strike, scuffle and rocky terrain are visibly kicked up and immediately affected/carried by the strong cold wind, blowing in consistent direction with realistic particle trajectories, dispersion, velocity matching gusts, and interaction with clothing/hair/light. All primary actions (collar grab, dragging steps, knee strike, punch, wild struggle, launch shove) drive immediate but lagged secondary wind-reactive motions in every strand of hair and every fold/crease of clothing and leather. Wind intensity remains strong and constant with organic subtle building gusts, momentary lulls and variations for lifelike feel, intensifying naturally where driven by the knee action and struggle dynamics. Warriors' heavy leather vests/cuts/patches/chains, boots, jeans and Ramsey/Brant's rugged jackets all exhibit authentic hyper-detailed fabric/leather physics and aerodynamics interacting with wind + body + terrain. Hyper realistic individual hair strands, hyper-detailed leather textures and creasing, authentic fabric physics on all elements at every frame. On natural uneven rocky terrain: every step, stance change, knee impact and balance correction shows visible grip reactions, foot pressure digs, center-of-mass shifts countering combined wind + footing + physical conflict — completely non-stiff, alive, physically believable. Wind effects match exactly the preserved snapshot from the input keyframe at start and continue without reset or discontinuity.
-
-WIND EFFECTS ON THE FORCING ACTION, STRUGGLE AND BALANCE ON ROCKS (integrated): The cold wind compounds every aspect of the forcing and confrontation — gusts push laterally against bodies and billowing clothing, forcing characters to actively brace, lean into the wind or widen stances to maintain equilibrium on the narrow, uneven rocky clifftop inches from the fatal edge; as Ramsey grabs Brant by the collar and walks/drags the resisting chief back toward the drop, both exhibit continuous realistic compensatory posture and balance physics: knees and hips flexing over irregular rock surfaces, ankles rolling or digging for purchase on loose stones and dirt, subtle forward/backward and side-to-side sways as wind torque combines with the opponent's resistance and ground slope plus knee force; Brant's older frame shows more pronounced wind-induced sway and jacket/hair/leather flare while being manhandled, requiring Ramsey to adjust his powerful grip and footing constantly; Ramsey maintains control with planted wide stance on more stable rock, jacket/vest and hair whipping but core and legs countering the wind load plus Brant's wild struggles and the knee action; the two warriors (when visible) hold their own wind-battered postures with minimal interference, heavy leather vests/cuts/patches/chains/clothing and hair reacting while they shift weight and apply force on the terrain. During knee strike and impacts: clothing, leather and hair react instantly to the combined force + wind with visible creasing, flapping, strand whipping and particle blow. On the natural rocky terrain: every step and stance change shows visible grip reactions, small corrective foot placements, toe/heel pressure digs into stone and soil, and center-of-mass shifts to recover from combined wind gusts + uneven footing + physical conflict + knee impact — completely non-stiff and alive. During the final launch/push: wind catches and dramatically flares the chief's clothing, leather and hair as he is propelled over the edge, adding authentic chaotic air resistance and trajectory nuance consistent with real momentum, mass and aerodynamics; the scream and falling arc integrate the wind effect naturally.
-
-Throughout the full 6s clip enforce (WIND, HAIR, CLOTHING & LEATHER DETAIL EXPERT): primary actions (collar grab, dragging steps, knee strike, punch, wild struggle, launch shove) drive immediate but lagged secondary wind-reactive motions in every strand of hair and every fold of clothing/leather with correct fabric/leather mass, air resistance and inertia; wind intensity varies organically with subtle building gusts and momentary lulls for lifelike feel while staying strong cold constant overall; all four characters (and any visible background elements) maintain authentic age/build-appropriate balance and posture while countering wind + terrain + opponent near the cliff edge. Hyper-detailed photoreal fabric dynamics, individual hair strand physics, hyper-detailed leather creasing/shifting/wear on vests/jackets (patches, chains), rock surface interaction, weight transfer, dust particle wind interaction and micro-posture corrections at 8K fidelity in every frame. Natural, non-stiff, physically believable human behavior only. Use the starting keyframe (48.jpg enhanced via image_edit preserving exact wind snapshot from Clip 11 end) as the authoritative visual reference for initial wind state, hair positions, clothing flap/crease states, leather details — evolve from there without reset.`;
-
-      finalPromptForVideo = (finalPromptForVideo || cleanPrompt) + ' ' + WIND_PHYSICS_INSTRUCTION;
-    }
-  } catch (e) { /* non fatal smoother */ }
-
+  const finalPromptForVideo = buildShotVideoPrompt(cleanPrompt, ui, p, si, shi) || cleanPrompt || rawPrompt;
   mhSetShotGenButton(key, 'submitting');
   if (btn && btn.id !== 'gen-shot-btn-' + key) btn.textContent = 'Submitting video…';
 
@@ -9035,11 +8292,9 @@ setTimeout(() => {
   } catch (e) { console.warn('model select init', e); }
 }, 200);
 
-// Helper to keep the old simulated output working
-// (already exists as getSimulatedAgentOutput in the file)
 
 </script>
-<!-- Note: /agents/client.js intentionally removed here. All agent logic is self-contained in this file via window.SB_Agents / SB_InvokeAgent so the single golden HTML works after deploys without external JS 404s or version skew causing 502s on functions. -->
+<!-- Agent layer removed — prompts are user-authored; server-side polish in generate-video.js only. -->
 <!-- Dashboard — load workflow projects from localStorage and render inline -->
 <script>
 (function () {
