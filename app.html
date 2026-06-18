@@ -2372,7 +2372,25 @@ function verr(){const a=["[SBVideo ERROR]"].concat([].slice.call(arguments));con
 
 // Defensive response unpacking — handles WaveSpeed shape variations
 function pickStatus(d){return d&&(d.status||d.state||(d.data&&d.data.status))||"IN_QUEUE"}
-function pickVideoUrl(d){if(!d)return null;const c=d.video_url||(d.video&&d.video.url)||(d.videos&&d.videos[0]&&(d.videos[0].url||d.videos[0]))||(d.outputs&&d.outputs[0])||(d.data&&(d.data.outputs&&d.data.outputs[0]||d.data.video_url));if(!c)return null;return typeof c==="string"?c:(c.url||null)}
+function pickVideoUrl(d){
+  if(!d)return null;
+  const tryOne=function(v){
+    if(!v)return null;
+    if(typeof v==="string"&&/^https?:\/\//i.test(v))return v;
+    if(v&&typeof v==="object"&&v.url)return v.url;
+    return null;
+  };
+  let c=tryOne(d.video_url)||tryOne(d.url)||tryOne(d.video&&d.video.url);
+  if(!c&&Array.isArray(d.videos)&&d.videos[0])c=tryOne(d.videos[0].url||d.videos[0]);
+  if(!c&&Array.isArray(d.outputs)&&d.outputs[0])c=tryOne(d.outputs[0]);
+  if(!c&&d.data){
+    c=tryOne(d.data.video_url)||tryOne(d.data.url);
+    if(!c&&Array.isArray(d.data.outputs)&&d.data.outputs[0])c=tryOne(d.data.outputs[0]);
+  }
+  if(!c&&d.raw)c=pickVideoUrl(d.raw);
+  return c;
+}
+function mhExtractVideoFromResponse(d){return pickVideoUrl(d)||null;}
 
 V.refreshBalance=async function(){try{const h=await window.hdrs();const r=await fetch(PROXY,{method:"POST",headers:h,body:JSON.stringify({action:"balance"})});const d=await r.json();if(r.ok){V.balance=d.credits;V.tier=d.tier;const be=document.getElementById("vg-bal");const te=document.getElementById("vg-tier");if(be)be.textContent=(d.credits>=999999?"∞":d.credits)+" credits";if(te)te.textContent=d.tier}}catch(e){vlog("Balance check skipped:",e.message)}};
 
@@ -6123,11 +6141,13 @@ function mhGetShotJob(si, shi) {
 
 function mhClipMediaHtml(j) {
   if (!j || !j.videoUrl) return '';
+  const src = esc(j.videoUrl);
   const isReal = mhIsRealVideoUrl(j.videoUrl, j);
   if (isReal && !String(j.videoUrl).startsWith('data:')) {
-    return '<video src="' + j.videoUrl + '" controls preload="metadata" style="width:100%;display:block;background:#000;aspect-ratio:16/9;object-fit:cover"></video>';
+    return '<video src="' + src + '" controls playsinline preload="metadata" referrerpolicy="no-referrer" style="width:100%;display:block;background:#000;aspect-ratio:16/9;object-fit:cover" onerror="this.style.display=\'none\';var n=this.nextElementSibling;if(n)n.style.display=\'block\'"></video>' +
+      '<div style="display:none;padding:10px;background:#111;border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--dim)">Inline preview blocked — <a href="' + src + '" target="_blank" rel="noopener" style="color:var(--gold)">open video in new tab</a> or use Download below.</div>';
   }
-  return '<img src="' + j.videoUrl + '" alt="clip preview" style="width:100%;display:block;background:#000;aspect-ratio:16/9;object-fit:cover;border-bottom:1px solid var(--border)"/>';
+  return '<img src="' + src + '" alt="clip preview" style="width:100%;display:block;background:#000;aspect-ratio:16/9;object-fit:cover;border-bottom:1px solid var(--border)"/>';
 }
 
 function mhRenderShotClipPreview(key) {
@@ -6864,50 +6884,58 @@ async function mhPollVideoUntilDone(requestId, headers, shotKey) {
   const h = headers || (window.hdrs ? await window.hdrs() : { 'Content-Type': 'application/json' });
   const started = Date.now();
   const maxWait = sbMaxPollMs();
+  let polls = 0;
   while (Date.now() - started < maxWait) {
-    await new Promise(res => setTimeout(res, 5000));
+    await new Promise(res => setTimeout(res, polls < 2 ? 3000 : 5000));
+    polls++;
     if (shotKey) {
       const [psi, pshi] = shotKey.split('-').map(Number);
       mhUpsertGenJob(psi, pshi, { status: 'poll', requestId });
       mhRenderShotClipPreview(shotKey);
       mhSetShotGenButton(shotKey, 'generating');
     }
-    const pr = await fetch(sbVideoProxy(), {
-      method: 'POST',
-      headers: h,
-      body: JSON.stringify({ action: 'status', request_id: requestId })
-    });
-    const pd = await pr.json();
-    const stat = mhNormalizeVideoStatus(pd.status || pd.state || (pd.data && pd.data.status));
-    if (stat === 'COMPLETED') {
-      const rr = await fetch(sbVideoProxy(), {
+    let pd = {};
+    let stat = 'PROCESSING';
+    try {
+      const pr = await fetch(sbVideoProxy(), {
         method: 'POST',
         headers: h,
-        body: JSON.stringify({ action: 'result', request_id: requestId })
+        body: JSON.stringify({ action: 'status', request_id: requestId })
       });
-      const rd = await rr.json();
-      const videoUrl = rd.video_url || rd.url || (rd.video && rd.video.url) || pickVideoUrl(rd);
-      if (!videoUrl) throw new Error('completed but no video URL returned');
-      return { videoUrl, provider: rd.provider || pd.provider || 'wavespeed' };
+      pd = await pr.json().catch(() => ({}));
+      stat = mhNormalizeVideoStatus(pd.status || pd.state || (pd.data && pd.data.status));
+      const statusUrl = mhExtractVideoFromResponse(pd);
+      if (statusUrl && stat === 'COMPLETED') {
+        return { videoUrl: statusUrl, provider: pd.provider || 'wavespeed' };
+      }
+      if (stat === 'FAILED') {
+        throw new Error(pd.error || pd.message || (pd.data && pd.data.error) || (pd.raw && pd.raw.data && pd.raw.data.error) || 'provider failed');
+      }
+    } catch (statusErr) {
+      if (String(statusErr.message || '').indexOf('provider failed') >= 0) throw statusErr;
+      console.warn('[mhPoll] status check:', statusErr.message || statusErr);
     }
-    if (stat === 'FAILED') {
-      throw new Error(pd.error || pd.message || (pd.data && pd.data.error) || 'provider failed');
-    }
-    // Belt-and-suspenders: some providers expose the URL on /result while status still says processing
     try {
       const rr = await fetch(sbVideoProxy(), {
         method: 'POST',
         headers: h,
         body: JSON.stringify({ action: 'result', request_id: requestId })
       });
-      const rd = await rr.json();
-      const earlyUrl = rd.video_url || rd.url || pickVideoUrl(rd);
-      if (earlyUrl && mhNormalizeVideoStatus(rd.status) === 'COMPLETED') {
-        return { videoUrl: earlyUrl, provider: rd.provider || pd.provider || 'wavespeed' };
+      const rd = await rr.json().catch(() => ({}));
+      const resultUrl = mhExtractVideoFromResponse(rd);
+      const resultStat = mhNormalizeVideoStatus(rd.status || (rd.raw && rd.raw.data && rd.raw.data.status) || stat);
+      if (resultUrl && (resultStat === 'COMPLETED' || /^https?:\/\//i.test(resultUrl))) {
+        return { videoUrl: resultUrl, provider: rd.provider || pd.provider || 'wavespeed' };
       }
-    } catch (e) { /* keep polling */ }
+      if (resultStat === 'FAILED') {
+        throw new Error(rd.error || rd.message || (rd.raw && rd.raw.data && rd.raw.data.error) || 'provider failed');
+      }
+    } catch (resultErr) {
+      if (String(resultErr.message || '').indexOf('provider failed') >= 0) throw resultErr;
+      console.warn('[mhPoll] result check:', resultErr.message || resultErr);
+    }
   }
-  throw new Error('timed out waiting for video');
+  throw new Error('timed out waiting for video (waited ' + Math.round((Date.now() - started) / 1000) + 's)');
 }
 
 // Quality / Upscale / Sizing / Downloader panel (final tab in the exact flow the user described)
@@ -8303,10 +8331,14 @@ async function generateVideoForShot(key, btn, opts) {
         job.status = 'poll';
         mhRenderShotClipPreview(key);
         const polled = await mhPollVideoUntilDone(d.request_id, h, key);
-        job.status = 'done';
-        job.videoUrl = polled.videoUrl;
-        job.provider = polled.provider;
-        job.localGenerated = false;
+        mhUpsertGenJob(si, shi, {
+          status: 'done',
+          videoUrl: polled.videoUrl,
+          provider: polled.provider,
+          localGenerated: false,
+          error: null,
+          requestId: d.request_id
+        });
         mhPersistClips();
         mhRefreshGenUI(key);
         mhSetShotGenButton(key, 'done', '✅ Video ready');

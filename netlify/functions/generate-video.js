@@ -52,8 +52,7 @@ function callWaveSpeed(path, body, method = 'POST') {
   });
 }
 
-// WaveSpeed v3 uses GET /predictions/{id}/result for status + outputs.
-// GET /predictions/{id} alone returns 404 on current API — do not use it.
+// WaveSpeed v3: GET /predictions/{id} is canonical; /result is a fallback alias.
 function normalizeWaveSpeedStatus(st) {
   const s = String(st || '').toLowerCase();
   if (['completed', 'succeeded', 'success', 'done', 'finished'].includes(s)) return 'COMPLETED';
@@ -69,18 +68,43 @@ function isFakeWaveSpeedId(request_id) {
 }
 
 async function fetchWaveSpeedPrediction(request_id) {
-  return callWaveSpeed('/api/v3/predictions/' + request_id + '/result', null, 'GET');
+  const paths = [
+    '/api/v3/predictions/' + request_id,
+    '/api/v3/predictions/' + request_id + '/result',
+  ];
+  let last = null;
+  for (const path of paths) {
+    try {
+      const res = await callWaveSpeed(path, null, 'GET');
+      last = res;
+      const httpOk = res && res.httpStatus && res.httpStatus < 400;
+      const codeOk = !res.code || res.code === 200;
+      const hasPayload = !!(res.data && (res.data.status || res.data.outputs || res.data.id));
+      if (httpOk && codeOk && hasPayload) return res;
+    } catch (e) {
+      last = { error: e.message, httpStatus: 500 };
+    }
+  }
+  return last || { code: 404, message: 'prediction not found', httpStatus: 404 };
 }
 
 function extractWaveSpeedOutput(result) {
-  const data = result && result.data;
-  const out = (data && data.outputs && data.outputs[0])
-    || (result.outputs && result.outputs[0])
-    || result.video_url
-    || result.url
-    || (data && data.video_url);
-  if (!out) return null;
-  return typeof out === 'string' ? out : (out.url || null);
+  if (!result) return null;
+  const data = result.data || result;
+  const candidates = [];
+  if (Array.isArray(data.outputs) && data.outputs.length) candidates.push(data.outputs[0]);
+  if (Array.isArray(result.outputs) && result.outputs.length) candidates.push(result.outputs[0]);
+  if (data.output) candidates.push(data.output);
+  if (data.video_url) candidates.push(data.video_url);
+  if (data.url) candidates.push(data.url);
+  if (result.video_url) candidates.push(result.video_url);
+  if (result.url) candidates.push(result.url);
+  for (const out of candidates) {
+    if (!out) continue;
+    if (typeof out === 'string' && /^https?:\/\//i.test(out)) return out;
+    if (out && typeof out === 'object' && out.url) return out.url;
+  }
+  return null;
 }
 
 // --- Grok Imagine helpers (for when user chooses Grok native for pictures or video) ---
@@ -530,7 +554,14 @@ exports.handler = async function (event) {
         const result = await fetchWaveSpeedPrediction(request_id);
         const rawSt = (result.data && result.data.status) || result.status || 'processing';
         const st = normalizeWaveSpeedStatus(rawSt);
-        return jsonResponse(event, 200, { request_id, status: st, provider: 'wavespeed', raw: result });
+        const out = extractWaveSpeedOutput(result);
+        return jsonResponse(event, 200, {
+          request_id,
+          status: st,
+          video_url: out || null,
+          provider: 'wavespeed',
+          raw: result
+        });
       }
     } catch (err) {
       return jsonResponse(event, 500, { error: err.message });
