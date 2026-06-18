@@ -1366,6 +1366,41 @@ function sbVideoProxy() {
   }
   return '/.netlify/functions/generate-video';
 }
+function sbIsPlaceholderUrl(url) {
+  if (!url || typeof url !== 'string') return true;
+  if (/picsum\.photos/i.test(url)) return true;
+  if (/placeholder|demo[-_]?only/i.test(url)) return true;
+  return false;
+}
+function sbInferProvider(model, apiProvider) {
+  if (apiProvider) return apiProvider;
+  const m = String(model || '').toLowerCase();
+  if (m.includes('grok') || m === 'flux-xai') return 'grok-imagine';
+  return 'wavespeed';
+}
+function sbIsVideoMediaUrl(url) {
+  if (!url || sbIsPlaceholderUrl(url)) return false;
+  if (/\.(mp4|webm|mov|m4v)(\?|$)/i.test(url)) return true;
+  if (/vidgen\.xai/i.test(url)) return true;
+  if (url.startsWith('data:video/')) return true;
+  return false;
+}
+function sbPollPayload(requestId, model, provider) {
+  return {
+    action: 'status',
+    request_id: requestId,
+    model: model || null,
+    provider: provider || sbInferProvider(model, null)
+  };
+}
+function sbResultPayload(requestId, model, provider) {
+  return {
+    action: 'result',
+    request_id: requestId,
+    model: model || null,
+    provider: provider || sbInferProvider(model, null)
+  };
+}
 function sbHealthUrl() {
   const cfg = window.SHOTBREAK_CONFIG || {};
   if (cfg.localGeneration && cfg.localGeneration.healthUrl) return cfg.localGeneration.healthUrl;
@@ -2052,10 +2087,12 @@ async function sbGenerateCharacterPicture(opts) {
   };
   const r = await fetch(sbVideoProxy(), {method: 'POST', headers: h, body: JSON.stringify(picPayload)});
   const d = await r.json();
-  if (!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
-  const url = d.url || d.demo_url || d.image_url || (d.images && d.images[0] && d.images[0].url);
-  if (!url) throw new Error('No image URL returned.');
-  return Object.assign({}, d, {url, prompt: d.prompt || picPayload.prompt, model: picModel});
+  if (!r.ok || d.error) throw new Error((d.detail ? d.error + ': ' + d.detail : d.error) || ('HTTP ' + r.status));
+  const url = d.url || d.image_url || (d.images && d.images[0] && d.images[0].url);
+  if (!url || sbIsPlaceholderUrl(url)) {
+    throw new Error(d.detail || d.hint || d.note || 'No real image URL returned — check XAI_API_KEY / WAVESPEED_API_KEY in Netlify.');
+  }
+  return Object.assign({}, d, {url, prompt: d.prompt || picPayload.prompt, model: picModel, provider: d.provider || sbInferProvider(picModel, null)});
 }
 
 function updateOptionsForModel(model, isVideo, resId, aspectId, durId) {
@@ -2596,7 +2633,7 @@ V._onBatch=async function(){
       V.jobs.set(d.request_id, {
         scene: sh.scene, shot: sh.shot,
         status: d.status || "IN_QUEUE", videoUrl: null,
-        model: V.model, attempts: 0,
+        model: V.model, provider: d.provider || sbInferProvider(V.model, null), attempts: 0,
         charLock: sh.char_lock || null,
       });
       V._startPoll(d.request_id, V.model);
@@ -2655,13 +2692,16 @@ V._startPoll=function(rid,model){
     }
     try{
       const pollHdrs=window.hdrs?await window.hdrs():{"Content-Type":"application/json"};
-      const r=await fetch(PROXY,{method:"POST",headers:pollHdrs,body:JSON.stringify({action:"result",request_id:rid,model})});
-      if(!r.ok){vlog("Poll HTTP "+r.status+" — keep retrying");return}
-      const d=await r.json();
       const job=V.jobs.get(rid);
       if(!job){clearInterval(iv);V.polls.delete(rid);return}
+      const pollModel=job.model||model;
+      const pollProv=job.provider||sbInferProvider(pollModel,null);
+      const r=await fetch(PROXY,{method:"POST",headers:pollHdrs,body:JSON.stringify(sbResultPayload(rid,pollModel,pollProv))});
+      if(!r.ok){vlog("Poll HTTP "+r.status+" — keep retrying");return}
+      const d=await r.json();
+      if(!job){clearInterval(iv);V.polls.delete(rid);return}
       const st=pickStatus(d);
-      const url=pickVideoUrl(d);
+      const url=mhAcceptVideoUrl(pickVideoUrl(d));
       vlog("Poll",rid.slice(0,8),"status:",st,"url:",url?"yes":"no");
       if(url){
         job.videoUrl=url;job.status="COMPLETED";
@@ -3626,9 +3666,13 @@ function addCharacterPhoto(charName, model, photoData) {
   p = ensureProjectAssets(p);
   if (!p.assets.characterPhotos[charName]) p.assets.characterPhotos[charName] = {};
   if (!p.assets.characterPhotos[charName][model]) p.assets.characterPhotos[charName][model] = [];
+  if (!photoData.url || sbIsPlaceholderUrl(photoData.url)) {
+    console.warn('[addCharacterPhoto] rejected placeholder/missing url for', charName);
+    return;
+  }
   p.assets.characterPhotos[charName][model].push({
     id: 'photo_' + Date.now(),
-    url: photoData.url || 'https://picsum.photos/seed/' + charName + Date.now() + '/512/512',
+    url: photoData.url,
     prompt: photoData.prompt || '',
     timestamp: Date.now(),
     ...photoData
@@ -3696,12 +3740,13 @@ window.removeLocationPhoto = removeLocationPhoto;
 
 function addVideoClip(model, sceneKey, shotKey, takeKey, videoData) {
   const p = projectLoad(); if (!p) return;
+  if (!videoData || !videoData.url || sbIsPlaceholderUrl(videoData.url)) return;
   if (!p.assets.videos[model]) p.assets.videos[model] = {};
   if (!p.assets.videos[model][sceneKey]) p.assets.videos[model][sceneKey] = {};
   if (!p.assets.videos[model][sceneKey][shotKey]) p.assets.videos[model][sceneKey][shotKey] = {};
   p.assets.videos[model][sceneKey][shotKey][takeKey] = {
     id: 'vid_' + Date.now(),
-    url: videoData.url || 'https://picsum.photos/seed/video' + Date.now(),
+    url: videoData.url,
     prompt: videoData.prompt || '',
     timestamp: Date.now(),
     notes: videoData.notes || 'baseline take',
@@ -5916,7 +5961,7 @@ async function mhRunSingleJob(j,model){
       console.error('[mh submit fail]',r.status,d);
       mhRenderGenProgress();return;
     }
-    j.requestId=d.request_id;j.status='poll';j.model=model;j.startedAt=Date.now();mhPersistPendingJobs();mhRenderGenProgress();
+    j.requestId=d.request_id;j.status='poll';j.model=model;j.provider=d.provider||sbInferProvider(model,d.provider);j.startedAt=Date.now();mhPersistPendingJobs();mhRenderGenProgress();
     const jobKey=j.sceneIdx+'-'+j.shotIdx;
     mhRegisterGenCancel(jobKey,j.requestId);
     mhUpdateShotCancelButton(jobKey,true);
@@ -5933,14 +5978,13 @@ async function mhRunSingleJob(j,model){
       }
       await mhSleepWhilePolling(5000,jobKey);
       try{
-        const pr=await fetch(sbVideoProxy(),{method:'POST',headers:h,body:JSON.stringify({action:'status',request_id:j.requestId})});
+        const pr=await fetch(sbVideoProxy(),{method:'POST',headers:h,body:JSON.stringify(sbPollPayload(j.requestId,j.model||model,j.provider))});
         const pd=await pr.json();
         const stat=mhNormalizeVideoStatus(pd.status||pd.state||(pd.data&&pd.data.status));
         if(stat==='COMPLETED'){
-          // Fetch result
-          const rr=await fetch(sbVideoProxy(),{method:'POST',headers:h,body:JSON.stringify({action:'result',request_id:j.requestId})});
+          const rr=await fetch(sbVideoProxy(),{method:'POST',headers:h,body:JSON.stringify(sbResultPayload(j.requestId,j.model||model,j.provider))});
           const rd=await rr.json();
-          j.videoUrl=rd.video_url||rd.url||(rd.video&&rd.video.url);
+          j.videoUrl=mhAcceptVideoUrl(mhExtractVideoFromResponse(rd));
           if(rd.provider)j.provider=rd.provider;
           if(j.videoUrl){
             j.status='done';mhPersistClips();mhPersistPendingJobs();
@@ -6155,6 +6199,15 @@ function mhRenderGenProgress(){
 function mhEnsureGenState() {
   if (!_mhGenState) _mhGenState = { running: false, jobs: [] };
   if (!_mhGenState.jobs) _mhGenState.jobs = [];
+  (_mhGenState.jobs || []).forEach(j => {
+    if (j.videoUrl && !mhIsRealVideoUrl(j.videoUrl, j) && !j.localGenerated) {
+      j.videoUrl = null;
+      if (j.status === 'done') {
+        j.status = 'fail';
+        j.error = j.error || 'Removed invalid placeholder video — configure API keys and regenerate.';
+      }
+    }
+  });
 }
 
 function mhUpsertGenJob(si, shi, patch) {
@@ -6169,10 +6222,10 @@ function mhUpsertGenJob(si, shi, patch) {
 }
 
 function mhIsRealVideoUrl(url, job) {
-  if (!url) return false;
+  if (!url || sbIsPlaceholderUrl(url)) return false;
   if (job && job.localGenerated) return false;
   if (url.startsWith('data:image/')) return false;
-  return true;
+  return sbIsVideoMediaUrl(url);
 }
 
 function mhIsJobGenerating(j) {
@@ -6256,11 +6309,14 @@ function mhClipMediaHtml(j) {
   if (!j || !j.videoUrl) return '';
   const src = esc(j.videoUrl);
   const isReal = mhIsRealVideoUrl(j.videoUrl, j);
+  if (j.localGenerated && !String(j.videoUrl).startsWith('data:')) {
+    return '<img src="' + src + '" alt="local preview" style="width:100%;display:block;background:#000;aspect-ratio:16/9;object-fit:cover;border-bottom:1px solid var(--border)"/>';
+  }
   if (isReal && !String(j.videoUrl).startsWith('data:')) {
     return '<video src="' + src + '" controls playsinline preload="metadata" referrerpolicy="no-referrer" style="width:100%;display:block;background:#000;aspect-ratio:16/9;object-fit:cover" onerror="this.style.display=\'none\';var n=this.nextElementSibling;if(n)n.style.display=\'block\'"></video>' +
       '<div style="display:none;padding:10px;background:#111;border:1px solid var(--border);border-radius:6px;font-size:11px;color:var(--dim)">Inline preview blocked — <a href="' + src + '" target="_blank" rel="noopener" style="color:var(--gold)">open video in new tab</a> or use Download below.</div>';
   }
-  return '<img src="' + src + '" alt="clip preview" style="width:100%;display:block;background:#000;aspect-ratio:16/9;object-fit:cover;border-bottom:1px solid var(--border)"/>';
+  return '<div style="padding:10px;background:#1a0a0a;border:1px solid rgba(239,68,68,0.35);border-radius:6px;font-size:11px;color:#fca5a5">Invalid or placeholder video URL — generation did not return a real .mp4. Check API keys and retry.</div>';
 }
 
 function mhRenderShotClipPreview(key) {
@@ -6307,7 +6363,7 @@ function mhRenderGenClipsGallery() {
   const inner = document.getElementById('mhGenClipsGalleryInner');
   if (!grid || !inner) { mhRenderClipsGridLegacy(); return; }
   mhEnsureGenState();
-  const jobs = (_mhGenState.jobs || []).filter(j => j.videoUrl).sort((a, b) =>
+  const jobs = (_mhGenState.jobs || []).filter(j => j.videoUrl && (mhIsRealVideoUrl(j.videoUrl, j) || j.localGenerated)).sort((a, b) =>
     a.sceneIdx !== b.sceneIdx ? a.sceneIdx - b.sceneIdx : a.shotIdx - b.shotIdx);
   if (!jobs.length) { grid.style.display = 'none'; return; }
   grid.style.display = 'block';
@@ -7174,14 +7230,22 @@ window.mhCancelActiveGeneration = mhCancelActiveGeneration;
 function mhNormalizeVideoStatus(st) {
   const s = String(st || '').toUpperCase();
   if (s === 'COMPLETED' || s === 'SUCCESS' || s === 'SUCCEEDED' || s === 'DONE' || s === 'FINISHED') return 'COMPLETED';
-  if (s === 'FAILED' || s === 'ERROR' || s === 'CANCELLED' || s === 'CANCELED') return 'FAILED';
+  if (s === 'FAILED' || s === 'ERROR' || s === 'CANCELLED' || s === 'CANCELED' || s === 'EXPIRED') return 'FAILED';
+  if (s === 'PENDING' || s === 'PROCESSING' || s === 'IN_PROGRESS' || s === 'IN_QUEUE' || s === 'SUBMITTED' || s === 'CREATED') return 'PROCESSING';
   return 'PROCESSING';
 }
+function mhAcceptVideoUrl(url, job) {
+  if (!url || sbIsPlaceholderUrl(url)) return null;
+  if (job && job.localGenerated) return url;
+  if (sbIsVideoMediaUrl(url)) return url;
+  return null;
+}
 
-async function mhPollVideoUntilDone(requestId, headers, shotKey, model) {
+async function mhPollVideoUntilDone(requestId, headers, shotKey, model, provider) {
   const h = headers || (window.hdrs ? await window.hdrs() : { 'Content-Type': 'application/json' });
   const started = Date.now();
   const maxWait = sbMaxPollMs(model);
+  const prov = provider || sbInferProvider(model, null);
   let polls = 0;
   while (Date.now() - started < maxWait) {
     if (shotKey && mhIsGenCancelled(shotKey)) throw new Error(MH_GEN_CANCELLED_ERR);
@@ -7189,7 +7253,7 @@ async function mhPollVideoUntilDone(requestId, headers, shotKey, model) {
     polls++;
     if (shotKey) {
       const [psi, pshi] = shotKey.split('-').map(Number);
-      mhUpsertGenJob(psi, pshi, { status: 'poll', requestId });
+      mhUpsertGenJob(psi, pshi, { status: 'poll', requestId, provider: prov, model });
       mhRenderShotClipPreview(shotKey);
       mhSetShotGenButton(shotKey, 'generating');
     }
@@ -7199,13 +7263,13 @@ async function mhPollVideoUntilDone(requestId, headers, shotKey, model) {
       const pr = await fetch(sbVideoProxy(), {
         method: 'POST',
         headers: h,
-        body: JSON.stringify({ action: 'status', request_id: requestId })
+        body: JSON.stringify(sbPollPayload(requestId, model, prov))
       });
       pd = await pr.json().catch(() => ({}));
       stat = mhNormalizeVideoStatus(pd.status || pd.state || (pd.data && pd.data.status));
-      const statusUrl = mhExtractVideoFromResponse(pd);
+      const statusUrl = mhAcceptVideoUrl(mhExtractVideoFromResponse(pd));
       if (statusUrl && stat === 'COMPLETED') {
-        return { videoUrl: statusUrl, provider: pd.provider || 'wavespeed' };
+        return { videoUrl: statusUrl, provider: pd.provider || prov };
       }
       if (stat === 'FAILED') {
         throw new Error(pd.error || pd.message || (pd.data && pd.data.error) || (pd.raw && pd.raw.data && pd.raw.data.error) || 'provider failed');
@@ -7218,13 +7282,13 @@ async function mhPollVideoUntilDone(requestId, headers, shotKey, model) {
       const rr = await fetch(sbVideoProxy(), {
         method: 'POST',
         headers: h,
-        body: JSON.stringify({ action: 'result', request_id: requestId })
+        body: JSON.stringify(sbResultPayload(requestId, model, prov))
       });
       const rd = await rr.json().catch(() => ({}));
-      const resultUrl = mhExtractVideoFromResponse(rd);
+      const resultUrl = mhAcceptVideoUrl(mhExtractVideoFromResponse(rd));
       const resultStat = mhNormalizeVideoStatus(rd.status || (rd.raw && rd.raw.data && rd.raw.data.status) || stat);
-      if (resultUrl && (resultStat === 'COMPLETED' || /^https?:\/\//i.test(resultUrl))) {
-        return { videoUrl: resultUrl, provider: rd.provider || pd.provider || 'wavespeed' };
+      if (resultUrl && resultStat === 'COMPLETED') {
+        return { videoUrl: resultUrl, provider: rd.provider || pd.provider || prov };
       }
       if (resultStat === 'FAILED') {
         throw new Error(rd.error || rd.message || (rd.raw && rd.raw.data && rd.raw.data.error) || 'provider failed');
@@ -7245,7 +7309,8 @@ async function mhStartBackgroundPoll(key, requestId, model) {
   const [si, shi] = key.split('-').map(Number);
   try {
     const h = window.hdrs ? await window.hdrs() : { 'Content-Type': 'application/json' };
-    const polled = await mhPollVideoUntilDone(requestId, h, key, model);
+    const jobRef = mhGetShotJob(si, shi);
+    const polled = await mhPollVideoUntilDone(requestId, h, key, model, jobRef && jobRef.provider);
     mhUpsertGenJob(si, shi, {
       status: 'done',
       videoUrl: polled.videoUrl,
@@ -7755,72 +7820,49 @@ async function generateCharacterPhotoForBox(charName) {
   const p = projectLoad();
   if (!p || !p.script) { alert('Lock a script first.'); return; }
 
-  // Read the chosen photo model (5 options). Internal picture gen uses a model-appropriate default for aspect/res.
   const photoSel = document.getElementById('photoModelSelect');
   const model = (photoSel && photoSel.value) ? photoSel.value : 'flux-xai';
   const pCfg = PHOTO_MODELS[model] || PHOTO_MODELS['flux-xai'];
-  const photoAspect = pCfg.aspectRatios[0];
-  const photoRes = pCfg.resolutions[0];
 
   let baseDesc = (p.characterBible || []).find(c => c.name === charName)?.description || 'character portrait';
   const charPoints = (_mhApprovedPoints.characters && _mhApprovedPoints.characters[charName]) || [];
   const pointsStr = charPoints.length ? ' | key traits: ' + charPoints.slice(0,4).join('; ') : '';
-  let promptUsed = baseDesc + pointsStr + ' -- cinematic still, high detail, consistent with locked character bible';
+  const promptUsed = baseDesc + pointsStr + ' -- cinematic still, high detail, consistent with locked character bible';
 
-  const isLocal = (location.protocol === 'file:') || (location.hostname === 'localhost') || (location.hostname === '127.0.0.1');
   const refImgsForPic = [];
   try {
     const existing = (p.assets && p.assets.characterPhotos && p.assets.characterPhotos[charName]) || {};
     Object.keys(existing).forEach(m => {
-      (existing[m] || []).slice(0,1).forEach(ph => { if (ph && ph.url) refImgsForPic.push({name: charName, url: ph.url}); });
+      (existing[m] || []).slice(0,1).forEach(ph => { if (ph && ph.url && !sbIsPlaceholderUrl(ph.url)) refImgsForPic.push({name: charName, url: ph.url}); });
     });
   } catch(e){ /* non-fatal */ }
 
-  // Local bridge generates images (ComfyUI T2I when GPU available, else Pillow reference cards).
-  let finalPhotoUrl = null;
-  let finalPromptForPhoto = promptUsed;
-  let picProvider = 'shotbreak-local';
-  const picProviderSel = (document.getElementById('mhProvider') ? document.getElementById('mhProvider').value : 'grok-imagine');
   try {
-    const h = (window.hdrs ? await window.hdrs() : {'Content-Type': 'application/json'});
-    const picPayload = {
-      action: 'generate_picture',
-      type: 'character',
+    const d = await sbGenerateCharacterPicture({
       name: charName,
       desc: baseDesc,
       prompt: promptUsed,
       points: charPoints,
       location: p.location || {},
       referenceImages: refImgsForPic,
-      model: model,
-      aspect_ratio: photoAspect,
-      resolution: photoRes,
-      provider: picProviderSel
-    };
-    const r = await fetch(sbVideoProxy(), {method: 'POST', headers: h, body: JSON.stringify(picPayload)});
-    const d = await r.json();
-    if (!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
-    if (d && d.prompt) finalPromptForPhoto = d.prompt;
-    if (d && (d.url || d.demo_url)) finalPhotoUrl = d.url || d.demo_url;
-    if (d && d.provider) picProvider = d.provider;
+      model,
+      aspect_ratio: pCfg.aspectRatios[0],
+      resolution: pCfg.resolutions[0]
+    });
+    addCharacterPhoto(charName, model, {
+      url: d.url,
+      prompt: d.prompt || promptUsed,
+      model,
+      usedPoints: charPoints,
+      grokDirected: true,
+      visionUsed: refImgsForPic.length > 0,
+      provider: d.provider || sbInferProvider(model, null)
+    });
+    renderCharacterPhotos(charName);
+    alert('✅ Photo for ' + charName + ' using ' + model + ' is DONE!\nProvider: ' + (d.provider || 'grok-imagine'));
   } catch(e) {
-    alert('Image generation failed: ' + (e.message || e) + '\nIs the local bridge running on port 3456?');
-    return;
+    alert('Image generation failed: ' + (e.message || e));
   }
-
-  addCharacterPhoto(charName, model, {
-    url: finalPhotoUrl,
-    prompt: finalPromptForPhoto,
-    model,
-    usedPoints: charPoints,
-    localGenerated: isLocal,
-    grokDirected: true,
-    visionUsed: refImgsForPic.length > 0,
-    provider: picProvider
-  });
-
-  renderCharacterPhotos(charName);
-  alert('✅ Photo for ' + charName + ' using ' + model + ' is DONE!\nProvider: ' + picProvider + (picProvider === 'comfyui-local' ? ' (real ComfyUI T2I)' : ' (reference card — connect ComfyUI for real pixels)') + '\nThumbnail updated below.');
 }
 
 // NEW: Location photo adder (for coherence matching, lives in Characters tab)
@@ -7840,38 +7882,34 @@ async function addLocationPhoto() {
   const locModel = (document.getElementById('photoModelSelect') ? document.getElementById('photoModelSelect').value : 'wan-2.7');
   const lCfg = PHOTO_MODELS[locModel] || PHOTO_MODELS['wan-2.7'];
 
-  let finalLocUrl = null;
-  let finalLocPrompt = desc;
-  let locProvider = 'shotbreak-local';
   try {
-    const h = (window.hdrs ? await window.hdrs() : {'Content-Type': 'application/json'});
-    const locPayload = {
-      action: 'generate_picture',
+    const d = await sbGenerateCharacterPicture({
       type: 'location',
       name: 'location-plate',
       desc,
+      prompt: desc,
       location: p.location || {},
       model: locModel,
       aspect_ratio: lCfg.aspectRatios[0],
       resolution: lCfg.resolutions[0],
       provider: locProviderSel
-    };
-    const r = await fetch(sbVideoProxy(), {method:'POST', headers:h, body:JSON.stringify(locPayload)});
-    const d = await r.json();
-    if (!r.ok || d.error) throw new Error(d.error || ('HTTP ' + r.status));
-    if (d && d.prompt) finalLocPrompt = d.prompt;
-    if (d && (d.url || d.demo_url)) finalLocUrl = d.url || d.demo_url;
-    if (d && d.provider) locProvider = d.provider;
+    });
+    p.assets.locationPhotos.push({
+      url: d.url,
+      prompt: d.prompt || desc,
+      model: locModel,
+      ts: Date.now(),
+      grokDirected: true,
+      provider: d.provider || sbInferProvider(locModel, null)
+    });
   } catch(e) {
-    alert('Location plate failed: ' + (e.message || e) + '\nIs the local bridge running on port 3456?');
+    alert('Location plate failed: ' + (e.message || e));
     return;
   }
-
-  p.assets.locationPhotos.push({ url: finalLocUrl, prompt: finalLocPrompt, model: locModel, ts: Date.now(), localGenerated: isLocal, grokDirected: true, provider: locProvider });
   try { localStorage.setItem('sb_project', JSON.stringify(p)); } catch(e){}
 
   renderLocationPhotos();
-  alert('✅ Location plate generated using ' + locModel + ' is DONE!\nProvider: ' + locProvider + (locProvider === 'comfyui-local' ? ' (real ComfyUI T2I)' : ' (reference card — connect ComfyUI for real pixels)') + '\nIt appears in the Location Photo Library.');
+  alert('✅ Location plate generated using ' + locModel + ' is DONE!\nIt appears in the Location Photo Library.');
 }
 
 function renderLocationPhotos() {
@@ -8611,7 +8649,8 @@ function addCharToShot(key) {
     } else {
       // fallback to placeholder or URL
       const photoUrl = prompt('Photo URL (or leave blank for placeholder):', '');
-      const photo = photoUrl || `https://picsum.photos/seed/${name.replace(/\s/g,'')}${Date.now()}/52/52`;
+      if (!photoUrl) { alert('Enter a photo URL or upload a file.'); return; }
+      const photo = photoUrl;
       if (!_shotUI[key]) _shotUI[key] = {chars:[]};
       _shotUI[key].chars.push({name, photo});
       buildPerShotDetailBoxes();
@@ -8725,12 +8764,15 @@ async function generateVideoForShot(key, btn, opts) {
       const modelUsed = payload.model || 'unknown';
       submittedRequestId = d.request_id || null;
       if (entry && submittedRequestId) entry.requestId = submittedRequestId;
+      const submitProvider = d.provider || sbInferProvider(modelUsed, null);
+      const immediateUrl = mhAcceptVideoUrl(d.video_url || mhExtractVideoFromResponse(d));
       const job = mhUpsertGenJob(si, shi, {
         prompt: finalPromptForVideo,
-        status: d.video_url ? 'done' : 'poll',
+        status: immediateUrl ? 'done' : 'poll',
         requestId: submittedRequestId,
-        videoUrl: d.video_url || null,
+        videoUrl: immediateUrl,
         model: modelUsed,
+        provider: submitProvider,
         localGenerated: false,
         error: null,
         startedAt: Date.now()
@@ -8745,7 +8787,7 @@ async function generateVideoForShot(key, btn, opts) {
         mhSetShotGenButton(key, 'generating', '⚙ Generating… (' + modelUsed + ')');
         job.status = 'poll';
         mhRenderShotClipPreview(key);
-        const polled = await mhPollVideoUntilDone(d.request_id, h, key, videoModel);
+        const polled = await mhPollVideoUntilDone(d.request_id, h, key, videoModel, submitProvider);
         mhUpsertGenJob(si, shi, {
           status: 'done',
           videoUrl: polled.videoUrl,

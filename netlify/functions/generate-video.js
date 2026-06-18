@@ -113,17 +113,21 @@ function extractWaveSpeedOutput(result) {
 // Auth uses XAI_API_KEY (same as agents). Supports reference images for I2I / I2V with high cohesion.
 function callGrokImagine(path, payload, method = 'POST') {
   return new Promise((resolve, reject) => {
-    const data = Buffer.from(JSON.stringify(payload || {}), 'utf8');
+    const isGet = method.toUpperCase() === 'GET';
+    const data = isGet ? null : Buffer.from(JSON.stringify(payload || {}), 'utf8');
+    const headers = {
+      'Authorization': 'Bearer ' + (process.env.XAI_API_KEY || process.env.GROK_API_KEY || ''),
+    };
+    if (!isGet) {
+      headers['Content-Type'] = 'application/json';
+      headers['Content-Length'] = data.length;
+    }
     const options = {
       hostname: 'api.x.ai',
       port: 443,
       path,
       method,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + (process.env.XAI_API_KEY || process.env.GROK_API_KEY || ''),
-        'Content-Length': data.length
-      }
+      headers
     };
 
     const req = https.request(options, (res) => {
@@ -132,63 +136,135 @@ function callGrokImagine(path, payload, method = 'POST') {
       res.on('end', () => {
         try {
           const json = JSON.parse(body);
+          if (res.statusCode >= 400) {
+            const msg = (json.error && (json.error.message || json.error)) || json.message || body;
+            reject(new Error('XAI API ' + res.statusCode + ': ' + msg));
+            return;
+          }
           resolve(json);
         } catch (e) {
+          if (res.statusCode >= 400) {
+            reject(new Error('XAI API ' + res.statusCode + ': ' + body));
+            return;
+          }
           resolve({ raw: body, status: res.statusCode });
         }
       });
     });
     req.on('error', reject);
-    req.write(data);
+    if (data) req.write(data);
     req.end();
   });
 }
 
-async function submitGrokImagineVideo({ prompt, duration, aspect_ratio, character_image_url, shotKey, location, model }) {
-  const imaginePayload = {
-    model: 'grok-imagine-video', // or grok-imagine-video-v1.5 etc. — can be overridden via env if needed
-    prompt,
-    duration: duration || 6,
-    aspect_ratio: aspect_ratio || '16:9',
-    resolution: '720p'
-  };
-  if (character_image_url) {
-    imaginePayload.image = { url: character_image_url }; // primary ref for I2V coherence
-    // Support extra refs if we ever pass an array, but for now single main char ref + prompt describes others
+function normalizeGrokVideoStatus(st) {
+  const s = String(st || '').toLowerCase();
+  if (s === 'done' || s === 'completed' || s === 'success' || s === 'succeeded') return 'COMPLETED';
+  if (s === 'failed' || s === 'error' || s === 'expired' || s === 'cancelled' || s === 'canceled') return 'FAILED';
+  if (s === 'pending' || s === 'processing' || s === 'in_progress' || s === 'queued' || s === 'submitted') return 'PROCESSING';
+  return 'PROCESSING';
+}
+
+function normalizeXaiResolution(res) {
+  if (!res) return '1k';
+  const r = String(res).toLowerCase().replace(/\s/g, '');
+  if (r === '1k' || r === '1024' || r === '1024x1024' || r === '720p') return '1k';
+  if (r === '2k' || r === '1080p') return '2k';
+  return r;
+}
+
+function isGrokVideoJob(request_id, provider, model) {
+  if (provider === 'grok-imagine' || provider === 'xai') return true;
+  if (model && String(model).includes('grok')) return true;
+  if (request_id && String(request_id).startsWith('grok_')) return true;
+  return false;
+}
+
+function extractGrokImageUrl(res) {
+  if (!res) throw new Error('Empty XAI image response');
+  if (res.error) {
+    const err = res.error.message || res.error.code || JSON.stringify(res.error);
+    throw new Error('XAI image error: ' + err);
   }
-  if (shotKey) imaginePayload.shot_key = shotKey;
-  if (location) imaginePayload.location = location;
+  const url = res.url
+    || (Array.isArray(res.data) && res.data[0] && res.data[0].url)
+    || (res.images && res.images[0] && (res.images[0].url || res.images[0]))
+    || null;
+  if (!url || typeof url !== 'string') {
+    throw new Error('XAI image API returned no URL — check XAI_API_KEY and model grok-imagine-image-quality');
+  }
+  return url;
+}
+
+function extractGrokVideoUrl(res) {
+  if (!res) return null;
+  if (res.video && res.video.url) return res.video.url;
+  return res.video_url || res.url || (res.outputs && res.outputs[0]) || (res.data && res.data.video_url) || null;
+}
+
+async function submitGrokImagineVideo({ prompt, duration, aspect_ratio, character_image_url, resolution }) {
+  const imaginePayload = {
+    model: 'grok-imagine-video',
+    prompt,
+    duration: Math.min(15, Math.max(1, Number(duration) || 6)),
+    aspect_ratio: aspect_ratio || '16:9',
+    resolution: resolution || '720p'
+  };
+  if (character_image_url && isSafeUrl(character_image_url)) {
+    imaginePayload.image = { url: character_image_url };
+  }
 
   const res = await callGrokImagine('/v1/videos/generations', imaginePayload);
-  // Normalize to the shape our client expects (request_id + status)
-  const rid = res.id || res.request_id || res.requestId || ('grok_' + Date.now());
-  return { request_id: rid, status: res.status || 'SUBMITTED', raw: res };
+  const rid = res.request_id || res.id || res.requestId;
+  if (!rid) throw new Error('XAI video submit returned no request_id');
+  return { request_id: rid, status: 'SUBMITTED', provider: 'grok-imagine', raw: res };
 }
 
 async function getGrokImagineVideoStatus(request_id) {
   const res = await callGrokImagine(`/v1/videos/${request_id}`, null, 'GET');
-  return { request_id, status: res.status || res.state || 'IN_PROGRESS', raw: res };
+  const st = normalizeGrokVideoStatus(res.status || res.state);
+  const video_url = st === 'COMPLETED' ? extractGrokVideoUrl(res) : null;
+  if (st === 'FAILED' && res.error) {
+    return {
+      request_id,
+      status: st,
+      error: res.error.message || res.error.code || 'Grok video failed',
+      provider: 'grok-imagine',
+      raw: res
+    };
+  }
+  return { request_id, status: st, video_url, provider: 'grok-imagine', raw: res };
 }
 
 async function getGrokImagineVideoResult(request_id) {
   const res = await callGrokImagine(`/v1/videos/${request_id}`, null, 'GET');
-  // Try common shapes for the final asset
-  const video_url = res.video_url || res.url || (res.video && res.video.url) || (res.outputs && res.outputs[0]) || (res.data && res.data.video_url);
-  return { request_id, video_url, status: res.status || 'COMPLETED', raw: res };
+  const st = normalizeGrokVideoStatus(res.status || res.state);
+  const video_url = extractGrokVideoUrl(res);
+  if (st === 'FAILED') {
+    return {
+      request_id,
+      video_url: null,
+      status: st,
+      error: (res.error && (res.error.message || res.error.code)) || 'Grok video generation failed',
+      provider: 'grok-imagine',
+      raw: res
+    };
+  }
+  return { request_id, video_url, status: st, provider: 'grok-imagine', raw: res };
 }
 
-async function generateGrokImagineImage({ prompt, model, aspect_ratio, resolution, character_image_url, name }) {
+async function generateGrokImagineImage({ prompt, model, aspect_ratio, resolution, character_image_url }) {
   const imgPayload = {
     model: model || 'grok-imagine-image-quality',
     prompt,
   };
   if (aspect_ratio) imgPayload.aspect_ratio = aspect_ratio;
-  if (resolution) imgPayload.resolution = resolution;
-  if (character_image_url) {
-    imgPayload.image = { url: character_image_url }; // for image editing / reference based gen
+  if (resolution) imgPayload.resolution = normalizeXaiResolution(resolution);
+  if (character_image_url && isSafeUrl(character_image_url)) {
+    imgPayload.image = { url: character_image_url };
   }
   const res = await callGrokImagine('/v1/images/generations', imgPayload);
-  const url = res.url || res.data?.[0]?.url || res.images?.[0]?.url || 'https://picsum.photos/seed/grokimg' + Date.now() + '/512/512';
+  const url = extractGrokImageUrl(res);
   return { url, prompt, grok: true, raw: res };
 }
 
@@ -464,21 +540,26 @@ exports.handler = async function (event) {
           character_image_url: picImages[0] ? picImages[0].url : null,
           name
         });
-        return {
-          statusCode: 200,
-          headers: CORS,
-          body: JSON.stringify({
-            prompt: imagePrompt,
-            url: imgRes.url,
-            demo_url: imgRes.url,
-            grok_enriched: true,
-            vision_used: picImages.length > 0,
-            model: photoModel,
-            note: 'Real pixels from Flux/Grok Imagine via XAI (vision-enriched prompt + refs).'
-          })
-        };
+        return jsonResponse(event, 200, {
+          prompt: imagePrompt,
+          url: imgRes.url,
+          grok_enriched: true,
+          vision_used: picImages.length > 0,
+          model: photoModel,
+          provider: 'grok-imagine',
+          note: 'Real pixels from Grok Imagine via XAI (vision-enriched prompt + refs).'
+        });
       } catch (e) {
-        console.error('XAI photo gen failed, falling to demo', e);
+        console.error('XAI photo gen failed', e);
+        if (!hasWsKey) {
+          return jsonResponse(event, 502, {
+            error: 'Grok image generation failed',
+            detail: e.message || String(e),
+            model: photoModel,
+            provider: 'grok-imagine',
+            hint: 'Verify XAI_API_KEY is set in Netlify (Deploy + Preview) and the account has Imagine access.'
+          });
+        }
       }
     }
 
@@ -499,40 +580,38 @@ exports.handler = async function (event) {
         };
         const wsPath = '/api/v3/' + getWaveSpeedPath(photoModel, !!picImages.length);
         const result = await callWaveSpeed(wsPath, wsBody);
-        const url = (result.data && result.data.outputs && result.data.outputs[0]) || result.url || result.image_url || result.data?.url || 'https://picsum.photos/seed/ws' + Date.now() + '/512/512';
-        const wsReqId = result.data && result.data.id ? result.data.id : null;
-        return {
-          statusCode: 200,
-          headers: CORS,
-          body: JSON.stringify({
-            prompt: imagePrompt,
-            url,
-            demo_url: url,
-            grok_enriched: true,
-            vision_used: picImages.length > 0,
+        const url = (result.data && result.data.outputs && result.data.outputs[0]) || result.url || result.image_url || result.data?.url || null;
+        if (!url) {
+          return jsonResponse(event, 502, {
+            error: 'WaveSpeed photo returned no image URL',
             model: photoModel,
-            note: `Generated via ${photoModel} on WaveSpeed (params filtered to model support).`
-          })
-        };
+            provider: 'wavespeed',
+            raw: result
+          });
+        }
+        return jsonResponse(event, 200, {
+          prompt: imagePrompt,
+          url,
+          grok_enriched: true,
+          vision_used: picImages.length > 0,
+          model: photoModel,
+          provider: 'wavespeed',
+          note: `Generated via ${photoModel} on WaveSpeed.`
+        });
       } catch (e) {
         console.error('WaveSpeed photo failed', e);
       }
     }
 
-    // Final demo fallback (local or no keys)
-    const demoSeed = (name || 'plate').replace(/\s+/g,'').toLowerCase() + Date.now().toString(36).slice(-6);
-    return {
-      statusCode: 200,
-      headers: CORS,
-      body: JSON.stringify({
-        prompt: imagePrompt,
-        demo_url: 'https://picsum.photos/seed/' + demoSeed + '/512/512',
-        grok_enriched: true,
-        vision_used: picImages.length > 0,
-        model: photoModel,
-        note: 'High-quality local demo (configure keys for real ' + photoModel + '). Client enforces model-supported resolution/aspect/refs.'
-      })
-    };
+    return jsonResponse(event, 503, {
+      error: 'No image generation provider available',
+      detail: isXaiDirectPhoto
+        ? 'Set XAI_API_KEY for Grok/flux-xai photo models.'
+        : 'Set WAVESPEED_API_KEY for ' + photoModel + '.',
+      model: photoModel,
+      grok_enriched: !!imagePrompt,
+      vision_used: picImages.length > 0
+    });
   }
 
   // Upload stub so per-shot char photos (data URLs from +Add) can be turned into usable refs.
@@ -557,14 +636,12 @@ exports.handler = async function (event) {
     const hasWsKey = !!process.env.WAVESPEED_API_KEY;
     const hasGrokKey = !!(process.env.XAI_API_KEY || process.env.GROK_API_KEY);
 
-    // Demo fallback when no keys at all
     if (!hasWsKey && !hasGrokKey) {
-      const fakeId = (videoModel.includes('grok') ? 'grok_demo_' : 'ws_demo_') + Date.now();
-      return {
-        statusCode: 200,
-        headers: CORS,
-        body: JSON.stringify({ request_id: fakeId, status: 'SUBMITTED', model: videoModel })
-      };
+      return jsonResponse(event, 503, {
+        error: 'No video generation API keys configured',
+        detail: 'Set WAVESPEED_API_KEY and/or XAI_API_KEY in Netlify environment variables (Deploy + Preview).',
+        model: videoModel
+      });
     }
 
     try {
@@ -588,15 +665,13 @@ exports.handler = async function (event) {
           duration,
           aspect_ratio,
           character_image_url,
-          shotKey,
-          location,
-          model: 'grok-imagine-video'
+          resolution: body.resolution
         });
-        return {
-          statusCode: 200,
-          headers: CORS,
-          body: JSON.stringify({ ...grokRes, model: videoModel, note: 'Direct via XAI Grok Imagine' })
-        };
+        return jsonResponse(event, 200, {
+          ...grokRes,
+          model: videoModel,
+          note: 'Direct via XAI Grok Imagine'
+        });
       } else {
         // WaveSpeed for all other video models (Seedance 2.0 Turbo, Wan 2.7, Sora 2, Veo 3.1, Kling 3.0 Pro, etc.)
         // User-selected resolution/duration/aspect/refs forwarded as-is (no client pre-filtering).
@@ -644,9 +719,15 @@ exports.handler = async function (event) {
   }
 
   if (action === 'status' && request_id) {
-    const isGrokJob = request_id.startsWith('grok_');
-    if ((isGrokJob && ! (process.env.XAI_API_KEY || process.env.GROK_API_KEY)) || (!isGrokJob && !process.env.WAVESPEED_API_KEY) || request_id.includes('demo_')) {
-      return jsonResponse(event, 200, { request_id, status: 'COMPLETED', provider: isGrokJob ? 'grok-imagine' : 'wavespeed' });
+    const isGrokJob = isGrokVideoJob(request_id, body.provider, body.model || model);
+    if (request_id.includes('demo_')) {
+      return jsonResponse(event, 400, { request_id, status: 'FAILED', error: 'Demo job id — configure API keys and resubmit', provider: isGrokJob ? 'grok-imagine' : 'wavespeed' });
+    }
+    if (isGrokJob && !(process.env.XAI_API_KEY || process.env.GROK_API_KEY)) {
+      return jsonResponse(event, 503, { request_id, status: 'FAILED', error: 'XAI_API_KEY not configured', provider: 'grok-imagine' });
+    }
+    if (!isGrokJob && !process.env.WAVESPEED_API_KEY) {
+      return jsonResponse(event, 503, { request_id, status: 'FAILED', error: 'WAVESPEED_API_KEY not configured', provider: 'wavespeed' });
     }
     if (!isGrokJob && isFakeWaveSpeedId(request_id)) {
       return jsonResponse(event, 400, { request_id, status: 'FAILED', error: 'Invalid WaveSpeed job id — submit did not reach WaveSpeed', provider: 'wavespeed' });
@@ -702,10 +783,15 @@ exports.handler = async function (event) {
   }
 
   if (action === 'result' && request_id) {
-    const isGrokJob = request_id.startsWith('grok_');
-    if ((isGrokJob && !(process.env.XAI_API_KEY || process.env.GROK_API_KEY)) || (!isGrokJob && !process.env.WAVESPEED_API_KEY) || request_id.includes('demo_')) {
-      const seed = (isGrokJob ? 'grokdemo' : 'wsdemo') + (request_id || '') + (body && body.shotKey ? body.shotKey.replace(/[^a-z0-9]/gi,'') : '');
-      return jsonResponse(event, 200, { request_id, video_url: 'https://picsum.photos/seed/' + seed + '/1280/720', status: 'COMPLETED', provider: isGrokJob ? 'grok-imagine' : 'wavespeed', note: 'demo result (configure the corresponding key for real)' });
+    const isGrokJob = isGrokVideoJob(request_id, body.provider, body.model || model);
+    if (request_id.includes('demo_')) {
+      return jsonResponse(event, 400, { request_id, status: 'FAILED', error: 'Demo job id — configure API keys and resubmit', provider: isGrokJob ? 'grok-imagine' : 'wavespeed' });
+    }
+    if (isGrokJob && !(process.env.XAI_API_KEY || process.env.GROK_API_KEY)) {
+      return jsonResponse(event, 503, { request_id, status: 'FAILED', error: 'XAI_API_KEY not configured', provider: 'grok-imagine' });
+    }
+    if (!isGrokJob && !process.env.WAVESPEED_API_KEY) {
+      return jsonResponse(event, 503, { request_id, status: 'FAILED', error: 'WAVESPEED_API_KEY not configured', provider: 'wavespeed' });
     }
     if (!isGrokJob && isFakeWaveSpeedId(request_id)) {
       return jsonResponse(event, 400, { request_id, status: 'FAILED', error: 'Invalid WaveSpeed job id — submit did not reach WaveSpeed', provider: 'wavespeed' });
