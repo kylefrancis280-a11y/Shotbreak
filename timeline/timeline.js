@@ -108,12 +108,18 @@ function isClipReconstruction(text){
 }
 
 function updateScriptMeta(){
-  const meta=$('scriptMeta');
-  if(!meta)return;
   const text=scriptEditorText();
   const lines=text?text.split(/\r?\n/).length:0;
   const chars=text.length;
-  meta.textContent=lines+' lines · '+chars+' chars'+(state.clips.length?' · '+state.clips.length+' clips on timeline':'');
+  const summary=lines+' lines · '+chars+' chars'+(state.clips.length?' · '+state.clips.length+' clips':'');
+  const meta=$('scriptMeta');
+  if(meta)meta.textContent=summary;
+  const bar=$('scriptBarMeta');
+  if(bar){
+    if(!text.trim())bar.textContent='No screenplay yet — click ✎ Open script editor';
+    else if(isClipReconstruction(text))bar.textContent='⚠ Corrupted clip text — open editor & use + New script';
+    else bar.textContent=summary;
+  }
 }
 
 function renderScriptWarn(text){
@@ -151,10 +157,16 @@ function renderScriptEditor(){
 }
 
 function openScriptPanel(){
-  const panel=$('scriptPanel');
-  if(panel){panel.open=true;panel.scrollIntoView({behavior:'smooth',block:'nearest'})}
+  renderScriptEditor();
+  const modal=$('scriptModal');
+  if(modal)modal.classList.remove('hidden');
   const ta=$('scriptEditor');
   if(ta)setTimeout(()=>ta.focus(),120);
+}
+function closeScriptPanel(){
+  syncScriptFromEditor();
+  const modal=$('scriptModal');
+  if(modal)modal.classList.add('hidden');
 }
 
 function syncScriptFromEditor(){
@@ -629,9 +641,19 @@ function bindUI(){
   $('moreMenu').onclick=e=>e.stopPropagation();
   $('fileInput').onchange=e=>{const f=e.target.files[0];if(f)importFile(f).catch(err=>toast(err.message));e.target.value=''};
   $('btnImport').onclick=()=>$('fileInput').click();
-  $('btnPaste').onclick=()=>{openScriptPanel();toast('Paste screenplay in the Script panel, then Re-parse timeline')};
+  $('btnPaste').onclick=()=>{openScriptPanel();toast('Paste screenplay here, then Re-parse timeline')};
   const btnScript=$('btnScript');
   if(btnScript)btnScript.onclick=openScriptPanel;
+  const btnOpenScript=$('btnOpenScript');
+  if(btnOpenScript)btnOpenScript.onclick=openScriptPanel;
+  const btnBarImport=$('btnBarImport');
+  if(btnBarImport)btnBarImport.onclick=()=>$('fileInput').click();
+  const btnBarReparse=$('btnBarReparse');
+  if(btnBarReparse)btnBarReparse.onclick=()=>reparseScriptFromEditor().catch(e=>toast(e.message));
+  const btnCloseScript=$('btnCloseScript');
+  if(btnCloseScript)btnCloseScript.onclick=closeScriptPanel;
+  const scriptModal=$('scriptModal');
+  if(scriptModal)scriptModal.onclick=e=>{if(e.target===scriptModal)closeScriptPanel()};
   const btnEditLink=$('btnEditScriptLink');
   if(btnEditLink)btnEditLink.onclick=openScriptPanel;
   const btnReparse=$('btnReparseScript');

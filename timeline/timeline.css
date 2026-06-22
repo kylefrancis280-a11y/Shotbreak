@@ -63,7 +63,11 @@ button,input,select,textarea{font-family:inherit}
 
 /* ── main layout ── */
 .main{display:flex;flex:1;min-height:0}
-.workspace{flex:1;display:flex;flex-direction:column;min-width:0;border-right:1px solid var(--border);overflow:hidden}
+.workspace{flex:1;display:flex;flex-direction:column;min-width:0;border-right:1px solid var(--border);overflow-y:auto;overflow-x:hidden}
+.script-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;background:rgba(212,168,67,.08);border-bottom:1px solid rgba(212,168,67,.28);flex-shrink:0}
+.script-bar-meta{flex:1;min-width:160px;font-size:12px;color:var(--text2);font-family:var(--mono)}
+.script-modal-card{width:min(920px,96vw);max-height:92vh;display:flex;flex-direction:column}
+.script-editor-modal{flex:1;min-height:280px;max-height:55vh}
 
 /* ── timeline strip ── */
 .timeline-wrap{padding:12px 14px 8px;flex-shrink:0;background:var(--bg)}
