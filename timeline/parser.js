@@ -14,8 +14,8 @@ window.SBParser = (function(){
     const t=(l||'').trim();
     if(!t||t.length<2||t.length>40||isSH(t))return false;
     if(/^(FADE|CUT|DISSOLVE|SMASH|MATCH|IRIS|WIPE)/.test(t))return false;
-    const n=t.replace(/\s*\(.*\)\s*$/,'');
-    return n===n.toUpperCase()&&!/[.!?,;:]$/.test(n)&&!((/^\(/.test(t)&&/\)$/.test(t)));
+    if(/^\(/.test(t)&&/\)$/.test(t))return false;
+    return isCharCueLine(t);
   }
   function isPar(t){return /^\([^)]+\)$/.test(t)}
   function isTr(t){return /^(FADE IN|FADE OUT|CUT TO|DISSOLVE TO|SMASH CUT)/i.test(t)}
@@ -73,8 +73,18 @@ window.SBParser = (function(){
     'ABANDONED','WAREHOUSE','BUILDING','APARTMENT','HOUSE','OFFICE','FACTORY','ALLEY','STREET',
     'ROOM','HALLWAY','CORRIDOR','BASEMENT','ATTIC','GARAGE','KITCHEN','BEDROOM','ROOF','CEILING',
     'PARKING','FIELD','FOREST','BEACH','DESERT','HIGHWAY','ROAD','BRIDGE','TUNNEL','HOSPITAL',
-    'SCHOOL','CHURCH','STATION','AIRPORT','PRISON','COURTROOM','LOBBY','BAR','RESTAURANT','LAB'
+    'SCHOOL','CHURCH','STATION','AIRPORT','PRISON','COURTROOM','LOBBY','BAR','RESTAURANT','LAB',
+    'SLOWLY','QUICKLY','SUDDENLY','THEN','NOW','BACK','AWAY','DOWN','UP','OUT','OFF','ON','IN','AT','TO',
+    'RAIN','WATER','WIND','FIRE','SMOKE','THUNDER','LIGHTNING','SUN','MOON','SNOW','FOG','MIST','TIN',
+    'MEANWHILE','FINALLY','GRADUALLY','INSTANTLY','IMMEDIATELY','EVERYONE','SOMEBODY','SOMEONE',
+    'ANYONE','NOBODY','PEOPLE','MEN','WOMEN','CHILDREN','SOLDIERS','WARRIORS','GUARDS','OFFICERS',
+    'GERMAN','RUSSIAN','AMERICAN','BRITISH','FRENCH','VIKING','NORSE','ROMAN','POLICE','HORSES',
+    'STOP','LOOK','LISTEN','RUN','HELP','WAIT','YES','NO','OK','OKAY','DAMN','HELL',
+    'CLIFF','MOUNTAIN','RIVER','OCEAN','SEA','LAKE','VALLEY','CASTLE','SHIP','BOAT','DOOR','WALL',
+    'HAMMER','HAMMERS','DRIP','DRIPS','STEP','STEPS','EMERGE','EMERGES','LAUNCH','LAUNCHES',
+    'PUSH','PUSHES','RAISE','RAISING','DELIVERING','OPENING','SEQUENCE','WRITTEN','CREDITS'
   ]);
+  const NON_NAME_WORDS=CAP_FALSE_POS;
 
   function isLocationCaps(name){
     const LOC=new Set(['ABANDONED','WAREHOUSE','BUILDING','APARTMENT','HOUSE','OFFICE','FACTORY','ALLEY','STREET','ROOM','HALLWAY','CORRIDOR','BASEMENT','ATTIC','GARAGE','KITCHEN','BEDROOM','ROOF','CEILING','PARKING','FIELD','FOREST','BEACH','DESERT','HIGHWAY','ROAD','BRIDGE','TUNNEL','HOSPITAL','SCHOOL','CHURCH','STATION','AIRPORT','PRISON','COURTROOM','LOBBY','BAR','RESTAURANT','LAB','LOCATION','INTERIOR','EXTERIOR']);
@@ -88,12 +98,40 @@ window.SBParser = (function(){
     return raw.replace(/\s*\([^)]*\)\s*/g,'').replace(/\s*[-–—:]\s*$/,'').replace(/\s+/g,' ').trim().toUpperCase();
   }
 
-  function registerChar(chars,name,desc){
+  function isDescriptiveParen(desc){
+    const d=String(desc||'').trim();
+    if(!d||d.length<2)return false;
+    if(/^(v\.?o\.?|o\.?s\.?|o\.?c\.?|cont'?d|whispering|beat|pause|sighs|laughing|filtered|into radio|to camera|pre-?lap|offscreen)$/i.test(d))return false;
+    if(/^(to the|at the|from the|into the|over the|under the)\b/i.test(d))return false;
+    if(/\d/.test(d))return true;
+    if(/,/.test(d))return true;
+    if(d.split(/\s+/).length>=3)return true;
+    if(/\b(weathered|military|athletic|silver|hair|suit|sharp|eyes|old|young|tall|short|beard|scar|ex-|former|aged|burly|lean|pale|dark|blonde|brunette)\b/i.test(d))return true;
+    return false;
+  }
+
+  function isLikelyPersonName(name,opts){
+    opts=opts||{};
+    const cn=cleanCharName(name);
+    if(!cn||cn.length<2||cn.length>40)return false;
+    if(/^(INT|EXT|I\/E|INT\/EXT)\b/.test(cn))return false;
+    if(isLocationCaps(cn))return false;
+    const words=cn.split(/\s+/);
+    if(words.every(w=>NON_NAME_WORDS.has(w)))return false;
+    if(words.length===1){
+      if(NON_NAME_WORDS.has(words[0]))return false;
+      if(!opts.fromCue&&words[0].length<3)return false;
+    }else if(words.every(w=>NON_NAME_WORDS.has(w)||/^(JR|SR|II|III|IV)$/i.test(w))){
+      return false;
+    }
+    return true;
+  }
+
+  function registerChar(chars,name,desc,opts){
+    opts=opts||{};
     const cn=cleanCharName(name);
     if(!cn||cn.length<2||cn.length>40)return;
-    if([...cn.split(/\s+/)].every(w=>CAP_FALSE_POS.has(w)))return;
-    if(isLocationCaps(cn))return;
-    if(/^(INT|EXT|I\/E|INT\/EXT)\b/.test(cn))return;
+    if(!isLikelyPersonName(cn,{fromCue:!!opts.fromCue}))return;
     if(chars[cn]===undefined)chars[cn]=desc||'';
     else if(desc&&!chars[cn])chars[cn]=desc;
   }
@@ -109,18 +147,28 @@ window.SBParser = (function(){
     if(/[.!?,;:]$/.test(cuePart))return false;
     if(!/[A-Z]/.test(cuePart))return false;
     const words=cuePart.split(/\s+/);
-    if(words.every(w=>CAP_FALSE_POS.has(w)))return false;
-    return true;
+    if(words.every(w=>NON_NAME_WORDS.has(w)))return false;
+    if(words.length===1&&NON_NAME_WORDS.has(words[0]))return false;
+    return isLikelyPersonName(cuePart,{fromCue:true});
   }
 
   function looksLikeCharCue(name){
+    return isLikelyPersonName(name,{fromCue:true});
+  }
+
+  function filterCharacterMap(chars){
+    const out={};
+    Object.entries(chars||{}).forEach(([n,d])=>{
+      if(isLikelyPersonName(n,{fromCue:true}))out[cleanCharName(n)]=d;
+    });
+    return out;
+  }
+
+  function nameInBlob(name,blob){
     const cn=cleanCharName(name);
-    if(!cn||cn.length<2||cn.length>40)return false;
-    if(isLocationCaps(cn))return false;
-    if(/^(INT|EXT|I\/E|INT\/EXT)\b/.test(cn))return false;
-    const words=cn.split(/\s+/);
-    if(words.every(w=>CAP_FALSE_POS.has(w)))return false;
-    return true;
+    if(!cn)return false;
+    const esc=cn.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    return new RegExp('(?:^|[^A-Z])'+esc+'(?:[^A-Z]|$)').test(blob);
   }
 
   function countLines(t){return String(t||'').split('\n').filter(l=>l.trim()).length}
@@ -219,23 +267,30 @@ window.SBParser = (function(){
     return'';
   }
 
-  function extractActionLineName(t){
+  function extractActionLineName(t,known){
     if(!t||isSH(t)||isTr(t))return null;
-    const m=t.match(/^([A-Z][A-Z0-9 .'\-]{1,30}(?:\s+[A-Z][A-Z0-9 .'\-]{1,30})?)\s+(?=[a-z])/);
-    return m&&looksLikeCharCue(m[1])?m[1]:null;
+    const m=t.match(/^([A-Z][A-Z0-9 .'\-]{1,30}(?:\s+[A-Z][A-Z0-9 .'\-]{1,30}){0,2})\s+(?=[a-z])/);
+    if(!m||!isLikelyPersonName(m[1]))return null;
+    const cn=cleanCharName(m[1]);
+    const words=cn.split(/\s+/);
+    const paren=t.match(/^\S+(?:\s+\S+){0,2}\s*\(([^)]+)\)/);
+    if(paren&&isDescriptiveParen(paren[1]))return cn;
+    if(known&&known.has(cn))return cn;
+    if(words.length===1&&words[0].length>=4&&!NON_NAME_WORDS.has(words[0]))return cn;
+    if(words.length>=2&&words.every(w=>!NON_NAME_WORDS.has(w)))return cn;
+    return null;
   }
 
   function extractInlineCue(t){
     if(!t||isSH(t))return null;
     const m=t.match(/^([A-Z][A-Z0-9 .'\-]{1,30})(\s*\([^)]{0,80}\))?\s+(?=[(\[]|[a-z]["'])/);
-    if(!m||!looksLikeCharCue(m[1]))return null;
-    if(isCharCueLine(m[1]+(m[2]||'')))return{name:m[1],desc:''};
+    if(!m||!isCharCueLine(m[1]+(m[2]||'')))return null;
     const ci=(m[2]||'').match(/\(([^)]+)\)/);
-    const desc=ci&&ci[1]&&!/^(V\.?O\.?|O\.?S\.?|CONT'?D?|O\.?C\.?)$/i.test(ci[1].trim())?ci[1].trim():'';
+    const desc=ci&&ci[1]&&isDescriptiveParen(ci[1])?ci[1].trim():'';
     return{name:m[1],desc};
   }
 
-  /** Pull character names from screenplay cues, dialogue labels, and action intros. */
+  /** Pull character names from screenplay cues, dialogue labels, and verified action intros. */
   function extractCharactersFromText(text){
     const chars={};
     const norm=normalizeScriptText(text);
@@ -246,31 +301,39 @@ window.SBParser = (function(){
       const t=line.trim();
       if(!t){inDialogue=false;return;}
       const fountain=t.match(/^@([A-Za-z][A-Za-z0-9 .'\-]{1,35})$/);
-      if(fountain){registerChar(chars,fountain[1],'');inDialogue=true;return;}
+      if(fountain){registerChar(chars,fountain[1],'',{fromCue:true});inDialogue=true;return;}
       const inlineDlg=t.match(/^([A-Z][A-Z0-9 .'\-()]{1,35})\s*(?:\([^)]*\))?\s*:\s+/);
-      if(inlineDlg){registerChar(chars,inlineDlg[1],'');inDialogue=true;return;}
+      if(inlineDlg){registerChar(chars,inlineDlg[1],'',{fromCue:true});inDialogue=true;return;}
       const dlgLabel=t.match(/^([A-Z][A-Z0-9 .'\-()]{1,35})\s*(?:\([^)]*\))?\s*:\s*$/);
-      if(dlgLabel){registerChar(chars,dlgLabel[1],'');inDialogue=true;return;}
+      if(dlgLabel){registerChar(chars,dlgLabel[1],'',{fromCue:true});inDialogue=true;return;}
       if(isCharCueLine(t)){
         const ci=t.match(/\(([^)]+)\)/);
-        const desc=ci&&ci[1]&&!/^(V\.?O\.?|O\.?S\.?|CONT'?D?|O\.?C\.?)$/i.test(ci[1].trim())?ci[1].trim():'';
-        registerChar(chars,t,desc);
+        const desc=ci&&ci[1]&&isDescriptiveParen(ci[1])?ci[1].trim():'';
+        registerChar(chars,t,desc,{fromCue:true});
         inDialogue=true;
         return;
       }
       if(isSH(t)){inDialogue=false;return;}
       if(!inDialogue){
-        const inlineCue=extractInlineCue(t);
-        if(inlineCue){registerChar(chars,inlineCue.name,inlineCue.desc);inDialogue=true;return;}
-        const actionName=extractActionLineName(t);
-        if(actionName)registerChar(chars,actionName,'');
-        const parenIntro=t.match(/\b([A-Z][A-Z0-9 .'\-]{1,30}(?:\s+[A-Z][A-Z0-9 .'\-]{1,30})?)\s*\([^)]{3,}\)/);
-        if(parenIntro)registerChar(chars,parenIntro[1],'');
+        const titleIntro=t.match(/^([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\s*\(([^)]+)\)/);
+        if(titleIntro&&isDescriptiveParen(titleIntro[2]))registerChar(chars,titleIntro[1],titleIntro[2].trim());
+        const parenIntro=t.match(/\b([A-Z][A-Z0-9 .'\-]{1,30}(?:\s+[A-Z][A-Z0-9 .'\-]{1,30}){0,2})\s*\(([^)]+)\)/);
+        if(parenIntro&&isDescriptiveParen(parenIntro[2]))registerChar(chars,parenIntro[1],parenIntro[2].trim());
       }
+    });
+    const known=new Set(Object.keys(chars).map(cleanCharName));
+    lines.forEach(line=>{
+      const t=line.trim();
+      if(!t||isSH(t)||isTr(t))return;
+      if(isCharCueLine(t))return;
+      const inlineCue=extractInlineCue(t);
+      if(inlineCue){registerChar(chars,inlineCue.name,inlineCue.desc,{fromCue:true});return;}
+      const actionName=extractActionLineName(t,known);
+      if(actionName)registerChar(chars,actionName,'');
     });
     const titled=norm.match(/\b(?:Mr|Mrs|Ms|Dr|Det|Agent|Sgt|Officer|Captain)\.?\s+[A-Z][A-Za-z\-']{2,20}\b/g)||[];
     titled.forEach(m=>registerChar(chars,m.replace(/\./g,'').trim(),''));
-    return chars;
+    return filterCharacterMap(chars);
   }
 
   /** Detect timeline clip metadata pasted back as a "script" (not a real screenplay). */
@@ -293,13 +356,13 @@ window.SBParser = (function(){
 
   function attachCharactersToShots(scenes,chars){
     if(!scenes||!chars)return;
-    const names=Object.keys(chars);
+    const names=Object.keys(chars).filter(n=>isLikelyPersonName(n,{fromCue:true}));
     scenes.forEach(sc=>{
       (sc.shots||[]).forEach(sh=>{
-        const found=new Set(sh.characters_in_frame||[]);
+        const found=new Set((sh.characters_in_frame||[]).filter(n=>isLikelyPersonName(n,{fromCue:true})));
         const blob=((sh.description||'')+' '+(sh.dialogue||'')).toUpperCase();
         names.forEach(n=>{
-          if(blob.includes(n))found.add(n);
+          if(nameInBlob(n,blob))found.add(cleanCharName(n));
         });
         sh.characters_in_frame=[...found];
       });
@@ -323,7 +386,9 @@ window.SBParser = (function(){
       }
       if(isCC(t)){
         const rn=exCN(t),cn=resCN(rn,chars),ci=t.match(/\(([^)]+)\)/);
-        if(chars[cn]===undefined)chars[cn]=ci?ci[1]:'';
+        const desc=ci&&ci[1]&&isDescriptiveParen(ci[1])?ci[1].trim():'';
+        if(chars[cn]===undefined)chars[cn]=desc;
+        else if(desc&&!chars[cn])chars[cn]=desc;
         i++;let par='',dl2=[];
         while(i<lines.length){
           const d=lines[i];
@@ -342,30 +407,40 @@ window.SBParser = (function(){
         continue;
       }
       const ss=spS(t);
+      const known=new Set(Object.keys(chars).map(cleanCharName));
       for(const s of ss){
         let m=[];
-        Object.keys(chars).forEach(c=>{if(s.toUpperCase().includes(c)&&!m.includes(c))m.push(c)});
-        const actionName=extractActionLineName(s);
-        if(actionName){
-          const r=resCN(cleanCharName(actionName),chars);
-          if(chars[r]===undefined)chars[r]='';
-          if(!m.includes(r))m.push(r);
-        }
-        const im=s.match(/([A-Z][A-Z0-9 .'\-]{1,30}(?:\s+[A-Z][A-Z0-9 .'\-]{1,30})?)\s*\(([^)]+)\)/);
-        if(im){
+        const blob=s.toUpperCase();
+        Object.keys(chars).forEach(c=>{if(nameInBlob(c,blob)&&!m.includes(c))m.push(c)});
+        const im=s.match(/([A-Z][A-Z0-9 .'\-]{1,30}(?:\s+[A-Z][A-Z0-9 .'\-]{1,30}){0,2})\s*\(([^)]+)\)/);
+        if(im&&isDescriptiveParen(im[2])){
           const rn=im[1].trim(),r=resCN(rn,chars);
           if(chars[r]===undefined)chars[rn]=im[2].trim();
+          if(!m.includes(r))m.push(r);
+          known.add(cleanCharName(r));
+        }
+        const titleIntro=s.match(/^([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\s*\(([^)]+)\)/);
+        if(titleIntro&&isDescriptiveParen(titleIntro[2])){
+          const rn=cleanCharName(titleIntro[1]),r=resCN(rn,chars);
+          if(chars[r]===undefined)chars[rn]=titleIntro[2].trim();
+          if(!m.includes(r))m.push(r);
+          known.add(rn);
+        }
+        const actionName=extractActionLineName(s,known);
+        if(actionName){
+          const r=resCN(actionName,chars);
           if(!m.includes(r))m.push(r);
         }
         s.split(/\s+/).forEach(w=>{
           const u=w.replace(/[^A-Z]/g,'');
-          if(u.length>=2){const r=resCN(u,chars);if(chars[r]!==undefined&&!m.includes(r))m.push(r)}
+          if(u.length>=2){const r=resCN(u,chars);if(chars[r]!==undefined&&isLikelyPersonName(r,{fromCue:true})&&!m.includes(r))m.push(r)}
         });
+        m=m.filter(n=>isLikelyPersonName(n,{fromCue:true}));
         cur.shots.push({type:iT(s,!1,m.length),camera:iCm(s,iT(s,!1,m.length)),duration:dl,description:s,dialogue:null,characters_in_frame:m,cine:{}});
       }
       i++;
     }
-    const enriched=mergeCharMaps(chars,extractCharactersFromText(text));
+    const enriched=filterCharacterMap(mergeCharMaps(chars,extractCharactersFromText(text)));
     attachCharactersToShots(scenes,enriched);
     return{scenes,characters:enriched};
   }
@@ -471,5 +546,5 @@ window.SBParser = (function(){
     return normalizeScriptText(pages.join('\n\n'));
   }
 
-  return{parse,scenesToClips,readFile,extractCharactersFromText,mergeCharMaps,normalizeScriptText,normalizeScriptTextDetailed,unflattenScreenplay,isScriptFlattened,isClipReconstruction,parseQualityWarning};
+  return{parse,scenesToClips,readFile,extractCharactersFromText,mergeCharMaps,filterCharacterMap,isLikelyPersonName,normalizeScriptText,normalizeScriptTextDetailed,unflattenScreenplay,isScriptFlattened,isClipReconstruction,parseQualityWarning};
 })();

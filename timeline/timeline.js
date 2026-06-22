@@ -404,13 +404,24 @@ async function uploadRef(name){
 
 function renderOutput(){$('queuePanel').innerHTML=SBExport.renderQueue(state.clips,state.queue);$('outputStats').textContent=state.clips.filter(c=>c.status==='approved').length+' approved · '+state.clips.filter(c=>c.videoUrl).length+' rendered'}
 
+function isValidCharacterName(name){
+  const up=String(name||'').toUpperCase().trim();
+  if(!up||up.length<2)return false;
+  if(SBParser.isLikelyPersonName)return SBParser.isLikelyPersonName(up,{fromCue:true});
+  return !JUNK_CHAR_WORDS.has(up)&&!CHAR_SKIP.has(up);
+}
+
 function trustedCharacterNames(text){
   const trusted=new Set();
   if(state.parseResult&&state.parseResult.characters){
-    Object.keys(state.parseResult.characters).forEach(n=>trusted.add(String(n).toUpperCase().trim()));
+    Object.keys(state.parseResult.characters).forEach(n=>{
+      if(isValidCharacterName(n))trusted.add(String(n).toUpperCase().trim());
+    });
   }
   if(text&&SBParser.extractCharactersFromText&&!isClipReconstruction(text)){
-    Object.keys(SBParser.extractCharactersFromText(text)).forEach(n=>trusted.add(String(n).toUpperCase().trim()));
+    Object.keys(SBParser.extractCharactersFromText(text)).forEach(n=>{
+      if(isValidCharacterName(n))trusted.add(String(n).toUpperCase().trim());
+    });
   }
   return trusted;
 }
@@ -425,7 +436,7 @@ function syncCharactersFromParse(result,text){
       (sc.shots||[]).forEach(sh=>{
         (sh.characters_in_frame||[]).forEach(n=>{
           const up=String(n||'').replace(/\s*\([^)]*\)\s*/g,'').trim().toUpperCase();
-          if(up&&chars[up]===undefined)chars[up]='';
+          if(up&&chars[up]===undefined&&isValidCharacterName(up))chars[up]='';
         });
       });
     });
@@ -448,7 +459,7 @@ function pruneJunkCharacters(chars,trusted){
   const out={};
   Object.entries(chars||{}).forEach(([name,val])=>{
     const up=String(name).toUpperCase().trim();
-    if(!up||up.length<2||up.length>40)return;
+    if(!up||up.length<2||up.length>40||!isValidCharacterName(up))return;
     if(trustedSet.has(up)){out[up]=val;return;}
     if(!clipSet.has(up))return;
     const words=up.split(/\s+/);
@@ -492,7 +503,7 @@ function repairCharactersFromClips(){
     (c.characters||[]).forEach(n=>{
       const up=String(n||'').toUpperCase().trim();
       if(!up)return;
-      if(!state.characters[up]){
+      if(isValidCharacterName(up)&&!state.characters[up]){
         state.characters[up]=Object.assign({},SBCharacters.DEFAULTS);
         changed=true;
       }
@@ -533,16 +544,15 @@ function rebuildCharactersFromProject(){
   });
   const names=Object.keys(merged).filter(n=>n.length>=2);
   if(!names.length)return false;
-  state.characters=SBCharacters.normalize(pruneJunkCharacters(merged,trustedCharacterNames(norm)));
+  const filtered=SBParser.filterCharacterMap?SBParser.filterCharacterMap(merged):merged;
+  state.characters=SBCharacters.normalize(pruneJunkCharacters(filtered,trustedCharacterNames(norm)));
   if(!state.selectedChar)state.selectedChar=names[0];
   save();
   return true;
 }
 function registerCharFromParse(map,name,desc){
   const up=String(name||'').replace(/\s*\([^)]*\)\s*/g,'').trim().toUpperCase();
-  if(!up||up.length<2||up.length>40)return;
-  if(CHAR_SKIP.has(up))return;
-  if(up.split(/\s+/).every(w=>CHAR_SKIP.has(w)))return;
+  if(!up||up.length<2||up.length>40||!isValidCharacterName(up))return;
   if(map[up]===undefined)map[up]=desc||'';
   else if(desc&&!map[up])map[up]=desc;
 }

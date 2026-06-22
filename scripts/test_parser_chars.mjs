@@ -43,11 +43,54 @@ John pushes Sarah behind him, raising the pistol.
 
 FADE OUT.`;
 
+const VIKING = `INT. CLIFFTOP - DAY
+
+BRANT
+(to the warriors)
+We ride at dawn.
+
+RAMSEY launches himself off the cliff.
+
+CRUMB (40s, weathered)
+What are you doing?
+
+VOLKOV
+Stop them!
+
+JOHN MERCER (40s, weathered)
+Everyone calm down.`;
+
+const NOISE = `INT. FIELD - DAY
+
+RAIN hammers the shields. GERMAN soldiers advance. STOP Look out!`;
+
+function assertChars(label, result, expected, forbidden) {
+  const found = new Set(Object.keys(result.characters));
+  const missing = expected.filter(n => !found.has(n));
+  const bad = [...found].filter(n => forbidden.some(rx => rx.test(n)));
+  console.log(`[${label}] Found:`, [...found].sort());
+  if (missing.length) {
+    console.error(`FAIL [${label}] missing:`, missing);
+    process.exit(1);
+  }
+  if (bad.length) {
+    console.error(`FAIL [${label}] false positives:`, bad);
+    process.exit(1);
+  }
+}
+
 const result = SBParser.parse(SAMPLE, 5);
-const found = new Set(Object.keys(result.characters));
-const expected = ['JOHN MERCER', 'JOHN', 'SARAH COLE', 'SARAH', 'DMITRI VOLKOV', 'VOLKOV'];
-const missing = expected.filter(n => !found.has(n));
-const bad = [...found].filter(n => /RAIN|TIN ROOF|WAREHOUSE/i.test(n) && !['JOHN','SARAH','VOLKOV'].some(c => n.includes(c)));
+assertChars('warehouse', result,
+  ['JOHN MERCER', 'JOHN', 'SARAH COLE', 'SARAH', 'DMITRI VOLKOV', 'VOLKOV'],
+  [/^(RAIN|WATER|TIN|WAREHOUSE|HAMMER|DRIP)$/i, /ROOF/i]);
+
+const viking = SBParser.parse(VIKING, 5);
+assertChars('viking', viking,
+  ['BRANT', 'RAMSEY', 'CRUMB', 'VOLKOV', 'JOHN MERCER'],
+  [/^(WARRIORS|STOP|CLIFF|LAUNCH)$/i]);
+
+const noise = SBParser.parse(NOISE, 5);
+assertChars('noise', noise, [], [/^(RAIN|GERMAN|STOP|LOOK|SHIELD|FIELD)$/i]);
 
 const pdfBlob = SAMPLE.replace(/\n/g, ' ');
 const pdfNorm = SBParser.normalizeScriptText(pdfBlob);
@@ -55,17 +98,6 @@ const pdfLines = pdfNorm.split('\n').filter(l => l.trim()).length;
 const pdfResult = SBParser.parse(pdfNorm, 5);
 const pdfFound = Object.keys(pdfResult.characters);
 
-console.log('=== Character extraction smoke test (parser.js) ===');
-console.log('Found:', [...found].sort());
-console.log('Descriptions:', Object.fromEntries(Object.entries(result.characters).filter(([,v]) => v)));
-if (missing.length) {
-  console.error('FAIL missing:', missing);
-  process.exit(1);
-}
-if (bad.length) {
-  console.error('FAIL false positives:', bad);
-  process.exit(1);
-}
 if (pdfLines < 8) {
   console.error('FAIL unflatten too few lines:', pdfLines, pdfNorm.slice(0, 200));
   process.exit(1);
@@ -74,6 +106,7 @@ if (pdfFound.length < 3) {
   console.error('FAIL PDF-normalized too sparse:', pdfFound);
   process.exit(1);
 }
+
 console.log('Unflattened lines:', pdfLines);
 console.log('PDF-normalized found:', pdfFound.sort());
 console.log('PASS');
