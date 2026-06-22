@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SHOTBREAK — Timeline Studio</title>
+<link rel="icon" href="/favicon.ico">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Anybody:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="timeline.css">
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="/js/config.js"></script>
+<script>if(window.pdfjsLib)pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="logo">SHOT<span>BREAK</span></div>
+    <button class="tb-btn" id="btnSaveProj" title="Save project JSON">💾 Save</button>
+    <button class="tb-btn" id="btnLoadProj" title="Load project">📂 Load</button>
+    <button class="tb-btn" id="btnImport">📄 Import Script</button>
+    <button class="tb-btn" id="btnAdd">+ Add Clip</button>
+    <button class="tb-btn" id="btnDup">Duplicate</button>
+    <button class="tb-btn" id="btnUndo">↶ Undo</button>
+    <button class="tb-btn" id="btnRedo">↷ Redo</button>
+    <button class="tb-btn" id="btnPreviewAll">▶ Preview All</button>
+    <button class="tb-btn gold" id="btnBatch">⚡ Batch Generate</button>
+    <div class="tb-spacer"></div>
+    <span class="tb-meta" id="projectTitle">Untitled Film</span>
+    <span class="tb-meta" id="userMeta">—</span>
+    <a class="tb-btn" href="/app.html">App</a>
+  </header>
+
+  <div class="universal">
+    <div class="uc-group"><span class="uc-label">Film Style</span><select class="uc-sel" id="gFilm"><option>Cinematic</option><option>Documentary</option><option>Film Noir</option><option>Neo-Noir</option><option>Commercial</option></select></div>
+    <div class="uc-group"><span class="uc-label">Color Grade</span><select class="uc-sel" id="gColor"><option>Natural</option><option>Warm</option><option>Cool</option><option>Desaturated</option><option>High Contrast</option></select></div>
+    <div class="uc-group"><span class="uc-label">Aspect</span><select class="uc-sel" id="gAspect"><option value="16:9">16:9</option><option value="9:16">9:16</option><option value="1:1">1:1</option></select></div>
+    <div class="uc-group"><span class="uc-label">Quality</span><select class="uc-sel" id="gQuality"><option>1080p</option><option>720p</option><option>4K</option></select></div>
+    <div class="uc-group"><span class="uc-label">Audio</span><select class="uc-sel" id="gAudio"><option>Cinematic</option><option>Narration</option><option>Dialogue + Music</option></select></div>
+    <div class="uc-group"><span class="uc-label">Language</span><select class="uc-sel" id="gLang"><option>English</option><option>French</option><option>Bilingual</option></select></div>
+    <div class="uc-group"><span class="uc-label">Model</span><select class="uc-sel" id="gModel"><option value="seedance-turbo">Seedance Turbo</option><option value="seedance">Seedance 2.0</option><option value="veo">Veo 3.1</option></select></div>
+    <div class="uc-group"><span class="uc-label">Clip length</span><select class="uc-sel" id="gDuration"><option value="5">~5 sec</option><option value="8">~8 sec</option><option value="10">~10 sec</option></select></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn on" data-tab="timeline">② Timeline</button>
+    <button class="tab-btn" data-tab="characters">⑤ Characters</button>
+    <button class="tab-btn" data-tab="assembly">⑥ Assembly</button>
+    <button class="tab-btn" data-tab="output">⑦ Output</button>
+  </div>
+
+  <div class="main">
+    <section class="workspace">
+      <div class="tab-panel" data-panel="timeline">
+        <div class="import-zone" id="importZone">
+          <h3>Script → Clips → Film</h3>
+          <p>Import screenplay — parser auto-fills clip boxes (2–8 sec). Flow: parse → set params → generate → approve → assemble → export.</p>
+          <div class="import-btns">
+            <button class="tb-btn gold" onclick="document.getElementById('btnImport').click()">Import .txt / .pdf / .fdx</button>
+            <button class="tb-btn" id="btnPaste">Paste script</button>
+          </div>
+          <input type="file" id="fileInput" accept=".txt,.pdf,.fdx">
+        </div>
+        <div id="timelineSection" class="hidden">
+          <div class="timeline-wrap">
+            <div class="timeline-head"><h2>Main Timeline</h2><span class="tb-meta" id="clipCount">0 clips</span></div>
+            <div class="time-ruler" id="timeRuler"></div>
+            <div class="clip-row" id="clipRow"></div>
+          </div>
+          <div class="chars"><h3>Characters in scene</h3><div id="charChips"></div></div>
+        </div>
+      </div>
+
+      <div class="tab-panel hidden" data-panel="characters">
+        <div class="panel-pad">
+          <div class="panel-head"><h2>Character Module</h2><button class="tb-btn" id="btnAddChar">+ Add Character</button></div>
+          <p class="panel-desc">Face lock via reference image (I2V). Lip-sync + emotion mapping apply per clip.</p>
+          <div id="charListPanel"></div>
+          <div id="charEditorPanel" class="char-editor-wrap"></div>
+        </div>
+      </div>
+
+      <div class="tab-panel hidden" data-panel="assembly">
+        <div class="panel-pad"><h2>Editor Module</h2><p class="panel-desc">Trim, transitions, speed, overlays, titles — then stitch or send to full editor.</p><div id="assemblyBody"></div></div>
+      </div>
+
+      <div class="tab-panel hidden" data-panel="output">
+        <div class="panel-pad">
+          <h2>Output &amp; Export</h2>
+          <p class="panel-desc" id="outputStats">0 approved</p>
+          <h3 class="sub-h">AI Render Queue</h3>
+          <div id="queuePanel"></div>
+          <div class="output-btns">
+            <button class="tb-btn gold" id="btnFinal">🎬 Final Export (MP4)</button>
+            <button class="tb-btn" id="btnEDL">⬇ Export EDL</button>
+            <button class="tb-btn" id="btnExport">→ Open in Editor</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="queue-bar" id="queueBar"><span id="queueText">Generating…</span></div>
+    </section>
+
+    <aside class="detail">
+      <div class="detail-h" id="detailTitle">③ Clip Detail</div>
+      <div class="detail-body" id="detailBody"><div class="detail-empty">Click a clip on the timeline.</div></div>
+      <div class="detail-actions">
+        <button class="tb-btn gold" id="btnGen">■ Generate Clip</button>
+        <div class="act-row"><button class="tb-btn" id="btnRegen">↻ Regenerate</button><button class="tb-btn" id="btnPreview">▶ Preview</button></div>
+        <button class="tb-btn approve-btn" id="btnApprove">✓ Approve Clip</button>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-card">
+    <h1>Timeline <span>Studio</span></h1>
+    <p>Sign in to generate video. Script parsing works offline.</p>
+    <div class="login-err" id="loginErr"></div>
+    <input type="email" id="loginEmail" placeholder="Email">
+    <input type="password" id="loginPw" placeholder="Password">
+    <button class="tb-btn gold" id="loginBtn" style="width:100%;margin-top:8px">Sign in</button>
+  </div>
+</div>
+
+<div class="modal hidden" id="previewModal">
+  <div class="modal-card">
+    <div class="modal-head"><span id="previewLabel">Preview</span><button class="tb-btn" id="btnClosePreview">✕</button></div>
+    <video id="previewPlayer" controls playsinline style="width:100%;border-radius:10px;background:#000"></video>
+  </div>
+</div>
+
+<div class="modal hidden" id="exportModal">
+  <div class="modal-card"><div class="modal-head"><span>Final Export</span><button class="tb-btn" id="btnCloseExport">✕</button></div><p id="exportStatus">Stitching clips…</p></div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="parser.js"></script>
+<script src="timeline-characters.js"></script>
+<script src="timeline-export.js"></script>
+<script src="timeline.js"></script>
+</body>
+</html>
