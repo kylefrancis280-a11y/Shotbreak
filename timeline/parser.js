@@ -157,15 +157,20 @@ window.SBParser = (function(){
         if(parenIntro)registerChar(chars,parenIntro[1],'');
       }
     });
-    const caps=norm.match(/\b[A-Z][A-Z0-9\-']{2,18}(?:\s+[A-Z][A-Z0-9\-']{2,18}){0,2}\b/g)||[];
-    caps.forEach(m=>{
-      const s=m.trim();
-      if(isLocationCaps(s))return;
-      registerChar(chars,s,'');
-    });
     const titled=norm.match(/\b(?:Mr|Mrs|Ms|Dr|Det|Agent|Sgt|Officer|Captain)\.?\s+[A-Z][A-Za-z\-']{2,20}\b/g)||[];
     titled.forEach(m=>registerChar(chars,m.replace(/\./g,'').trim(),''));
     return chars;
+  }
+
+  /** Detect timeline clip metadata pasted back as a "script" (not a real screenplay). */
+  function isClipReconstruction(text){
+    if(!text||!String(text).trim())return false;
+    const t=String(text);
+    const scene1=(t.match(/^SCENE 1\s*$/gim)||[]).length;
+    if(scene1>=3)return true;
+    if((t.match(/delivering dialogue\./gi)||[]).length>=2)return true;
+    if(/Close on\s+[A-Z][A-Z0-9 .'\-]{1,30}/i.test(t)&&(t.match(/Close on/gi)||[]).length>=2)return true;
+    return false;
   }
 
   function mergeCharMaps(base,extra){
@@ -322,5 +327,5 @@ window.SBParser = (function(){
     return text;
   }
 
-  return{parse,scenesToClips,readFile,extractCharactersFromText,mergeCharMaps,normalizeScriptText};
+  return{parse,scenesToClips,readFile,extractCharactersFromText,mergeCharMaps,normalizeScriptText,isClipReconstruction};
 })();

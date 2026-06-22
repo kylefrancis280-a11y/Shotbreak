@@ -6,7 +6,7 @@
 <title>SHOTBREAK — Text-to-Video Movie System</title>
 <link rel="icon" href="/favicon.ico">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Anybody:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="timeline.css?v=20260623c">
+<link rel="stylesheet" href="timeline.css?v=20260623d">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -118,6 +118,7 @@
           <summary>Script</summary>
           <div class="panel-pad">
             <p class="panel-desc">Paste or edit your screenplay here, then <strong>Re-parse timeline</strong> to refresh clips and characters. Importing a file also fills this editor.</p>
+            <div class="script-warn hidden" id="scriptWarn"></div>
             <textarea id="scriptEditor" class="script-editor" rows="14" placeholder="FADE IN:&#10;&#10;INT. LOCATION - DAY&#10;&#10;Your screenplay…"></textarea>
             <div class="script-actions">
               <span class="script-meta" id="scriptMeta">0 lines</span>
@@ -202,10 +203,10 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script src="/js/model-config.js?v=20260623c"></script>
-<script src="parser.js?v=20260623c"></script>
-<script src="timeline-characters.js?v=20260623c"></script>
-<script src="timeline-export.js?v=20260623c"></script>
-<script src="timeline.js?v=20260623c"></script>
+<script src="/js/model-config.js?v=20260623d"></script>
+<script src="parser.js?v=20260623d"></script>
+<script src="timeline-characters.js?v=20260623d"></script>
+<script src="timeline-export.js?v=20260623d"></script>
+<script src="timeline.js?v=20260623d"></script>
 </body>
 </html>

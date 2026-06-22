@@ -4,6 +4,13 @@
 
 const STORAGE_KEY='SB_Timeline_v1';
 const OWNER_EMAILS=new Set(['kyle@shotbreak.io','scott@shotbreak.io','steve@shotbreak.io']);
+const CHAR_SKIP=new Set(['INT','EXT','FADE','CUT','CLOSE','WIDE','THE','AND','RAIN','WATER','ROOF','SCENE','OPENING','DIALOGUE','ACTION','REACTION','CLIMAX','RESOLUTION','EPILOGUE','TRANSITION','ABANDONED','WAREHOUSE','BUILDING','STREET','NIGHT','DAY','MORNING','EVENING','LOCATION','INTERIOR','EXTERIOR']);
+const JUNK_CHAR_WORDS=new Set([
+  'THE','AND','BUT','FOR','NOT','YOU','ALL','CAN','HER','WAS','ONE','OUR','OUT','ARE','HAS','HIS','HOW','ITS','MAY','NEW','NOW','OLD','SEE','WAY','WHO','DID','GET','HIT','LET','PUT','SAY','SHE','TOO','USE','WHY','ANY','DAY','END','TWO','WAR','YES','YET',
+  'STOP','LOOK','THOSE','TONIGHT','THIS','WHAT','WHEN','THAT','SINCE','JUST','THEY','ROCKS','TOGETHER','READY','BESIDE','SWIFTLY','OPENING','SEQUENCE','WRITTEN','ROCKY','CLIFFTOP','HEIGHTS','DRIVE','INTERNATIONAL','AIRPORT','FEBRUARY','GERMAN',
+  'FORTY','UNIT','SUN','MEDIA','EXT','INT','SCI','VORSANGER','LONDON','CALLING','MONTREAL','OAKVILLE','SHERWOOD','MOTHERFUCKER','COCKSUCKER','FUCK','THROW','KNOW','ONLY','SURE','THINGS','LIFE','DEATH','TAXES','PAY','STRUGGLES','WILDLY','POWERFUL',
+  'LAUNCHES','SCREAMS','STRAIGHTENS','JACKET','TURNS','AROUND','LEAVES','SHAKES','WALKS','ALONE','ATOP','CLIFF','WARRIORS','CHIEF','SWORN'
+]);
 
 let state={
   projectName:'Untitled Film',clips:[],characters:{},selectedId:null,selectedChar:null,
@@ -94,6 +101,12 @@ function scriptEditorText(){
   return state.scriptText||'';
 }
 
+function isClipReconstruction(text){
+  if(SBParser.isClipReconstruction)return SBParser.isClipReconstruction(text);
+  const t=String(text||'');
+  return (t.match(/^SCENE 1\s*$/gim)||[]).length>=3||(t.match(/delivering dialogue\./gi)||[]).length>=2;
+}
+
 function updateScriptMeta(){
   const meta=$('scriptMeta');
   if(!meta)return;
@@ -103,17 +116,37 @@ function updateScriptMeta(){
   meta.textContent=lines+' lines · '+chars+' chars'+(state.clips.length?' · '+state.clips.length+' clips on timeline':'');
 }
 
+function renderScriptWarn(text){
+  const el=$('scriptWarn');
+  if(!el)return;
+  const corrupt=isClipReconstruction(text);
+  if(corrupt){
+    el.classList.remove('hidden');
+    el.innerHTML='<strong>Not your original screenplay.</strong> This box was auto-filled from broken timeline clip text (repeated SCENE 1 / shot descriptions). Click <strong>+ New script</strong>, then re-import your .txt / .pdf / .fdx — do not re-parse this garbage.';
+    return;
+  }
+  if(state.clips.length&&!text.trim()){
+    el.classList.remove('hidden');
+    el.innerHTML='<strong>No screenplay stored.</strong> Import or paste your original script here. The timeline clips alone cannot rebuild a proper screenplay.';
+    return;
+  }
+  el.classList.add('hidden');
+  el.innerHTML='';
+}
+
 function renderScriptEditor(){
   const ta=$('scriptEditor');
   if(!ta)return;
   if(!ta._focused){
-    const blob=state.scriptText||'';
-    if(blob&&ta.value!==blob)ta.value=blob;
-    else if(!blob&&!ta.value.trim()){
-      const rebuilt=clipTextBlob();
-      if(rebuilt&&rebuilt.trim()&&!state.scriptText)ta.value=rebuilt;
+    let blob=state.scriptText||'';
+    if(blob&&isClipReconstruction(blob)){
+      state.scriptText='';
+      blob='';
+      save();
     }
+    if(blob&&ta.value!==blob)ta.value=blob;
   }
+  renderScriptWarn(scriptEditorText());
   updateScriptMeta();
 }
 
@@ -127,8 +160,15 @@ function openScriptPanel(){
 function syncScriptFromEditor(){
   const ta=$('scriptEditor');
   if(!ta)return'';
-  state.scriptText=ta.value;
+  const val=ta.value;
+  if(isClipReconstruction(val)){
+    renderScriptWarn(val);
+    updateScriptMeta();
+    return val;
+  }
+  state.scriptText=val;
   save();
+  renderScriptWarn(val);
   updateScriptMeta();
   return state.scriptText;
 }
@@ -151,6 +191,11 @@ function startNewScript(){
 async function reparseScriptFromEditor(){
   const text=(scriptEditorText()||'').trim();
   if(!text){toast('Paste or type a screenplay in the Script panel first');openScriptPanel();return}
+  if(isClipReconstruction(text)){
+    toast('This is reconstructed clip junk — use + New script and re-import your real screenplay');
+    openScriptPanel();
+    return;
+  }
   const hasWork=state.clips.length>0;
   const hasRendered=state.clips.some(c=>c.videoUrl||c.status==='approved');
   if(hasWork){
@@ -242,9 +287,9 @@ function renderCharacters(){
   }
   $('charListPanel').innerHTML=listHtml;
   $('charListPanel').querySelectorAll('.char-card').forEach(el=>{el.onclick=()=>{state.selectedChar=el.dataset.name;renderCharEditor()}});
-  const names=Object.keys(state.characters);
-  if($('charsStrip'))$('charsStrip').classList.toggle('hidden',!names.length);
-  $('charChips').innerHTML=names.map(n=>'<span class="char-chip">'+esc(n)+'</span>').join('');
+  const stripNames=charsForStrip();
+  if($('charsStrip'))$('charsStrip').classList.toggle('hidden',!stripNames.length);
+  $('charChips').innerHTML=stripNames.map(n=>'<span class="char-chip">'+esc(n)+'</span>').join('');
   renderCharEditor();
 }
 function renderCharEditor(){
@@ -274,7 +319,7 @@ function renderOutput(){$('queuePanel').innerHTML=SBExport.renderQueue(state.cli
 
 function syncCharactersFromParse(result,text){
   let chars=Object.assign({},(result&&result.characters)||{});
-  if(text&&SBParser.extractCharactersFromText){
+  if(text&&SBParser.extractCharactersFromText&&!isClipReconstruction(text)){
     chars=SBParser.mergeCharMaps(chars,SBParser.extractCharactersFromText(text));
   }
   if(result&&result.scenes){
@@ -293,9 +338,41 @@ function syncCharactersFromParse(result,text){
     const up=String(k).toUpperCase().trim();
     if(up&&!out[up])out[up]=normalized[k];
   });
-  state.characters=out;
+  state.characters=pruneJunkCharacters(out);
   const names=Object.keys(state.characters);
   if(names.length&&!state.selectedChar)state.selectedChar=names[0];
+}
+
+function pruneJunkCharacters(chars){
+  const cueSet=new Set();
+  if(state.parseResult&&state.parseResult.characters)Object.keys(state.parseResult.characters).forEach(n=>cueSet.add(n.toUpperCase()));
+  state.clips.forEach(c=>(c.characters||[]).forEach(n=>cueSet.add(String(n).toUpperCase())));
+  const out={};
+  Object.entries(chars||{}).forEach(([name,val])=>{
+    const up=String(name).toUpperCase().trim();
+    if(!up||up.length<2||up.length>40)return;
+    if(cueSet.has(up)){out[up]=val;return;}
+    const words=up.split(/\s+/);
+    if(words.length>3)return;
+    if(words.every(w=>JUNK_CHAR_WORDS.has(w)||CHAR_SKIP.has(w)))return;
+    if(words.length===1&&JUNK_CHAR_WORDS.has(words[0]))return;
+    if(words.length>1&&words.some(w=>JUNK_CHAR_WORDS.has(w)))return;
+    out[up]=val;
+  });
+  if(!Object.keys(out).length&&Object.keys(chars||{}).length){
+    Object.entries(chars).forEach(([name,val])=>{
+      const up=String(name).toUpperCase().trim();
+      if(cueSet.has(up))out[up]=val;
+    });
+  }
+  return out;
+}
+
+function charsForStrip(){
+  const set=new Set();
+  state.clips.forEach(c=>(c.characters||[]).forEach(n=>{const u=String(n||'').toUpperCase().trim();if(u)set.add(u)}));
+  const pruned=pruneJunkCharacters(Object.fromEntries([...set].map(n=>[n,{}])));
+  return Object.keys(pruned).sort().slice(0,16);
 }
 
 function clipTextBlob(){
@@ -329,7 +406,8 @@ function repairCharactersFromClips(){
 
 /** Re-sync characters from stored script + full re-parse + clip metadata. */
 function rebuildCharactersFromProject(){
-  const blob=clipTextBlob();
+  if(!state.scriptText||!state.scriptText.trim()||isClipReconstruction(state.scriptText))return false;
+  const blob=state.scriptText;
   if(!blob||!blob.trim())return false;
   const base=Object.assign({},(state.parseResult&&state.parseResult.characters)||{});
   let merged=base;
@@ -346,28 +424,22 @@ function rebuildCharactersFromProject(){
       });
     });
   }
-  if(SBParser.extractCharactersFromText){
+  if(SBParser.extractCharactersFromText&&!isClipReconstruction(norm)){
     merged=SBParser.mergeCharMaps(merged,SBParser.extractCharactersFromText(norm));
   }
   state.clips.forEach(c=>{
     (c.characters||[]).forEach(n=>registerCharFromParse(merged,n));
     const desc=c.description||'';
-    const dlg=c.dialogue||'';
-    const intro=desc.match(/\b([A-Z][A-Z0-9 .'\-]{1,30})\s*\(([^)]+)\)/);
-    if(intro)registerCharFromParse(merged,intro[1],intro[2]);
     const closeOn=desc.match(/Close on\s+([A-Z][A-Z0-9 .'\-]{1,30})/i);
     if(closeOn)registerCharFromParse(merged,closeOn[1]);
-    const titleNames=(desc+' '+dlg).match(/\b([A-Z][a-z]{2,18}(?:\s+[A-Z][a-z]{2,18})?)\b/g)||[];
-    titleNames.forEach(m=>registerCharFromParse(merged,m));
   });
   const names=Object.keys(merged).filter(n=>n.length>=2);
   if(!names.length)return false;
-  state.characters=SBCharacters.normalize(merged);
+  state.characters=SBCharacters.normalize(pruneJunkCharacters(merged));
   if(!state.selectedChar)state.selectedChar=names[0];
   save();
   return true;
 }
-const CHAR_SKIP=new Set(['INT','EXT','FADE','CUT','CLOSE','WIDE','THE','AND','RAIN','WATER','ROOF','SCENE','OPENING','DIALOGUE','ACTION','REACTION','CLIMAX','RESOLUTION','EPILOGUE','TRANSITION','ABANDONED','WAREHOUSE','BUILDING','STREET','NIGHT','DAY','MORNING','EVENING','LOCATION','INTERIOR','EXTERIOR']);
 function registerCharFromParse(map,name,desc){
   const up=String(name||'').replace(/\s*\([^)]*\)\s*/g,'').trim().toUpperCase();
   if(!up||up.length<2||up.length>40)return;
@@ -614,10 +686,16 @@ function bindUI(){
     };
   }
   load();
+  if(state.scriptText&&isClipReconstruction(state.scriptText)){
+    state.scriptText='';
+    save();
+  }
   if(state.clips.length||state.scriptText||state.parseResult){
-    if(state.parseResult)syncCharactersFromParse(state.parseResult,state.scriptText||clipTextBlob());
+    if(state.parseResult)syncCharactersFromParse(state.parseResult,state.scriptText||'');
     rebuildCharactersFromProject();
+    state.characters=pruneJunkCharacters(state.characters);
     repairCharactersFromClips();
+    save();
   }
   const modelMigrate={'seedance-turbo':'seedance-2.0-turbo','seedance':'seedance-2.0-turbo','veo':'veo-3.1'};
   if(state.global.model&&modelMigrate[state.global.model])state.global.model=modelMigrate[state.global.model];
