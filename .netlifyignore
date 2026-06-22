@@ -14,3 +14,4 @@ TEST_OWNER_LOGINS.local.txt
 docs/
 local-backend/
 .grok/
+private/
