@@ -213,7 +213,13 @@ function syncCharactersFromParse(result,text){
       });
     });
   }
-  state.characters=SBCharacters.normalize(chars);
+  const normalized=SBCharacters.normalize(chars);
+  const out={};
+  Object.keys(normalized).forEach(k=>{
+    const up=String(k).toUpperCase().trim();
+    if(up&&!out[up])out[up]=normalized[k];
+  });
+  state.characters=out;
   const names=Object.keys(state.characters);
   if(names.length&&!state.selectedChar)state.selectedChar=names[0];
 }
@@ -309,10 +315,14 @@ async function importText(text){
   syncCharactersFromParse(result,norm);
   rebuildCharactersFromProject();
   state.clips.forEach(c=>{
+    const frame=[];
     (c.characters||[]).forEach(n=>{
       const up=String(n||'').toUpperCase().trim();
-      if(up&&!state.characters[up])state.characters[up]=Object.assign({},SBCharacters.DEFAULTS);
+      if(!up)return;
+      frame.push(up);
+      if(!state.characters[up])state.characters[up]=Object.assign({},SBCharacters.DEFAULTS);
     });
+    if(frame.length)c.characters=frame;
   });
   if(state.clips.length)state.selectedId=state.clips[0].id;
   save();renderAll();

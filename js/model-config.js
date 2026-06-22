@@ -348,10 +348,12 @@
     if (aspEl && aspEl.value !== aspect) aspEl.value = aspect;
     if (durEl && durEl.value !== String(duration)) durEl.value = String(duration);
     if (resEl && resEl.value !== resolution) resEl.value = resolution;
-    refreshSbDropdown(aspEl);
-    refreshSbDropdown(durEl);
-    refreshSbDropdown(resEl);
-    refreshSbDropdown(modelEl);
+    if (!isTimeline) {
+      refreshSbDropdown(aspEl);
+      refreshSbDropdown(durEl);
+      refreshSbDropdown(resEl);
+      refreshSbDropdown(modelEl);
+    }
 
     return {
       model: model,

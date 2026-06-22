@@ -16,6 +16,16 @@
     Referrer-Policy = "strict-origin-when-cross-origin"
     Permissions-Policy = "camera=(), microphone=(), geolocation=()"
 
+[[headers]]
+  for = "/timeline/*.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/timeline/*.css"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
 # Block ops/internal files — force=true overrides static file serving (_redirects alone cannot).
 [[redirects]]
   from = "/DO_THIS_NOW.txt"

@@ -1,6 +1,14 @@
 /* SHOTBREAK Timeline — Script Parser (offline module ①) */
 window.SBParser = (function(){
-  function isSH(t){return /^(INT\.|EXT\.|INT\/EXT\.|I\/E\.)/i.test(t)}
+  function isSH(t){
+    const line=(t||'').trim();
+    if(!line)return false;
+    if(/^(?:(?:SC|SCENE)\s*\d+[A-Z]?[.\s\-]+\s*|\d+[.\s-]+\s*)?(?:INT\.|EXT\.|INT\/EXT\.|I\/E\.)[\s\-]/i.test(line))return true;
+    if(/^SCENE\s+\d+(?:\s*[.\-—:]\s*|\s+)/i.test(line))return true;
+    if(/^(FLASHBACK|FLASH\s*CUT|MONTAGE|DREAM|INTERCUT|BACK\s+TO|LATER|TIME\s+CUT|SERIES\s+OF\s+SHOTS)\b/i.test(line)&&line===line.toUpperCase())return true;
+    if(/^\d+[.\s]+\s*[A-Z][A-Z0-9\s'\-]+\s+[-—–]\s+(DAY|NIGHT|MORNING|EVENING|DUSK|DAWN|CONTINUOUS|LATER)\s*$/i.test(line))return true;
+    return /^(INT\.|EXT\.|INT\/EXT\.|I\/E\.)/i.test(line);
+  }
   function isCC(t){return /^[A-Z][A-Z0-9 .'\-()]+$/i.test(t)&&t.length<40&&!isSH(t)&&!/^(FADE|CUT|DISSOLVE)/i.test(t)}
   function isPar(t){return /^\([^)]+\)$/.test(t)}
   function isTr(t){return /^(FADE IN|FADE OUT|CUT TO|DISSOLVE TO|SMASH CUT)/i.test(t)}
@@ -201,6 +209,16 @@ window.SBParser = (function(){
       for(const s of ss){
         let m=[];
         Object.keys(chars).forEach(c=>{if(s.toUpperCase().includes(c)&&!m.includes(c))m.push(c)});
+        const im=s.match(/([A-Z][A-Z0-9 .'\-]{1,30})\s*\(([^)]+)\)/);
+        if(im){
+          const rn=im[1].trim(),r=resCN(rn,chars);
+          if(chars[r]===undefined)chars[rn]=im[2].trim();
+          if(!m.includes(r))m.push(r);
+        }
+        s.split(/\s+/).forEach(w=>{
+          const u=w.replace(/[^A-Z]/g,'');
+          if(u.length>=2){const r=resCN(u,chars);if(chars[r]!==undefined&&!m.includes(r))m.push(r)}
+        });
         cur.shots.push({type:iT(s,!1,m.length),camera:iCm(s,iT(s,!1,m.length)),duration:dl,description:s,dialogue:null,characters_in_frame:m,cine:{}});
       }
       i++;
