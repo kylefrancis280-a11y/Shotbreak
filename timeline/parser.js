@@ -116,16 +116,28 @@ window.SBParser = (function(){
   /** Normalize PDF / pasted blobs — restore line breaks screenplay parsers expect. */
   function normalizeScriptText(text){
     if(!text)return'';
-    let t=String(text).replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+    let t=String(text).replace(/\r\n/g,'\n').replace(/\r/g,'\n').replace(/\t/g,' ');
     const lineCount=t.split('\n').filter(l=>l.trim()).length;
-    if(lineCount<12&&t.length>200){
+    const needsReflow=lineCount<20&&t.length>250;
+    if(needsReflow){
       t=t
         .replace(/\s+(?=(?:INT\.|EXT\.|INT\/EXT\.|I\/E\.)\s)/gi,'\n\n')
         .replace(/\s+(?=(?:FADE IN|FADE OUT|CUT TO|DISSOLVE TO|SMASH CUT)\b)/gi,'\n\n')
         .replace(/([.!?])\s+([A-Z][A-Z0-9 .'\-]{1,30})(\s*\([^)]{0,60}\))?\s+(?=[(\[]|[a-z])/g,'$1\n\n$2$3\n')
-        .replace(/\)\s+([A-Z][A-Z0-9 .'\-]{1,30})(\s*\([^)]{0,40}\))?\s*(?=\(|$|[a-z])/g,')\n\n$1$2\n');
+        .replace(/\)\s+([A-Z][A-Z0-9 .'\-]{1,30})(\s*\([^)]{0,40}\))?\s*(?=\(|$|[a-z])/g,')\n\n$1$2\n')
+        .replace(/\s{2,}([A-Z][A-Z0-9 .'\-]{1,28})(\s*\([^)]{0,50}\))?\s+(?=\()/g,'\n\n$1$2\n')
+        .replace(/\s+([A-Z][A-Z0-9 .'\-]{1,28})\s+(?=[A-Za-z][a-z])/g,'\n\n$1\n');
     }
-    return t;
+    return t.replace(/\n{3,}/g,'\n\n').trim();
+  }
+
+  function parseQualityWarning(result){
+    if(!result||!result.scenes||!result.scenes.length)return'';
+    const heads=result.scenes.map(s=>(s.heading||'').trim().toUpperCase());
+    const allFallback=heads.every(h=>h==='SCENE 1'||!h);
+    if(allFallback&&result.scenes.length>=4)return'Parser could not find scene headings (INT./EXT.). Try .txt/.fdx or fix line breaks.';
+    if(result.scenes.length>=8&&heads.filter(h=>h==='SCENE 1').length>=6)return'Many shots landed in fallback SCENE 1 — screenplay structure may be flattened (common with PDF).';
+    return'';
   }
 
   /** Pull character names from screenplay cues, dialogue labels, and ALL-CAPS mentions. */
@@ -166,10 +178,11 @@ window.SBParser = (function(){
   function isClipReconstruction(text){
     if(!text||!String(text).trim())return false;
     const t=String(text);
+    const dlgHits=(t.match(/delivering dialogue\./gi)||[]).length;
+    const closeHits=(t.match(/Close on\s+[A-Z]/gi)||[]).length;
     const scene1=(t.match(/^SCENE 1\s*$/gim)||[]).length;
-    if(scene1>=3)return true;
-    if((t.match(/delivering dialogue\./gi)||[]).length>=2)return true;
-    if(/Close on\s+[A-Z][A-Z0-9 .'\-]{1,30}/i.test(t)&&(t.match(/Close on/gi)||[]).length>=2)return true;
+    if(dlgHits>=2||(closeHits>=2&&dlgHits>=1))return true;
+    if(scene1>=5&&dlgHits>=1)return true;
     return false;
   }
 
@@ -314,18 +327,43 @@ window.SBParser = (function(){
     return ls.join('\n');
   }
 
+  function pdfItemsToLines(items){
+    const bits=items.map(it=>({
+      str:String(it.str||'').replace(/\s+/g,' ').trim(),
+      x:it.transform?it.transform[4]:0,
+      y:it.transform?it.transform[5]:0
+    })).filter(it=>it.str);
+    bits.sort((a,b)=>b.y-a.y||a.x-b.x);
+    const Y_TOL=5,lines=[];
+    let curY=null,bucket=[];
+    bits.forEach(it=>{
+      if(curY===null||Math.abs(it.y-curY)>Y_TOL){
+        if(bucket.length){
+          bucket.sort((a,b)=>a.x-b.x);
+          lines.push(bucket.map(b=>b.str).join(' ').trim());
+        }
+        bucket=[it];curY=it.y;
+      }else bucket.push(it);
+    });
+    if(bucket.length){
+      bucket.sort((a,b)=>a.x-b.x);
+      lines.push(bucket.map(b=>b.str).join(' ').trim());
+    }
+    return lines;
+  }
+
   async function readPdf(file){
     if(!window.pdfjsLib)throw new Error('PDF library not loaded');
     const buf=await file.arrayBuffer();
     const pdf=await window.pdfjsLib.getDocument({data:buf}).promise;
-    let text='';
+    const pages=[];
     for(let p=1;p<=pdf.numPages;p++){
       const page=await pdf.getPage(p);
       const content=await page.getTextContent();
-      text+=content.items.map(it=>it.str).join(' ')+'\n';
+      pages.push(pdfItemsToLines(content.items).join('\n'));
     }
-    return text;
+    return pages.join('\n\n');
   }
 
-  return{parse,scenesToClips,readFile,extractCharactersFromText,mergeCharMaps,normalizeScriptText,isClipReconstruction};
+  return{parse,scenesToClips,readFile,extractCharactersFromText,mergeCharMaps,normalizeScriptText,isClipReconstruction,parseQualityWarning};
 })();

@@ -95,10 +95,26 @@ function openCharactersPanelIfNeeded(){
   });
 }
 
+/** Read screenplay from textarea, falling back to stored scriptText. */
 function scriptEditorText(){
   const ta=$('scriptEditor');
-  if(ta&&typeof ta.value==='string')return ta.value;
+  const stored=(state.scriptText||'').trim();
+  if(!ta)return stored;
+  const live=(ta.value||'').trim();
+  if(live)return ta.value;
   return state.scriptText||'';
+}
+
+/** Persist textarea → state.scriptText before parse/import. */
+function flushScriptEditor(){
+  const ta=$('scriptEditor');
+  const raw=ta?(ta.value||''):(state.scriptText||'');
+  const trimmed=raw.trim();
+  if(trimmed&&!isClipReconstruction(trimmed)){
+    state.scriptText=raw;
+    save();
+  }
+  return trimmed?raw:(state.scriptText||'');
 }
 
 function isClipReconstruction(text){
@@ -146,11 +162,15 @@ function renderScriptEditor(){
   if(!ta._focused){
     let blob=state.scriptText||'';
     if(blob&&isClipReconstruction(blob)){
-      state.scriptText='';
-      blob='';
-      save();
+      if(!ta.value.trim()||isClipReconstruction(ta.value)){
+        state.scriptText='';
+        blob='';
+        ta.value='';
+        save();
+      }
+    }else if(blob&&ta.value!==blob){
+      ta.value=blob;
     }
-    if(blob&&ta.value!==blob)ta.value=blob;
   }
   renderScriptWarn(scriptEditorText());
   updateScriptMeta();
@@ -201,7 +221,7 @@ function startNewScript(){
 }
 
 async function reparseScriptFromEditor(){
-  const text=(scriptEditorText()||'').trim();
+  const text=flushScriptEditor().trim();
   if(!text){toast('Paste or type a screenplay in the Script panel first');openScriptPanel();return}
   if(isClipReconstruction(text)){
     toast('This is reconstructed clip junk — use + New script and re-import your real screenplay');
@@ -463,8 +483,15 @@ function registerCharFromParse(map,name,desc){
 
 async function importText(text,opts){
   opts=opts||{};
+  const raw=String(text||'').trim();
+  if(!raw){toast('No screenplay text to parse');openScriptPanel();return}
+  if(isClipReconstruction(raw)){
+    toast('That text is broken clip output — use + New script, then import your real file');
+    openScriptPanel();
+    return;
+  }
   pushHistory();
-  const norm=SBParser.normalizeScriptText?SBParser.normalizeScriptText(text):text;
+  const norm=SBParser.normalizeScriptText?SBParser.normalizeScriptText(raw):raw;
   state.scriptText=norm;
   const ta=$('scriptEditor');
   if(ta){ta.value=norm;ta._focused=false}
@@ -488,19 +515,24 @@ async function importText(text,opts){
   if(state.clips.length)state.selectedId=state.clips[0].id;
   save();renderAll();
   const nChars=Object.keys(state.characters).length;
-  toast(state.clips.length+' clips'+(nChars?' · '+nChars+' characters from parse':''));
+  let msg=state.clips.length+' clips'+(nChars?' · '+nChars+' characters':'');
+  const warn=SBParser.parseQualityWarning?SBParser.parseQualityWarning(result):'';
+  if(warn)msg+=' — '+warn;
+  toast(msg);
   document.querySelectorAll('.module-panel').forEach(panel=>{
     const sum=panel.querySelector('summary');
     if(sum&&sum.textContent.trim()==='Characters')panel.open=true;
   });
-  if(!opts.fromEditor)openScriptPanel();
+  openScriptPanel();
 }
 async function importFile(file){
-  const text=await SBParser.readFile(file);
-  const ta=$('scriptEditor');
-  if(ta){ta.value=text;ta._focused=false}
-  syncScriptFromEditor();
-  await importText(text);
+  try{
+    const text=await SBParser.readFile(file);
+    await importText(text);
+  }catch(e){
+    toast(e.message||'Import failed');
+    openScriptPanel();
+  }
 }
 
 function addClip(){
@@ -639,7 +671,14 @@ function bindUI(){
   document.addEventListener('click',()=>toggleMoreMenu(false));
   window.addEventListener('scroll',()=>toggleMoreMenu(false),true);
   $('moreMenu').onclick=e=>e.stopPropagation();
-  $('fileInput').onchange=e=>{const f=e.target.files[0];if(f)importFile(f).catch(err=>toast(err.message));e.target.value=''};
+  $('fileInput').onchange=async e=>{
+    const f=e.target.files[0];
+    e.target.value='';
+    if(!f)return;
+    openScriptPanel();
+    toast('Reading '+f.name+'…');
+    try{await importFile(f)}catch(err){toast(err.message||'Import failed')}
+  };
   $('btnImport').onclick=()=>$('fileInput').click();
   $('btnPaste').onclick=()=>{openScriptPanel();toast('Paste screenplay here, then Re-parse timeline')};
   const btnScript=$('btnScript');
