@@ -6,7 +6,7 @@ const STORAGE_KEY='SB_Timeline_v1';
 const OWNER_EMAILS=new Set(['kyle@shotbreak.io','scott@shotbreak.io','steve@shotbreak.io']);
 
 let state={
-  projectName:'Untitled Film',clips:[],characters:{},selectedId:null,selectedChar:null,activeTab:'timeline',
+  projectName:'Untitled Film',clips:[],characters:{},selectedId:null,selectedChar:null,
   global:{filmStyle:'Cinematic',colorGrade:'Natural',aspectRatio:'16:9',quality:'1080p',audioProfile:'Cinematic',model:'seedance-turbo',clipDuration:5,language:'English'},
   assembly:{titleText:'',creditsText:'',musicHint:'',sfxHint:''},
   parseResult:null,queue:{running:false}
@@ -69,12 +69,6 @@ function buildPrompt(clip){
 
 function clipDur(c){return (c.edit.trimOut!=null?c.edit.trimOut:c.durationSec)-(c.edit.trimIn||0)}
 function totalDuration(){return state.clips.reduce((a,c)=>a+clipDur(c),0)}
-
-function setTab(tab){
-  state.activeTab=tab;
-  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
-  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.toggle('hidden',p.dataset.panel!==tab));
-}
 
 function renderAll(){
   $('projectTitle').textContent=state.projectName;
@@ -324,14 +318,13 @@ function bindUI(){
   $('btnAddChar').onclick=()=>{const n=prompt('Character name:');if(!n)return;pushHistory();state.characters[n.toUpperCase()]=Object.assign({},SBCharacters.DEFAULTS);state.selectedChar=n.toUpperCase();save();renderCharacters()};
   $('btnClosePreview').onclick=()=>$('previewModal').classList.add('hidden');
   $('btnCloseExport').onclick=()=>$('exportModal').classList.add('hidden');
-  document.querySelectorAll('.tab-btn').forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
   ['gFilm','gColor','gAspect','gQuality','gAudio','gModel','gDuration','gLang'].forEach(id=>{const el=$(id);if(el)el.onchange=syncGlobal});
   load();
   ['gFilm','gColor','gAspect','gQuality','gAudio','gModel','gDuration'].forEach(id=>{
     const m={gFilm:'filmStyle',gColor:'colorGrade',gAspect:'aspectRatio',gQuality:'quality',gAudio:'audioProfile',gModel:'model',gDuration:'clipDuration'};
     const el=$(id);if(el&&state.global[m[id]])el.value=state.global[m[id]];
   });
-  setTab('timeline');renderAll();
+  renderAll();
 }
 
 document.addEventListener('DOMContentLoaded',()=>{initAuth();bindUI()});

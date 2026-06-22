@@ -68,8 +68,13 @@
   status = 404
   force = true
 [[redirects]]
-  from = "/timeline/*"
-  to = "/app.html"
+  from = "/app.html"
+  to = "/timeline/"
+  status = 302
+  force = true
+[[redirects]]
+  from = "/app"
+  to = "/timeline/"
   status = 302
   force = true
 
