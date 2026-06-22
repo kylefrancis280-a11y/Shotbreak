@@ -1,0 +1,16 @@
+# Internal ops docs — keep in git for dev, never publish to shotbreak.io
+DO_THIS_NOW.txt
+MINIMAL_DO_THIS_NOW.txt
+POST_IMPLEMENTATION_CHECKLIST.txt
+FIX_ALL_DEPLOY.txt
+GOLDEN_READY.txt
+DEPLOY_FOR_DEMO_THIS_MORNING.txt
+NETLIFY_FUNCTIONS_NOW_READY.txt
+OWNER_LOGIN.md
+DEPLOY-INSTRUCTIONS.md
+README.md
+get-owner-token.ps1
+TEST_OWNER_LOGINS.local.txt
+docs/
+local-backend/
+.grok/
