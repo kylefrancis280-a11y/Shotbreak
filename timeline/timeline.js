@@ -77,7 +77,7 @@ function renderAll(){
     rebuildCharactersFromProject();
     repairCharactersFromClips();
   }
-  renderTimeline();renderAssembly();renderCharacters();renderOutput();renderDetail();updateUndo();
+  renderTimeline();renderScriptEditor();renderAssembly();renderCharacters();renderOutput();renderDetail();updateUndo();
   openCharactersPanelIfNeeded();
 }
 function openCharactersPanelIfNeeded(){
@@ -86,6 +86,80 @@ function openCharactersPanelIfNeeded(){
     const sum=panel.querySelector('summary');
     if(sum&&sum.textContent.trim()==='Characters')panel.open=true;
   });
+}
+
+function scriptEditorText(){
+  const ta=$('scriptEditor');
+  if(ta&&typeof ta.value==='string')return ta.value;
+  return state.scriptText||'';
+}
+
+function updateScriptMeta(){
+  const meta=$('scriptMeta');
+  if(!meta)return;
+  const text=scriptEditorText();
+  const lines=text?text.split(/\r?\n/).length:0;
+  const chars=text.length;
+  meta.textContent=lines+' lines · '+chars+' chars'+(state.clips.length?' · '+state.clips.length+' clips on timeline':'');
+}
+
+function renderScriptEditor(){
+  const ta=$('scriptEditor');
+  if(!ta)return;
+  if(!ta._focused){
+    const blob=state.scriptText||'';
+    if(blob&&ta.value!==blob)ta.value=blob;
+    else if(!blob&&!ta.value.trim()){
+      const rebuilt=clipTextBlob();
+      if(rebuilt&&rebuilt.trim()&&!state.scriptText)ta.value=rebuilt;
+    }
+  }
+  updateScriptMeta();
+}
+
+function openScriptPanel(){
+  const panel=$('scriptPanel');
+  if(panel){panel.open=true;panel.scrollIntoView({behavior:'smooth',block:'nearest'})}
+  const ta=$('scriptEditor');
+  if(ta)setTimeout(()=>ta.focus(),120);
+}
+
+function syncScriptFromEditor(){
+  const ta=$('scriptEditor');
+  if(!ta)return'';
+  state.scriptText=ta.value;
+  save();
+  updateScriptMeta();
+  return state.scriptText;
+}
+
+function startNewScript(){
+  const has=!!(state.clips.length||state.scriptText||(scriptEditorText()||'').trim());
+  if(has&&!confirm('Start a new script? This clears the timeline, characters, and stored screenplay. Rendered videos in this session are removed from the timeline (downloads are kept).'))return;
+  pushHistory();
+  state.scriptText='';
+  state.clips=[];
+  state.characters={};
+  state.parseResult=null;
+  state.selectedId=null;
+  state.selectedChar=null;
+  const ta=$('scriptEditor');
+  if(ta){ta.value='';ta._focused=false}
+  save();renderAll();openScriptPanel();toast('Ready for a new script — paste or import below');
+}
+
+async function reparseScriptFromEditor(){
+  const text=(scriptEditorText()||'').trim();
+  if(!text){toast('Paste or type a screenplay in the Script panel first');openScriptPanel();return}
+  const hasWork=state.clips.length>0;
+  const hasRendered=state.clips.some(c=>c.videoUrl||c.status==='approved');
+  if(hasWork){
+    let msg='Re-parse and replace the timeline from your edited script?';
+    if(hasRendered)msg+=' Clips with generated video will be rebuilt (you may need to re-generate).';
+    if(!confirm(msg))return;
+  }
+  await importText(text,{fromEditor:true});
+  openScriptPanel();
 }
 
 function renderTimeline(){
@@ -303,10 +377,13 @@ function registerCharFromParse(map,name,desc){
   else if(desc&&!map[up])map[up]=desc;
 }
 
-async function importText(text){
+async function importText(text,opts){
+  opts=opts||{};
   pushHistory();
   const norm=SBParser.normalizeScriptText?SBParser.normalizeScriptText(text):text;
   state.scriptText=norm;
+  const ta=$('scriptEditor');
+  if(ta){ta.value=norm;ta._focused=false}
   const dur=parseInt(state.global.clipDuration,10)||5;
   const result=SBParser.parse(norm,dur);
   state.parseResult=result;
@@ -332,8 +409,15 @@ async function importText(text){
     const sum=panel.querySelector('summary');
     if(sum&&sum.textContent.trim()==='Characters')panel.open=true;
   });
+  if(!opts.fromEditor)openScriptPanel();
 }
-async function importFile(file){importText(await SBParser.readFile(file))}
+async function importFile(file){
+  const text=await SBParser.readFile(file);
+  const ta=$('scriptEditor');
+  if(ta){ta.value=text;ta._focused=false}
+  syncScriptFromEditor();
+  await importText(text);
+}
 
 function addClip(){
   pushHistory();const n=state.clips.length+1;
@@ -413,12 +497,15 @@ function exportEDL(){
   SBExport.exportEDL(approved.length?approved:state.clips);
   toast('EDL downloaded');
 }
-function exportProject(){SBExport.exportProject({clips:state.clips,characters:state.characters,global:state.global,assembly:state.assembly,projectName:state.projectName});toast('Project saved')}
+function exportProject(){SBExport.exportProject({clips:state.clips,characters:state.characters,global:state.global,assembly:state.assembly,projectName:state.projectName,scriptText:state.scriptText,parseResult:state.parseResult});toast('Project saved')}
 function loadProject(){
   const inp=document.createElement('input');inp.type='file';inp.accept='.json';
   inp.onchange=async()=>{const f=inp.files[0];if(!f)return;pushHistory();const d=JSON.parse(await f.text());
     state.clips=d.clips||[];state.characters=SBCharacters.normalize(d.characters||{});state.global=Object.assign(state.global,d.global||{});
-    state.assembly=Object.assign(state.assembly,d.assembly||{});state.projectName=d.projectName||'Imported';state.clips.forEach(ensureClip);save();renderAll();toast('Project loaded')};
+    state.assembly=Object.assign(state.assembly,d.assembly||{});state.projectName=d.projectName||'Imported';
+    state.scriptText=d.scriptText||'';state.parseResult=d.parseResult||null;
+    const ta=$('scriptEditor');if(ta){ta.value=state.scriptText;ta._focused=false}
+    state.clips.forEach(ensureClip);save();renderAll();openScriptPanel();toast('Project loaded')};
   inp.click();
 }
 
@@ -470,7 +557,26 @@ function bindUI(){
   $('moreMenu').onclick=e=>e.stopPropagation();
   $('fileInput').onchange=e=>{const f=e.target.files[0];if(f)importFile(f).catch(err=>toast(err.message));e.target.value=''};
   $('btnImport').onclick=()=>$('fileInput').click();
-  $('btnPaste').onclick=()=>{const t=prompt('Paste screenplay:');if(t&&t.trim())importText(t)};
+  $('btnPaste').onclick=()=>{openScriptPanel();toast('Paste screenplay in the Script panel, then Re-parse timeline')};
+  const btnScript=$('btnScript');
+  if(btnScript)btnScript.onclick=openScriptPanel;
+  const btnEditLink=$('btnEditScriptLink');
+  if(btnEditLink)btnEditLink.onclick=openScriptPanel;
+  const btnReparse=$('btnReparseScript');
+  if(btnReparse)btnReparse.onclick=()=>reparseScriptFromEditor().catch(e=>toast(e.message));
+  const btnScriptImport=$('btnScriptImport');
+  if(btnScriptImport)btnScriptImport.onclick=()=>$('fileInput').click();
+  const btnNewScript=$('btnNewScript');
+  if(btnNewScript)btnNewScript.onclick=startNewScript;
+  const btnMenuScript=$('btnMenuScript');
+  if(btnMenuScript)btnMenuScript.onclick=()=>{toggleMoreMenu(false);openScriptPanel()};
+  const scriptTa=$('scriptEditor');
+  if(scriptTa&&!scriptTa._wired){
+    scriptTa._wired=true;
+    scriptTa.addEventListener('focus',()=>{scriptTa._focused=true});
+    scriptTa.addEventListener('blur',()=>{scriptTa._focused=false;syncScriptFromEditor()});
+    scriptTa.addEventListener('input',()=>{syncScriptFromEditor()});
+  }
   $('btnAdd').onclick=addClip;
   $('btnDup').onclick=duplicateClip;
   $('btnUndo').onclick=undo;

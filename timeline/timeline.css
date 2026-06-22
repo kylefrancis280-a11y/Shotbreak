@@ -172,6 +172,19 @@ button,input,select,textarea{font-family:inherit}
 .ref-preview img{width:100%;object-fit:cover}
 .char-chip.on{border-color:var(--gold);color:var(--gold)}
 
+/* ── script editor ── */
+.script-editor{
+  width:100%;min-height:200px;max-height:42vh;resize:vertical;
+  background:var(--surface2);border:1px solid var(--border);border-radius:8px;
+  color:var(--text);padding:10px 12px;font-family:var(--mono);font-size:12px;line-height:1.5;outline:none;
+}
+.script-editor:focus{border-color:var(--gold);box-shadow:0 0 0 2px rgba(212,168,67,.1)}
+.script-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-top:10px}
+.script-meta{font-size:11px;color:var(--dim);font-family:var(--mono)}
+.script-btns{display:flex;flex-wrap:wrap;gap:8px}
+.timeline-head .script-link{font-size:11px;color:var(--gold);cursor:pointer;font-weight:600;border:none;background:transparent;padding:0}
+.timeline-head .script-link:hover{text-decoration:underline}
+
 /* ── assembly ── */
 .asm-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px}
 .asm-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}

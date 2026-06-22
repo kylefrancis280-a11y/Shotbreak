@@ -6,7 +6,7 @@
 <title>SHOTBREAK — Text-to-Video Movie System</title>
 <link rel="icon" href="/favicon.ico">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Anybody:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="timeline.css?v=20260623b">
+<link rel="stylesheet" href="timeline.css?v=20260623c">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -20,6 +20,7 @@
     <div class="logo">SHOT<span>BREAK</span></div>
     <div class="tb-group">
       <button class="tb-btn" id="btnImport">Import</button>
+      <button class="tb-btn" id="btnScript" title="Edit or replace screenplay">Script</button>
       <button class="tb-btn" id="btnAdd">+ Clip</button>
       <button class="tb-btn gold" id="btnBatch">Generate All</button>
     </div>
@@ -28,6 +29,7 @@
       <div class="tb-dropdown hidden" id="moreMenu">
         <button class="tb-dd" id="btnSaveProj">Save project</button>
         <button class="tb-dd" id="btnLoadProj">Load project</button>
+        <button class="tb-dd" id="btnMenuScript">Edit script</button>
         <button class="tb-dd" id="btnDup">Duplicate clip</button>
         <button class="tb-dd" id="btnUndo">Undo</button>
         <button class="tb-dd" id="btnRedo">Redo</button>
@@ -85,7 +87,7 @@
     <section class="workspace">
       <div class="import-zone" id="importZone">
         <h3>Start with a script</h3>
-        <p>Import a screenplay (.txt, .pdf, or .fdx). We break it into short clips on the timeline.</p>
+        <p>Import a screenplay (.txt, .pdf, or .fdx), or paste in the <strong>Script</strong> panel below. Re-parse anytime to replace the timeline.</p>
         <div class="import-btns">
           <button class="tb-btn gold" onclick="document.getElementById('btnImport').click()">Import Script</button>
           <button class="tb-btn" id="btnPaste">Paste script</button>
@@ -97,7 +99,10 @@
         <div class="timeline-wrap">
           <div class="timeline-head">
             <h2>Timeline</h2>
-            <span class="tb-meta" id="clipCount">0 clips</span>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <button type="button" class="script-link" id="btnEditScriptLink">Edit script</button>
+              <span class="tb-meta" id="clipCount">0 clips</span>
+            </div>
           </div>
           <div class="time-ruler" id="timeRuler"></div>
           <div class="clip-row" id="clipRow"></div>
@@ -109,6 +114,22 @@
       </div>
 
       <div class="module-stack">
+        <details class="module-panel" id="scriptPanel" open>
+          <summary>Script</summary>
+          <div class="panel-pad">
+            <p class="panel-desc">Paste or edit your screenplay here, then <strong>Re-parse timeline</strong> to refresh clips and characters. Importing a file also fills this editor.</p>
+            <textarea id="scriptEditor" class="script-editor" rows="14" placeholder="FADE IN:&#10;&#10;INT. LOCATION - DAY&#10;&#10;Your screenplay…"></textarea>
+            <div class="script-actions">
+              <span class="script-meta" id="scriptMeta">0 lines</span>
+              <div class="script-btns">
+                <button class="tb-btn gold" id="btnReparseScript" type="button">↻ Re-parse timeline</button>
+                <button class="tb-btn" id="btnScriptImport" type="button">Import file</button>
+                <button class="tb-btn" id="btnNewScript" type="button">+ New script</button>
+              </div>
+            </div>
+          </div>
+        </details>
+
         <details class="module-panel">
           <summary>Characters</summary>
           <div class="panel-pad">
@@ -181,10 +202,10 @@
 </div>
 
 <div class="toast" id="toast"></div>
-<script src="/js/model-config.js?v=20260623b"></script>
-<script src="parser.js?v=20260623b"></script>
-<script src="timeline-characters.js?v=20260623b"></script>
-<script src="timeline-export.js?v=20260623b"></script>
-<script src="timeline.js?v=20260623b"></script>
+<script src="/js/model-config.js?v=20260623c"></script>
+<script src="parser.js?v=20260623c"></script>
+<script src="timeline-characters.js?v=20260623c"></script>
+<script src="timeline-export.js?v=20260623c"></script>
+<script src="timeline.js?v=20260623c"></script>
 </body>
 </html>
