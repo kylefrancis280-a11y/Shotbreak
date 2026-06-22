@@ -29,6 +29,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics-compat.js"></script>
 <script src="js/config.js?v=20260617"></script>
 <script src="js/auth.js?v=20260617"></script>
+<script src="js/model-config.js?v=20260622b"></script>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Anybody:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -664,6 +665,83 @@ window.safeSignIn = safeSignIn;
 #mhGenEntityBoxes { margin-top: 14px; }
 #mhCharAgentArea .suggestion-item, .suggestion-item { padding: 5px 0; line-height: 1.3; }
 .point-list { padding: 8px 10px; font-size: 12px; line-height: 1.35; }
+
+/* Sticky video settings — always visible at top of Edit Studio (native selects, no details trap) */
+#mhSettingsBar {
+  position: sticky;
+  top: 52px;
+  z-index: 120;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 16px;
+  overflow: visible;
+  isolation: isolate;
+}
+.mh-settings-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  flex-wrap: wrap;
+  overflow: visible;
+}
+.mh-settings-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  flex-shrink: 0;
+}
+.mh-settings-quick {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex: 1;
+  flex-wrap: wrap;
+  overflow: visible;
+}
+.mh-settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 120px;
+}
+.mh-settings-field label {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+.mh-settings-sel {
+  appearance: auto !important;
+  -webkit-appearance: menulist !important;
+  background: var(--surface2);
+  background-image: none !important;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 6px 28px 6px 10px;
+  min-width: 128px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+}
+.mh-settings-sel:hover { border-color: var(--border2); color: #fff; }
+.mh-settings-sel:focus { border-color: var(--gold); outline: none; box-shadow: 0 0 0 2px rgba(212, 168, 67, 0.12); }
+#mhSettingsBar .mh-settings-note {
+  font-size: 9px;
+  color: #666;
+  padding: 0 14px 8px;
+  line-height: 1.4;
+  display: none;
+}
+#mhSettingsBar .mh-settings-note:not(:empty) { display: block; }
 </style>
 <div id="mediaView" style="display:none">
   <div class="ws">
@@ -675,6 +753,32 @@ window.safeSignIn = safeSignIn;
       <div id="mhProjInfo" style="font-size:12px;color:var(--dim)"></div>
     </div>
     <div id="sbLocalStatus" style="display:none;font-size:11px;color:var(--dim);padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;margin-bottom:10px;font-family:var(--mono);line-height:1.45"></div>
+
+    <!-- Sticky video settings — model / aspect / duration always reachable (native &lt;select&gt;, no details trap) -->
+    <div id="mhSettingsBar">
+      <div class="mh-settings-row">
+        <span class="mh-settings-label">Settings</span>
+        <div class="mh-settings-quick">
+          <div class="mh-settings-field">
+            <label for="videoModelSelect">Model</label>
+            <select id="videoModelSelect" class="mh-settings-sel" title="Video model" onchange="updateVideoOptions()"></select>
+          </div>
+          <div class="mh-settings-field">
+            <label for="videoAspectSelect">Size</label>
+            <select id="videoAspectSelect" class="mh-settings-sel" title="Aspect ratio"></select>
+          </div>
+          <div class="mh-settings-field">
+            <label for="videoDurationSelect">Duration</label>
+            <select id="videoDurationSelect" class="mh-settings-sel" title="Clip length"></select>
+          </div>
+          <div class="mh-settings-field">
+            <label for="videoResolutionSelect">Quality</label>
+            <select id="videoResolutionSelect" class="mh-settings-sel" title="Resolution"></select>
+          </div>
+        </div>
+      </div>
+      <div id="videoModelNote" class="mh-settings-note"></div>
+    </div>
 
     <!-- Tab bar hidden — unified edit workspace shows all sections stacked -->
     <div id="mhTabBar" style="display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap;background:var(--surface);padding:6px;border-radius:10px;border:1px solid var(--gold-border)">
@@ -777,34 +881,12 @@ window.safeSignIn = safeSignIn;
             <div style="font-size:10px;color:var(--dim);margin-top:4px">This lets you see what the software is doing early. Results will appear organized in the entity boxes below by model → scene/shot → take.</div>
           </div>
 
-          <div style="margin:12px 0;padding:10px;background:var(--surface2);border-radius:8px">
-            <div style="font-size:12px;color:var(--gold);margin-bottom:6px">Video Settings (per project) — choose model + resolution / aspect / duration (sent to WaveSpeed or XAI direct for the selected model)</div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px">
-              <div>
-                <label style="font-size:10px">Video Model</label>
-                <select id="videoModelSelect" style="width:100%" onchange="updateVideoOptions()">
-                  <!-- JS populated from VIDEO_MODELS -->
-                </select>
-              </div>
-              <div>
-                <label style="font-size:10px">Resolution</label>
-                <select id="videoResolutionSelect" style="width:100%"></select>
-              </div>
-              <div>
-                <label style="font-size:10px">Aspect Ratio</label>
-                <select id="videoAspectSelect" style="width:100%"></select>
-              </div>
-              <div>
-                <label style="font-size:10px">Duration (seconds)</label>
-                <select id="videoDurationSelect" style="width:100%"></select>
-              </div>
-            </div>
-            <div id="videoModelNote" style="font-size:9px;color:#666;margin-top:4px"></div>
-            <div style="font-size:9px;color:#555;margin-top:2px">Resolution, aspect, and duration options change when you switch models — only valid combos for that model are shown. Settings are forwarded to WaveSpeed or Grok Imagine via XAI.</div>
-            <div id="mhGenActiveBar" style="display:none;margin-top:12px;padding:12px 14px;background:#1a0a0a;border:1px solid rgba(239,68,68,0.4);border-radius:8px;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-              <span id="mhGenActiveLabel" style="font-size:13px;color:#fbbf24;font-weight:700">⚙ Video generating…</span>
-              <button type="button" class="b b-g b-s" id="mhGenTabCancelBtn" style="color:#fca5a5;border-color:rgba(239,68,68,0.55);font-weight:700;min-width:160px" onclick="mhCancelActiveGeneration()">✕ Cancel Generation</button>
-            </div>
+          <div style="margin:12px 0;padding:10px;background:var(--surface2);border-radius:8px;font-size:11px;color:var(--dim);line-height:1.45">
+            Video model, aspect, duration, and resolution are in the <strong style="color:var(--gold)">Settings</strong> bar at the top — options update when you switch models (WaveSpeed or Grok Imagine via XAI).
+          </div>
+          <div id="mhGenActiveBar" style="display:none;margin-top:12px;padding:12px 14px;background:#1a0a0a;border:1px solid rgba(239,68,68,0.4);border-radius:8px;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <span id="mhGenActiveLabel" style="font-size:13px;color:#fbbf24;font-weight:700">⚙ Video generating…</span>
+            <button type="button" class="b b-g b-s" id="mhGenTabCancelBtn" style="color:#fca5a5;border-color:rgba(239,68,68,0.55);font-weight:700;min-width:160px" onclick="mhCancelActiveGeneration()">✕ Cancel Generation</button>
           </div>
 
           <div id="mhGenEntityBoxes" style="margin-top:12px;min-height:80px">
@@ -1897,6 +1979,7 @@ function showMode(m){
     if (typeof mhEnsureUnifiedStudio === 'function') {
       mhEnsureUnifiedStudio();
     }
+    setTimeout(function () { if (window.mhInitVideoSettings) window.mhInitVideoSettings(); }, 80);
   }
   document.getElementById('uMenu').classList.remove('open');
 }
@@ -1953,131 +2036,7 @@ async function trackUsage(type){
 const CINE={lens:{l:'Lens',o:['Default','14mm Ultra Wide','18mm Wide','24mm Wide','35mm Standard','50mm Normal','85mm Portrait','135mm Tele','Anamorphic 2x','Anamorphic 1.33x','Fisheye 8mm','Tilt-Shift','Cooke S4','Zeiss Master','Panavision Primo','Canon K35','Kowa Anamorphic']},tod:{l:'Time of Day',o:['Default','Dawn','Golden Hour AM','Early Morning','High Noon','Late Afternoon','Golden Hour PM','Dusk','Blue Hour','Night','Midnight','Moonlit','Overcast','Stormy','Foggy','Neon Night','Candlelit','Mixed Light']},style:{l:'Style',o:['Default','Cinematic','Documentary','Film Noir','Neo-Noir','Cyberpunk','Wes Anderson','Fincher','Nolan','Kubrick','Deakins','A24 Indie','Found Footage','Music Video','Commercial','Retro 70s','Retro 80s','VHS 90s','Horror','Gothic','Western','Sci-Fi','Fantasy','War Film','Vaporwave']},temp:{l:'Temperature',o:['Default','Ultra Warm 3200K','Warm 3800K','Neutral 5000K','Daylight 5600K','Cool 6500K','Cold 7500K','Tungsten Orange','Candlelight 1800K','Moonlight Blue','Teal & Orange']},grain:{l:'Film Grain',o:['Default','Light 35mm','Medium 35mm','Heavy 35mm','Super 8mm','Portra 400','Tri-X 400','CineStill 800T','Kodachrome','VHS Lines','High ISO 6400','Night Vision','Infrared']},season:{l:'Season',o:['Default','Spring Bloom','Summer','Autumn','Winter Snow','Monsoon','Desert','Tropical','Arctic']},contrast:{l:'Contrast',o:['Default','Flat Log','Low','Medium','High','Ultra Crushed','Bleach Bypass','Matte/Faded','Rich Deep']},dof:{l:'Depth of Field',o:['Default','Ultra Shallow f/0.95','Shallow f/1.4','Moderate f/2.8','Medium f/4','Deep f/8','Rack Focus','Split Diopter','Anamorphic Bokeh','Deep Focus']},camStyle:{l:'Camera Move',o:['Default','Locked Tripod','Handheld Subtle','Handheld Shaky','Steadicam','Gimbal','Dolly Track','Dolly Zoom Vertigo','Crane Up','Drone Wide','Drone Orbit','Body POV','Whip Pan','Dutch Angle','Long Take']},dist:{l:'Distortion',o:['Default','Barrel Subtle','Chroma Aberr Light','Flare Natural','Flare Anamorphic','Light Leak Red','Light Leak Rainbow','Vignette Light','Vignette Heavy','Halation','Bloom','Rain on Lens','Pro Mist','Black Mist','Glitch']},exp:{l:'Exposure',o:['Default','Over +1','Blown +2','Under -1','Moody -2','Silhouette','High Key','Low Key','Rembrandt','Chiaroscuro','God Rays','Neon','Available Light']}};
 const CK=Object.keys(CINE);let gC={};CK.forEach(k=>gC[k]='Default');let cOpen=false;
 
-// ===================== MODEL CAPABILITIES CONFIG =====================
-// The 5 photo + 5 video models the user explicitly listed.
-// Resolution/aspect/duration dropdowns are filtered per model — only show values each model supports.
-// Model config drives the UI options, info notes (description + ref support), and API payload defaults.
-// Backend (generate-video.js) receives the selected model + validated params and routes
-// grok-imagine/flux-xai direct to XAI, everything else to WaveSpeed.
-const PHOTO_MODELS = {
-  'wan-2.7': {
-    label: 'Wan 2.7',
-    resolutions: ['720p', '1080p', '1K', '2K'],
-    aspectRatios: ['1:1', '16:9', '9:16', '2:3', '3:2', '4:3', '3:4'],
-    supportsReferences: true,
-    maxRefImages: 4,
-    description: 'Alibaba Wan 2.7 - excellent I2I consistency'
-  },
-  'flux-xai': {
-    label: 'Flux (pulling thru XAI API)',
-    resolutions: ['1K', '2K'],
-    aspectRatios: ['1:1', '16:9', '9:16', '2:3', '3:2', '4:3', '3:4', '20:9'],
-    supportsReferences: true,
-    maxRefImages: 3,
-    description: 'High quality via Grok/Flux on XAI'
-  },
-  'nano-banana': {
-    label: 'Nano Banana',
-    resolutions: ['1K'],
-    aspectRatios: ['1:1', '16:9', '9:16', '3:2', '2:3'],
-    supportsReferences: true,
-    maxRefImages: 3,
-    description: 'Google Gemini Nano Banana - great for edits & consistency'
-  },
-  'nano-banana-pro': {
-    label: 'Nano Banana Pro',
-    resolutions: ['1K', '2K'],
-    aspectRatios: ['1:1', '16:9', '9:16', '3:2', '2:3', '4:3'],
-    supportsReferences: true,
-    maxRefImages: 5,
-    description: 'Nano Banana Pro - higher fidelity, strong character lock'
-  },
-  'gpt-image-2': {
-    label: 'GPT 2.0',
-    resolutions: ['1024x1024', '1792x1024', '1024x1792'],
-    aspectRatios: ['1:1', '16:9', '9:16'],
-    supportsReferences: true,
-    maxRefImages: 2,
-    description: 'OpenAI GPT 2.0 via aggregator'
-  }
-};
-
-const VIDEO_MODELS = {
-  'seedance-2.0-turbo': {
-    label: 'Seedance 2.0 Turbo',
-    resolutions: ['720p'],
-    aspectRatios: ['16:9', '9:16', '1:1', '2:3', '3:2'],
-    durations: [4, 5, 6, 8, 10],
-    supportsReferences: true,
-    maxRefImages: 3,
-    description: 'Fast reference-to-video, good audio'
-  },
-  'wan-2.7': {
-    label: 'Wan 2.7',
-    resolutions: ['720p', '1080p'],
-    aspectRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '2:3', '3:2'],
-    durations: [2, 4, 5, 6, 8, 10, 12, 15],
-    supportsReferences: true,
-    maxRefImages: 2, // first + last frame etc.
-    description: 'Wan 2.7 - strong I2V, first+last, audio, 2-15s'
-  },
-  'sora-2': {
-    label: 'Sora 2',
-    resolutions: ['720p'],
-    aspectRatios: ['16:9', '9:16'],
-    durations: [4, 8, 12],
-    supportsReferences: true,
-    maxRefImages: 1,
-    description: 'OpenAI Sora 2 - cinematic, limited sizes/durs in preview'
-  },
-  'veo-3.1': {
-    label: 'Veo 3.1',
-    resolutions: ['720p', '1080p'],
-    aspectRatios: ['16:9', '9:16'],
-    durations: [4, 6, 8],
-    supportsReferences: true,
-    maxRefImages: 3,
-    description: 'Google Veo 3.1 — 1080p T2V/R2V via WaveSpeed (4/6/8s)'
-  },
-  'grok-imagine': {
-    label: 'Grok Imagine (done through XAI API)',
-    resolutions: ['480p', '720p'],
-    aspectRatios: ['1:1', '16:9', '9:16', '2:3', '3:2'],
-    durations: [4, 5, 6, 8, 10, 12, 15],
-    supportsReferences: true,
-    maxRefImages: 7,
-    description: 'XAI Grok Imagine native - excellent ref coherence + audio'
-  },
-  'kling-3.0-pro': {
-    label: 'Kling 3.0 Pro',
-    resolutions: ['720p', '1080p'],
-    aspectRatios: ['16:9', '9:16', '1:1'],
-    durations: [3, 5, 8, 10, 15],
-    supportsReferences: true,
-    maxRefImages: 1,
-    description: 'Kling 3.0 Pro — cinematic T2V/I2V via WaveSpeed'
-  }
-};
-
-// Helper to get model config
-function getModelConfig(model, isVideo = true) {
-  const list = isVideo ? VIDEO_MODELS : PHOTO_MODELS;
-  return list[model] || Object.values(list)[0];
-}
-
-// Populate the *model* dropdown only (the 5 exact ones the user requested). No filtering on the other params.
-function populateModelSelect(selectId, modelsObj) {
-  const sel = document.getElementById(selectId);
-  if (!sel) return;
-  sel.innerHTML = '';
-  Object.keys(modelsObj).forEach(key => {
-    const m = modelsObj[key];
-    const opt = document.createElement('option');
-    opt.value = key;
-    opt.textContent = m.label;
-    sel.appendChild(opt);
-  });
-}
+// PHOTO_MODELS, VIDEO_MODELS, populateModelSelect, updateVideoOptions → js/model-config.js
 
 // Character/location stills via generate-video.js → Grok Imagine (flux-xai) or WaveSpeed
 async function sbGenerateCharacterPicture(opts) {
@@ -2109,86 +2068,6 @@ async function sbGenerateCharacterPicture(opts) {
     throw new Error(d.detail || d.hint || d.note || 'No real image URL returned — check XAI_API_KEY / WAVESPEED_API_KEY in Netlify.');
   }
   return Object.assign({}, d, {url, prompt: d.prompt || picPayload.prompt, model: picModel, provider: d.provider || sbInferProvider(picModel, null)});
-}
-
-function updateOptionsForModel(model, isVideo, resId, aspectId, durId) {
-  const cfg = getModelConfig(model, isVideo);
-  const resSel = document.getElementById(resId);
-  const aspSel = document.getElementById(aspectId);
-  const durSel = durId ? document.getElementById(durId) : null;
-
-  const resolutions = Array.isArray(cfg.resolutions) ? cfg.resolutions : [];
-  const aspects = Array.isArray(cfg.aspectRatios) ? cfg.aspectRatios : [];
-  const durations = isVideo && Array.isArray(cfg.durations) ? cfg.durations : [];
-
-  if (resSel) {
-    const current = resSel.value;
-    resSel.innerHTML = '';
-    resolutions.forEach(r => {
-      const o = document.createElement('option');
-      o.value = r; o.textContent = r;
-      resSel.appendChild(o);
-    });
-    if (current && resolutions.includes(current)) resSel.value = current;
-    else if (resolutions[0]) resSel.value = resolutions[0];
-  }
-  if (aspSel) {
-    const current = aspSel.value;
-    aspSel.innerHTML = '';
-    aspects.forEach(a => {
-      const o = document.createElement('option');
-      o.value = a; o.textContent = a;
-      aspSel.appendChild(o);
-    });
-    if (current && aspects.includes(current)) aspSel.value = current;
-    else if (aspects[0]) aspSel.value = aspects[0];
-  }
-  if (durSel) {
-    const current = durSel.value;
-    const currentNum = current ? parseInt(current, 10) : null;
-    durSel.innerHTML = '';
-    durations.forEach(d => {
-      const o = document.createElement('option');
-      o.value = String(d); o.textContent = d + 's';
-      durSel.appendChild(o);
-    });
-    if (currentNum != null && durations.includes(currentNum)) {
-      durSel.value = String(currentNum);
-    } else if (durations[0] != null) {
-      durSel.value = String(durations[0]);
-    }
-  }
-
-  // Model-specific note: description + ref support + supported output params
-  const noteEl = document.getElementById(isVideo ? 'videoModelNote' : 'photoModelNote');
-  if (noteEl && cfg.description) {
-    const refNote = cfg.supportsReferences ? ` • up to ${cfg.maxRefImages || 3} refs` : '';
-    const paramBits = [];
-    if (resolutions.length) paramBits.push(resolutions.join(', '));
-    if (aspects.length) paramBits.push(aspects.join(', '));
-    if (durations.length) paramBits.push(durations.map(d => d + 's').join(', '));
-    const paramNote = paramBits.length ? ` • supported: ${paramBits.join(' · ')}` : '';
-    noteEl.textContent = cfg.description + refNote + paramNote;
-  }
-}
-
-function updateVideoOptions() {
-  const modelSel = document.getElementById('videoModelSelect');
-  if (!modelSel) return;
-  updateOptionsForModel(modelSel.value, true, 'videoResolutionSelect', 'videoAspectSelect', 'videoDurationSelect');
-}
-
-function updatePhotoOptions() {
-  const modelSel = document.getElementById('photoModelSelect');
-  if (!modelSel) return;
-  // For photo we only show the model + its note (no live res/aspect selects in the Characters UI for photos).
-  // Picture generation still picks a sane default from the model's config for the API payload.
-  const cfg = getModelConfig(modelSel.value, false);
-  const noteEl = document.getElementById('photoModelNote');
-  if (noteEl) {
-    const refNote = cfg.supportsReferences ? ` • up to ${cfg.maxRefImages || 3} refs supported` : '';
-    noteEl.textContent = cfg.description + refNote;
-  }
 }
 
 // ===================== STATE =====================
@@ -7605,10 +7484,13 @@ function mhIsUnifiedStudio() {
 }
 
 function mhEnsureUnifiedStudio() {
-  if (mhIsUnifiedStudio()) return;
-  document.body.setAttribute('data-mh-unified', '1');
-  document.querySelectorAll('.mh-tab-pane').forEach(p => { p.style.display = 'block'; });
-  ['script', 'characters', 'generate', 'edit'].forEach(t => mhRunTabInit(t));
+  const firstRun = !mhIsUnifiedStudio();
+  if (firstRun) {
+    document.body.setAttribute('data-mh-unified', '1');
+    document.querySelectorAll('.mh-tab-pane').forEach(p => { p.style.display = 'block'; });
+    ['script', 'characters', 'generate', 'edit'].forEach(t => mhRunTabInit(t));
+  }
+  if (typeof window.mhInitVideoSettings === 'function') window.mhInitVideoSettings();
 }
 
 function mhRunTabInit(tab) {
@@ -7663,17 +7545,7 @@ function mhRunTabInit(tab) {
       if (typeof buildPerShotDetailBoxes === 'function') buildPerShotDetailBoxes();
       mhRenderGenClipsGallery();
     }, 250);
-    // Populate video model select; resolution/aspect/duration filtered per model via updateVideoOptions().
-    setTimeout(() => {
-      const vidSel = document.getElementById('videoModelSelect');
-      if (vidSel && vidSel.options.length === 0) {
-        populateModelSelect('videoModelSelect', VIDEO_MODELS);
-        // default to Seedance (WaveSpeed) for live investor demo renders
-        if (VIDEO_MODELS['seedance-2.0-turbo']) vidSel.value = 'seedance-2.0-turbo';
-        else vidSel.selectedIndex = 0;
-        updateVideoOptions();
-      }
-    }, 50);
+    setTimeout(function () { if (window.mhInitVideoSettings) window.mhInitVideoSettings(); }, 50);
   }
 
   if (tab === 'edit') {
@@ -8970,15 +8842,10 @@ function generateBaselineVideo() {
   buildPerShotDetailBoxes();
 }
 
-// Initialize the 5 photo + 5 video model selects (video output params filtered per model)
+// Initialize photo + video model selects (video settings also wired on mhEnsureUnifiedStudio)
 setTimeout(() => {
   try {
-    const vSel = document.getElementById('videoModelSelect');
-    if (vSel && vSel.options.length === 0) {
-      populateModelSelect('videoModelSelect', VIDEO_MODELS);
-      vSel.value = 'seedance-2.0-turbo';
-      updateVideoOptions();
-    }
+    if (window.mhInitVideoSettings) window.mhInitVideoSettings();
     const pSel = document.getElementById('photoModelSelect');
     if (pSel && pSel.options.length === 0) {
       populateModelSelect('photoModelSelect', PHOTO_MODELS);

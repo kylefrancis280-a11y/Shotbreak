@@ -1,3 +1,7 @@
+# Main app — serve golden Edit Studio (NOT timeline)
+/app    /app.html    200
+/app/   /app.html    200
+
 # Block internal/ops files from public web access
 /OWNER_LOGIN.md /404.html 404
 /MINIMAL_DO_THIS_NOW.txt /404.html 404

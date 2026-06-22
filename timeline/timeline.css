@@ -6,7 +6,7 @@
   --red:#f87171;--text:#e8e8ec;--text2:#8e8e9e;--dim:#5a5a6a;
   --display:'Syne',sans-serif;--body:'Anybody',sans-serif;--mono:'JetBrains Mono',monospace;
 }
-html,body{height:100%;overflow:hidden}
+html,body{height:100%;margin:0;overflow-x:hidden;overflow-y:auto}
 body{background:var(--bg);color:var(--text);font-family:var(--body);-webkit-font-smoothing:antialiased}
 button,input,select,textarea{font-family:inherit}
 .app{display:flex;flex-direction:column;height:100vh}
@@ -32,7 +32,7 @@ button,input,select,textarea{font-family:inherit}
 .tb-dd:hover{background:var(--surface3);color:#fff}
 
 /* ── settings bar ── */
-.settings-bar{border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0;position:relative;z-index:40}
+.settings-bar{border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0;position:relative;z-index:120;overflow:visible;isolation:isolate}
 .settings-row{display:flex;align-items:center;gap:12px;padding:8px 14px}
 .settings-label{font-size:10px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;flex-shrink:0}
 .settings-quick{display:flex;align-items:center;gap:8px;flex:1;flex-wrap:wrap}
@@ -43,13 +43,14 @@ button,input,select,textarea{font-family:inherit}
 .settings-full:not(.hidden){display:flex}
 .uc-group{display:flex;align-items:center;gap:6px}
 .uc-label{font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.08em}
+.settings-bar .uc-sel,.settings-full .uc-sel{appearance:auto!important;-webkit-appearance:menulist!important;background-image:none!important;min-width:130px;pointer-events:auto}
 .uc-sel{
-  appearance:none;-webkit-appearance:none;
-  background:var(--surface2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' fill='%235a5a6a'%3E%3Cpath d='M2 4l3 3 3-3'/%3E%3C/svg%3E") no-repeat right 8px center;
+  appearance:auto;-webkit-appearance:menulist;
+  background:var(--surface2);
   border:1px solid var(--border);color:var(--text);border-radius:6px;
   padding:6px 28px 6px 10px;min-width:120px;
   font-size:11px;font-weight:600;outline:none;cursor:pointer;
-  position:relative;z-index:50;
+  position:relative;z-index:50;pointer-events:auto;
 }
 .uc-sel:hover{border-color:var(--border2);color:#fff}
 .uc-sel:focus{border-color:var(--gold);box-shadow:0 0 0 2px rgba(212,168,67,.12)}
@@ -117,8 +118,8 @@ button,input,select,textarea{font-family:inherit}
 .char-chip{display:inline-flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--border);border-radius:16px;padding:3px 9px;font-size:10px;margin:0 4px 4px 0}
 
 /* ── login overlay ── */
-.login-overlay{position:fixed;inset:0;background:rgba(5,5,7,.92);display:flex;align-items:center;justify-content:center;z-index:100}
-.login-card{width:380px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:28px}
+.login-overlay{position:fixed;inset:0;background:rgba(5,5,7,.72);display:flex;align-items:center;justify-content:center;z-index:100;pointer-events:none}
+.login-card{width:380px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:28px;pointer-events:auto;box-shadow:0 20px 50px rgba(0,0,0,.55)}
 .login-card h1{font-family:var(--display);font-size:24px;margin-bottom:4px}
 .login-card h1 span{color:var(--gold)}
 .login-card p{color:var(--text2);font-size:13px;margin-bottom:18px}

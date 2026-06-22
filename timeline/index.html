@@ -43,34 +43,17 @@
     <div class="settings-row">
       <span class="settings-label">Settings</span>
       <div class="settings-quick">
-        <select class="uc-sel" id="gModel" title="Video model">
-          <option value="seedance-2.0-turbo">Seedance Turbo</option>
-          <option value="wan-2.7">Wan 2.7</option>
-          <option value="sora-2">Sora 2</option>
-          <option value="veo-3.1">Veo 3.1</option>
-          <option value="kling-3.0-pro">Kling 3.0 Pro</option>
-          <option value="grok-imagine">Grok Imagine</option>
-        </select>
-        <select class="uc-sel" id="gAspect" title="Aspect ratio">
-          <option value="16:9">16:9</option>
-          <option value="9:16">9:16</option>
-          <option value="1:1">1:1</option>
-          <option value="2.39:1">2.39:1</option>
-        </select>
-        <select class="uc-sel" id="gDuration" title="Clip length">
-          <option value="5">~5s</option>
-          <option value="6">~6s</option>
-          <option value="8">~8s</option>
-          <option value="10">~10s</option>
-          <option value="15">~15s</option>
-        </select>
+        <select class="uc-sel" id="gModel" title="Video model"></select>
+        <select class="uc-sel" id="gAspect" title="Aspect ratio"></select>
+        <select class="uc-sel" id="gDuration" title="Clip length"></select>
+        <select class="uc-sel" id="gQuality" title="Quality"></select>
       </div>
       <button type="button" class="settings-more-btn" id="btnSettingsMore" title="More settings" aria-expanded="false">▾</button>
     </div>
     <div class="settings-full hidden" id="settingsFull">
       <div class="uc-group"><span class="uc-label">Style</span><select class="uc-sel" id="gFilm"><option>Cinematic</option><option>Documentary</option><option>Film Noir</option><option>Neo-Noir</option><option>Commercial</option></select></div>
       <div class="uc-group"><span class="uc-label">Color</span><select class="uc-sel" id="gColor"><option>Natural</option><option>Warm</option><option>Cool</option><option>Desaturated</option><option>High Contrast</option></select></div>
-      <div class="uc-group"><span class="uc-label">Quality</span><select class="uc-sel" id="gQuality"><option>1080p</option><option>720p</option><option>4K</option></select></div>
+
       <div class="uc-group"><span class="uc-label">Audio</span><select class="uc-sel" id="gAudio"><option>Cinematic</option><option>Narration</option><option>Dialogue + Music</option></select></div>
       <div class="uc-group"><span class="uc-label">Language</span><select class="uc-sel" id="gLang"><option>English</option><option>French</option><option>Bilingual</option></select></div>
     </div>
@@ -175,6 +158,7 @@
 </div>
 
 <div class="toast" id="toast"></div>
+<script src="/js/model-config.js?v=20260622b"></script>
 <script src="parser.js"></script>
 <script src="timeline-characters.js"></script>
 <script src="timeline-export.js"></script>

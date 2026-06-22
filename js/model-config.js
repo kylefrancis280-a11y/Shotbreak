@@ -1,0 +1,290 @@
+/* Shotbreak — photo + video model capabilities + bulletproof settings dropdowns */
+(function () {
+  'use strict';
+
+  var PHOTO_MODELS = {
+    'wan-2.7': { label: 'Wan 2.7', resolutions: ['720p', '1080p', '1K', '2K'], aspectRatios: ['1:1', '16:9', '9:16', '2:3', '3:2', '4:3', '3:4'], supportsReferences: true, maxRefImages: 4, description: 'Alibaba Wan 2.7 - excellent I2I consistency' },
+    'flux-xai': { label: 'Flux (pulling thru XAI API)', resolutions: ['1K', '2K'], aspectRatios: ['1:1', '16:9', '9:16', '2:3', '3:2', '4:3', '3:4', '20:9'], supportsReferences: true, maxRefImages: 3, description: 'High quality via Grok/Flux on XAI' },
+    'nano-banana': { label: 'Nano Banana', resolutions: ['1K'], aspectRatios: ['1:1', '16:9', '9:16', '3:2', '2:3'], supportsReferences: true, maxRefImages: 3, description: 'Google Gemini Nano Banana - great for edits & consistency' },
+    'nano-banana-pro': { label: 'Nano Banana Pro', resolutions: ['1K', '2K'], aspectRatios: ['1:1', '16:9', '9:16', '3:2', '2:3', '4:3'], supportsReferences: true, maxRefImages: 5, description: 'Nano Banana Pro - higher fidelity, strong character lock' },
+    'gpt-image-2': { label: 'GPT 2.0', resolutions: ['1024x1024', '1792x1024', '1024x1792'], aspectRatios: ['1:1', '16:9', '9:16'], supportsReferences: true, maxRefImages: 2, description: 'OpenAI GPT 2.0 via aggregator' }
+  };
+
+  var VIDEO_MODELS = {
+    'seedance-2.0-turbo': { label: 'Seedance 2.0 Turbo', resolutions: ['720p'], aspectRatios: ['16:9', '9:16', '1:1', '2:3', '3:2'], durations: [4, 5, 6, 8, 10], supportsReferences: true, maxRefImages: 3, description: 'Fast reference-to-video, good audio' },
+    'wan-2.7': { label: 'Wan 2.7', resolutions: ['720p', '1080p'], aspectRatios: ['16:9', '9:16', '1:1', '4:3', '3:4', '2:3', '3:2'], durations: [2, 4, 5, 6, 8, 10, 12, 15], supportsReferences: true, maxRefImages: 2, description: 'Wan 2.7 - strong I2V, first+last, audio, 2-15s' },
+    'sora-2': { label: 'Sora 2', resolutions: ['720p'], aspectRatios: ['16:9', '9:16'], durations: [4, 8, 12], supportsReferences: true, maxRefImages: 1, description: 'OpenAI Sora 2 - cinematic, limited sizes/durs in preview' },
+    'veo-3.1': { label: 'Veo 3.1', resolutions: ['720p', '1080p'], aspectRatios: ['16:9', '9:16'], durations: [4, 6, 8], supportsReferences: true, maxRefImages: 3, description: 'Google Veo 3.1 — 1080p T2V/R2V via WaveSpeed (4/6/8s)' },
+    'grok-imagine': { label: 'Grok Imagine (XAI)', resolutions: ['480p', '720p'], aspectRatios: ['1:1', '16:9', '9:16', '2:3', '3:2'], durations: [4, 5, 6, 8, 10, 12, 15], supportsReferences: true, maxRefImages: 7, description: 'XAI Grok Imagine native - excellent ref coherence + audio' },
+    'kling-3.0-pro': { label: 'Kling 3.0 Pro', resolutions: ['720p', '1080p'], aspectRatios: ['16:9', '9:16', '1:1'], durations: [3, 5, 8, 10, 15], supportsReferences: true, maxRefImages: 1, description: 'Kling 3.0 Pro — cinematic T2V/I2V via WaveSpeed' }
+  };
+
+  var _ddDocClickWired = false;
+
+  function injectDropdownStyles() {
+    if (document.getElementById('sb-dd-styles')) return;
+    var s = document.createElement('style');
+    s.id = 'sb-dd-styles';
+    s.textContent = [
+      '.sb-dd-wrap{position:relative;display:inline-block;min-width:128px;vertical-align:top;z-index:200}',
+      '.sb-dd-btn{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;text-align:left;background:var(--surface2,#131319);border:1px solid var(--border,rgba(255,255,255,.1));color:var(--text,#e8e8ec);border-radius:6px;padding:7px 10px;font-size:11px;font-weight:600;cursor:pointer;line-height:1.3}',
+      '.sb-dd-btn:hover{border-color:var(--border2,rgba(255,255,255,.18));color:#fff}',
+      '.sb-dd-btn:focus{outline:none;border-color:var(--gold,#d4a843);box-shadow:0 0 0 2px rgba(212,168,67,.15)}',
+      '.sb-dd-btn::after{content:"▾";font-size:10px;color:var(--dim,#5a5a6a);flex-shrink:0}',
+      '.sb-dd-btn.open::after{transform:rotate(180deg)}',
+      '.sb-dd-menu{position:absolute;top:calc(100% + 4px);left:0;right:0;max-height:240px;overflow-y:auto;background:var(--surface2,#131319);border:1px solid var(--border2,rgba(255,255,255,.14));border-radius:8px;padding:4px;box-shadow:0 10px 28px rgba(0,0,0,.5);z-index:9999}',
+      '.sb-dd-menu.sb-dd-hidden{display:none}',
+      '.sb-dd-item{display:block;width:100%;text-align:left;border:none;background:transparent;color:var(--text2,#8e8e9e);padding:8px 10px;font-size:11px;font-weight:600;border-radius:5px;cursor:pointer}',
+      '.sb-dd-item:hover,.sb-dd-item.sb-dd-on{background:rgba(212,168,67,.12);color:var(--gold,#d4a843)}',
+      '.sb-dd-native{position:absolute!important;opacity:0!important;width:1px!important;height:1px!important;pointer-events:none!important;left:-9999px!important}',
+      '#mhSettingsBar .sb-dd-wrap,#settingsBar .sb-dd-wrap{min-width:140px}',
+      '#mhSettingsBar,#settingsBar,.settings-quick,.mh-settings-quick{overflow:visible!important}'
+    ].join('');
+    document.head.appendChild(s);
+  }
+
+  function wireDocClose() {
+    if (_ddDocClickWired) return;
+    _ddDocClickWired = true;
+    document.addEventListener('click', function () {
+      document.querySelectorAll('.sb-dd-menu').forEach(function (m) { m.classList.add('sb-dd-hidden'); });
+      document.querySelectorAll('.sb-dd-btn.open').forEach(function (b) { b.classList.remove('open'); });
+    });
+  }
+
+  function refreshSbDropdown(sel) {
+    if (!sel || !sel._sbDd) return;
+    var ui = sel._sbDd;
+    var btnLabel = 'Choose…';
+    if (sel.options.length && sel.selectedIndex >= 0) {
+      btnLabel = sel.options[sel.selectedIndex].textContent;
+    } else if (sel.disabled) {
+      btnLabel = '—';
+    }
+    ui.btn.textContent = btnLabel;
+    ui.btn.disabled = !!sel.disabled;
+    ui.menu.innerHTML = '';
+    for (var i = 0; i < sel.options.length; i++) {
+      (function (opt) {
+        var item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'sb-dd-item' + (opt.value === sel.value ? ' sb-dd-on' : '');
+        item.textContent = opt.textContent;
+        item.addEventListener('click', function (e) {
+          e.stopPropagation();
+          sel.value = opt.value;
+          refreshSbDropdown(sel);
+          ui.menu.classList.add('sb-dd-hidden');
+          ui.btn.classList.remove('open');
+          sel.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        ui.menu.appendChild(item);
+      })(sel.options[i]);
+    }
+  }
+
+  function enhanceSelect(sel) {
+    if (!sel || sel.dataset.sbDd === '1') {
+      refreshSbDropdown(sel);
+      return;
+    }
+    injectDropdownStyles();
+    wireDocClose();
+    sel.dataset.sbDd = '1';
+    sel.classList.add('sb-dd-native');
+
+    var wrap = document.createElement('div');
+    wrap.className = 'sb-dd-wrap';
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'sb-dd-btn';
+    btn.setAttribute('aria-haspopup', 'listbox');
+    var menu = document.createElement('div');
+    menu.className = 'sb-dd-menu sb-dd-hidden';
+    menu.setAttribute('role', 'listbox');
+
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (sel.disabled) return;
+      var open = menu.classList.contains('sb-dd-hidden');
+      document.querySelectorAll('.sb-dd-menu').forEach(function (m) { m.classList.add('sb-dd-hidden'); });
+      document.querySelectorAll('.sb-dd-btn.open').forEach(function (b) { b.classList.remove('open'); });
+      if (open) {
+        refreshSbDropdown(sel);
+        menu.classList.remove('sb-dd-hidden');
+        btn.classList.add('open');
+      }
+    });
+
+    sel._sbDd = { wrap: wrap, btn: btn, menu: menu };
+    var parent = sel.parentNode;
+    parent.insertBefore(wrap, sel);
+    wrap.appendChild(btn);
+    wrap.appendChild(menu);
+    wrap.appendChild(sel);
+    refreshSbDropdown(sel);
+  }
+
+  function enhanceSelects(ids) {
+    ids.forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) enhanceSelect(el);
+    });
+  }
+
+  function getModelConfig(model, isVideo) {
+    var list = isVideo ? VIDEO_MODELS : PHOTO_MODELS;
+    return list[model] || Object.values(list)[0] || {};
+  }
+
+  function populateModelSelect(selectId, modelsObj) {
+    var sel = document.getElementById(selectId);
+    if (!sel || !modelsObj) return;
+    sel.innerHTML = '';
+    Object.keys(modelsObj).forEach(function (key) {
+      var m = modelsObj[key];
+      var opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = m.label || key;
+      sel.appendChild(opt);
+    });
+    refreshSbDropdown(sel);
+  }
+
+  function fillSelect(selectId, values, formatter) {
+    var sel = document.getElementById(selectId);
+    if (!sel) return;
+    var current = sel.value;
+    sel.innerHTML = '';
+    if (!values || !values.length) {
+      sel.disabled = true;
+      var empty = document.createElement('option');
+      empty.value = '';
+      empty.textContent = '—';
+      sel.appendChild(empty);
+      refreshSbDropdown(sel);
+      return;
+    }
+    sel.disabled = false;
+    values.forEach(function (v) {
+      var o = document.createElement('option');
+      o.value = String(v);
+      o.textContent = formatter ? formatter(v) : String(v);
+      sel.appendChild(o);
+    });
+    if (current && values.some(function (x) { return String(x) === current; })) sel.value = current;
+    else sel.value = String(values[0]);
+    refreshSbDropdown(sel);
+  }
+
+  function updateOptionsForModel(model, isVideo, resId, aspectId, durId) {
+    var cfg = getModelConfig(model, isVideo);
+    var resolutions = Array.isArray(cfg.resolutions) ? cfg.resolutions : [];
+    var aspects = Array.isArray(cfg.aspectRatios) ? cfg.aspectRatios : [];
+    var durations = isVideo && Array.isArray(cfg.durations) ? cfg.durations : [];
+
+    fillSelect(resId, resolutions, null);
+    fillSelect(aspectId, aspects, null);
+    if (durId) fillSelect(durId, durations, function (d) { return '~' + d + 's'; });
+
+    var noteEl = document.getElementById(isVideo ? 'videoModelNote' : 'photoModelNote');
+    if (noteEl && cfg.description) {
+      var refNote = cfg.supportsReferences ? ' • up to ' + (cfg.maxRefImages || 3) + ' refs' : '';
+      var paramBits = [];
+      if (resolutions.length) paramBits.push(resolutions.join(', '));
+      if (aspects.length) paramBits.push(aspects.join(', '));
+      if (durations.length) paramBits.push(durations.map(function (d) { return d + 's'; }).join(', '));
+      var paramNote = paramBits.length ? ' • supported: ' + paramBits.join(' · ') : '';
+      noteEl.textContent = cfg.description + refNote + paramNote;
+    }
+  }
+
+  function updateVideoOptions() {
+    var modelSel = document.getElementById('videoModelSelect');
+    if (!modelSel) return;
+    updateOptionsForModel(modelSel.value, true, 'videoResolutionSelect', 'videoAspectSelect', 'videoDurationSelect');
+  }
+
+  function updatePhotoOptions() {
+    var modelSel = document.getElementById('photoModelSelect');
+    if (!modelSel) return;
+    var cfg = getModelConfig(modelSel.value, false);
+    var noteEl = document.getElementById('photoModelNote');
+    if (noteEl) {
+      var refNote = cfg.supportsReferences ? ' • up to ' + (cfg.maxRefImages || 3) + ' refs supported' : '';
+      noteEl.textContent = (cfg.description || '') + refNote;
+    }
+  }
+
+  var APP_VIDEO_IDS = ['videoModelSelect', 'videoAspectSelect', 'videoDurationSelect', 'videoResolutionSelect'];
+  var TL_VIDEO_IDS = ['gModel', 'gAspect', 'gDuration', 'gQuality'];
+
+  function mhInitVideoSettings() {
+    var vidSel = document.getElementById('videoModelSelect');
+    if (!vidSel) return;
+    var keys = Object.keys(VIDEO_MODELS);
+    if (!keys.length) return;
+    if (vidSel.options.length !== keys.length) {
+      populateModelSelect('videoModelSelect', VIDEO_MODELS);
+    }
+    if (!vidSel.value || !VIDEO_MODELS[vidSel.value]) {
+      vidSel.value = VIDEO_MODELS['seedance-2.0-turbo'] ? 'seedance-2.0-turbo' : keys[0];
+    }
+    updateVideoOptions();
+    enhanceSelects(APP_VIDEO_IDS);
+    if (!vidSel.dataset.mhWired) {
+      vidSel.dataset.mhWired = '1';
+      vidSel.addEventListener('change', updateVideoOptions);
+    }
+  }
+
+  function initTimelineVideoSettings(onSync, skipInitialSync) {
+    var modelSel = document.getElementById('gModel');
+    if (!modelSel) return;
+    populateModelSelect('gModel', VIDEO_MODELS);
+    var migrate = { 'seedance-turbo': 'seedance-2.0-turbo', seedance: 'seedance-2.0-turbo', veo: 'veo-3.1' };
+    if (modelSel.value && migrate[modelSel.value]) modelSel.value = migrate[modelSel.value];
+    if (!modelSel.value || !VIDEO_MODELS[modelSel.value]) {
+      modelSel.value = VIDEO_MODELS['seedance-2.0-turbo'] ? 'seedance-2.0-turbo' : Object.keys(VIDEO_MODELS)[0];
+    }
+    function refresh(runSync) {
+      updateOptionsForModel(modelSel.value, true, 'gQuality', 'gAspect', 'gDuration');
+      enhanceSelects(TL_VIDEO_IDS);
+      if (runSync !== false && typeof onSync === 'function') onSync();
+    }
+    if (!modelSel.dataset.tlWired) {
+      modelSel.dataset.tlWired = '1';
+      modelSel.addEventListener('change', function () { refresh(true); });
+      ['gAspect', 'gDuration', 'gQuality'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('change', function () { if (typeof onSync === 'function') onSync(); });
+      });
+    }
+    refresh(skipInitialSync === true ? false : true);
+  }
+
+  window.PHOTO_MODELS = PHOTO_MODELS;
+  window.VIDEO_MODELS = VIDEO_MODELS;
+  window.getModelConfig = getModelConfig;
+  window.populateModelSelect = populateModelSelect;
+  window.updateOptionsForModel = updateOptionsForModel;
+  window.updateVideoOptions = updateVideoOptions;
+  window.updatePhotoOptions = updatePhotoOptions;
+  window.mhInitVideoSettings = mhInitVideoSettings;
+  window.initTimelineVideoSettings = initTimelineVideoSettings;
+  window.enhanceSelect = enhanceSelect;
+  window.enhanceSelects = enhanceSelects;
+
+  function boot() {
+    if (document.getElementById('videoModelSelect')) mhInitVideoSettings();
+    if (document.getElementById('gModel') && typeof window.initTimelineVideoSettings === 'function') {
+      /* timeline.js calls initTimelineVideoSettings with syncGlobal */
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () { setTimeout(boot, 30); });
+  } else {
+    setTimeout(boot, 30);
+  }
+})();

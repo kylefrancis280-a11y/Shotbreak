@@ -68,15 +68,13 @@
   status = 404
   force = true
 [[redirects]]
-  from = "/app.html"
-  to = "/timeline/"
-  status = 302
-  force = true
-[[redirects]]
   from = "/app"
-  to = "/timeline/"
-  status = 302
-  force = true
+  to = "/app.html"
+  status = 200
+[[redirects]]
+  from = "/app/"
+  to = "/app.html"
+  status = 200
 
 # For the full golden HTML deploy, the app.html is the main file (large single file golden pushed via web editor ritual as documented).
 # Functions auto-deploy on git push.

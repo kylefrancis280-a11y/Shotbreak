@@ -212,7 +212,7 @@ async function runJob(clip){
     const h=await hdrs();
     const dur=Math.min(15,Math.max(3,parseInt(state.global.clipDuration,10)||clip.durationSec||5));
     const asp=state.global.aspectRatio||'16:9';
-    const body={action:'submit',model:state.global.model,prompt,duration:dur,aspect_ratio:asp,provider:state.global.model&&state.global.model.includes('grok')?'grok-imagine':'wavespeed'};
+    const body={action:'submit',model:state.global.model,prompt,duration:dur,aspect_ratio:asp,resolution:state.global.quality||'720p',provider:state.global.model&&state.global.model.includes('grok')?'grok-imagine':'wavespeed'};
     if(ref)body.character_image_url=ref.url;
     const sub=await fetch('/.netlify/functions/generate-video',{method:'POST',headers:h,body:JSON.stringify(body)});
     const sd=await sub.json();
@@ -344,14 +344,24 @@ function bindUI(){
   load();
   const modelMigrate={'seedance-turbo':'seedance-2.0-turbo','seedance':'seedance-2.0-turbo','veo':'veo-3.1'};
   if(state.global.model&&modelMigrate[state.global.model])state.global.model=modelMigrate[state.global.model];
-  ['gFilm','gColor','gAspect','gQuality','gAudio','gModel','gDuration','gLang'].forEach(id=>{
-    const m={gFilm:'filmStyle',gColor:'colorGrade',gAspect:'aspectRatio',gQuality:'quality',gAudio:'audioProfile',gModel:'model',gDuration:'clipDuration',gLang:'language'};
-    const el=$(id);if(!el)return;
-    const v=state.global[m[id]];
-    if(v==null||v==='')return;
-    const has=[...el.options].some(o=>o.value===String(v));
-    el.value=has?String(v):el.options[0]?el.options[0].value:'';
-  });
+  if(typeof window.initTimelineVideoSettings==='function'){
+    if($('gModel')&&state.global.model)$('gModel').value=state.global.model;
+    window.initTimelineVideoSettings(syncGlobal,true);
+    if($('gModel')&&state.global.model&&window.VIDEO_MODELS&&window.VIDEO_MODELS[state.global.model])$('gModel').value=state.global.model;
+    if(typeof window.updateOptionsForModel==='function')window.updateOptionsForModel($('gModel').value,true,'gQuality','gAspect','gDuration');
+    if(state.global.aspectRatio&&$('gAspect')){const ok=[...$('gAspect').options].some(o=>o.value===state.global.aspectRatio);if(ok)$('gAspect').value=state.global.aspectRatio;}
+    if(state.global.clipDuration&&$('gDuration')){const dv=String(state.global.clipDuration);const ok=[...$('gDuration').options].some(o=>o.value===dv);if(ok)$('gDuration').value=dv;}
+    if(state.global.quality&&$('gQuality')){const ok=[...$('gQuality').options].some(o=>o.value===state.global.quality);if(ok)$('gQuality').value=state.global.quality;}
+    ['gFilm','gColor','gAudio','gLang'].forEach(id=>{
+      const m={gFilm:'filmStyle',gColor:'colorGrade',gAudio:'audioProfile',gLang:'language'};
+      const el=$(id);if(!el)return;
+      const v=state.global[m[id]];
+      if(v==null||v==='')return;
+      const has=[...el.options].some(o=>o.value===String(v));
+      el.value=has?String(v):el.options[0]?el.options[0].value:'';
+    });
+    syncGlobal();
+  }
   renderAll();
 }
 
