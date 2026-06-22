@@ -7,7 +7,7 @@ const OWNER_EMAILS=new Set(['kyle@shotbreak.io','scott@shotbreak.io','steve@shot
 
 let state={
   projectName:'Untitled Film',clips:[],characters:{},selectedId:null,selectedChar:null,
-  global:{filmStyle:'Cinematic',colorGrade:'Natural',aspectRatio:'16:9',quality:'1080p',audioProfile:'Cinematic',model:'seedance-turbo',clipDuration:5,language:'English'},
+  global:{filmStyle:'Cinematic',colorGrade:'Natural',aspectRatio:'16:9',quality:'1080p',audioProfile:'Cinematic',model:'seedance-2.0-turbo',clipDuration:5,language:'English'},
   assembly:{titleText:'',creditsText:'',musicHint:'',sfxHint:''},
   parseResult:null,queue:{running:false}
 };
@@ -210,7 +210,9 @@ async function runJob(clip){
   const ref=SBCharacters.getRefForClip(state.characters,clip);
   try{
     const h=await hdrs();
-    const body={action:'submit',model:state.global.model,prompt,duration:clip.durationSec>=10?10:5,aspect_ratio:state.global.aspectRatio==='9:16'?'9:16':'16:9'};
+    const dur=Math.min(15,Math.max(3,parseInt(state.global.clipDuration,10)||clip.durationSec||5));
+    const asp=state.global.aspectRatio||'16:9';
+    const body={action:'submit',model:state.global.model,prompt,duration:dur,aspect_ratio:asp,provider:state.global.model&&state.global.model.includes('grok')?'grok-imagine':'wavespeed'};
     if(ref)body.character_image_url=ref.url;
     const sub=await fetch('/.netlify/functions/generate-video',{method:'POST',headers:h,body:JSON.stringify(body)});
     const sd=await sub.json();
@@ -219,10 +221,11 @@ async function runJob(clip){
     const t0=Date.now();
     while(Date.now()-t0<480000){
       await new Promise(r=>setTimeout(r,5000));
-      const pr=await fetch('/.netlify/functions/generate-video',{method:'POST',headers:h,body:JSON.stringify({action:'status',request_id:clip.requestId})});
+      const pollBody={action:'status',request_id:clip.requestId,model:state.global.model,provider:state.global.model&&state.global.model.includes('grok')?'grok-imagine':'wavespeed'};
+      const pr=await fetch('/.netlify/functions/generate-video',{method:'POST',headers:h,body:JSON.stringify(pollBody)});
       const pd=await pr.json();const st=(pd.status||pd.state||'').toUpperCase();
-      if(st==='COMPLETED'||st==='SUCCESS'||st==='SUCCEEDED'){
-        const rr=await fetch('/.netlify/functions/generate-video',{method:'POST',headers:h,body:JSON.stringify({action:'result',request_id:clip.requestId})});
+      if(st==='COMPLETED'||st==='SUCCESS'||st==='SUCCEEDED'||st==='DONE'){
+        const rr=await fetch('/.netlify/functions/generate-video',{method:'POST',headers:h,body:JSON.stringify({action:'result',request_id:clip.requestId,model:state.global.model,provider:pollBody.provider})});
         const rd=await rr.json();
         clip.videoUrl=rd.video_url||rd.url||(rd.video&&rd.video.url);
         if(!clip.videoUrl)throw new Error('No video URL');
@@ -330,12 +333,24 @@ function bindUI(){
   $('btnClosePreview').onclick=()=>$('previewModal').classList.add('hidden');
   $('btnCloseExport').onclick=()=>$('exportModal').classList.add('hidden');
   ['gFilm','gColor','gAspect','gQuality','gAudio','gModel','gDuration','gLang'].forEach(id=>{const el=$(id);if(el)el.onchange=syncGlobal});
-  const sq=document.querySelector('.settings-quick');
-  if(sq){sq.addEventListener('mousedown',e=>e.preventDefault());sq.addEventListener('click',e=>e.stopPropagation())}
+  const btnMore=$('btnSettingsMore'), panelFull=$('settingsFull');
+  if(btnMore&&panelFull){
+    btnMore.onclick=()=>{
+      const open=panelFull.classList.toggle('hidden');
+      btnMore.classList.toggle('open',!open);
+      btnMore.setAttribute('aria-expanded',!open?'true':'false');
+    };
+  }
   load();
-  ['gFilm','gColor','gAspect','gQuality','gAudio','gModel','gDuration'].forEach(id=>{
-    const m={gFilm:'filmStyle',gColor:'colorGrade',gAspect:'aspectRatio',gQuality:'quality',gAudio:'audioProfile',gModel:'model',gDuration:'clipDuration'};
-    const el=$(id);if(el&&state.global[m[id]])el.value=state.global[m[id]];
+  const modelMigrate={'seedance-turbo':'seedance-2.0-turbo','seedance':'seedance-2.0-turbo','veo':'veo-3.1'};
+  if(state.global.model&&modelMigrate[state.global.model])state.global.model=modelMigrate[state.global.model];
+  ['gFilm','gColor','gAspect','gQuality','gAudio','gModel','gDuration','gLang'].forEach(id=>{
+    const m={gFilm:'filmStyle',gColor:'colorGrade',gAspect:'aspectRatio',gQuality:'quality',gAudio:'audioProfile',gModel:'model',gDuration:'clipDuration',gLang:'language'};
+    const el=$(id);if(!el)return;
+    const v=state.global[m[id]];
+    if(v==null||v==='')return;
+    const has=[...el.options].some(o=>o.value===String(v));
+    el.value=has?String(v):el.options[0]?el.options[0].value:'';
   });
   renderAll();
 }

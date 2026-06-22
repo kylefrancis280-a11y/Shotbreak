@@ -32,17 +32,27 @@ button,input,select,textarea{font-family:inherit}
 .tb-dd:hover{background:var(--surface3);color:#fff}
 
 /* ── settings bar ── */
-.settings-bar{border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0}
-.settings-bar summary{list-style:none;cursor:pointer}
-.settings-bar summary::-webkit-details-marker{display:none}
-.settings-summary{display:flex;align-items:center;gap:12px;padding:8px 14px}
+.settings-bar{border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0;position:relative;z-index:40}
+.settings-row{display:flex;align-items:center;gap:12px;padding:8px 14px}
 .settings-label{font-size:10px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.08em;flex-shrink:0}
-.settings-quick{display:flex;align-items:center;gap:8px;flex:1}
+.settings-quick{display:flex;align-items:center;gap:8px;flex:1;flex-wrap:wrap}
+.settings-more-btn{border:1px solid var(--border);background:var(--surface2);color:var(--text2);border-radius:6px;width:28px;height:28px;font-size:12px;cursor:pointer;flex-shrink:0;line-height:1}
+.settings-more-btn:hover{border-color:var(--gold);color:var(--gold)}
+.settings-more-btn.open{transform:rotate(180deg);border-color:var(--gold);color:var(--gold)}
 .settings-full{display:flex;gap:10px;flex-wrap:wrap;padding:0 14px 10px;border-top:1px solid var(--border)}
+.settings-full:not(.hidden){display:flex}
 .uc-group{display:flex;align-items:center;gap:6px}
 .uc-label{font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.08em}
-.uc-sel{background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:6px;padding:5px 9px;font-size:11px;font-weight:600;outline:none;cursor:pointer}
-.uc-sel:focus{border-color:var(--gold)}
+.uc-sel{
+  appearance:none;-webkit-appearance:none;
+  background:var(--surface2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' fill='%235a5a6a'%3E%3Cpath d='M2 4l3 3 3-3'/%3E%3C/svg%3E") no-repeat right 8px center;
+  border:1px solid var(--border);color:var(--text);border-radius:6px;
+  padding:6px 28px 6px 10px;min-width:120px;
+  font-size:11px;font-weight:600;outline:none;cursor:pointer;
+  position:relative;z-index:50;
+}
+.uc-sel:hover{border-color:var(--border2);color:#fff}
+.uc-sel:focus{border-color:var(--gold);box-shadow:0 0 0 2px rgba(212,168,67,.12)}
 
 /* ── main layout ── */
 .main{display:flex;flex:1;min-height:0}
