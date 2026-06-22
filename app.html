@@ -305,8 +305,7 @@ window.safeSignIn = safeSignIn;
       <div class="user-pill-av" id="uAv">K</div>
       <span class="user-pill-name" id="uNm">Kyle</span>
       <div class="user-menu" id="uMenu">
-        <a onclick="showMode('media')">Generation Hub</a>
-        <a href="/timeline/" onclick="document.getElementById('uMenu').classList.remove('open')">Timeline Studio (NEW)</a>
+        <a onclick="showMode('media');mhEnsureUnifiedStudio()">Edit Studio</a>
         <a onclick="window.open('https://billing.stripe.com/p/login/8x2eVebPLcQ707J0Pt1ck00','_blank');document.getElementById('uMenu').classList.remove('open')">Manage Subscription</a>
         <a class="red" onclick="doLogout()">Log Out</a>
       </div>
@@ -612,8 +611,11 @@ window.safeSignIn = safeSignIn;
 .qst-d{background:rgba(34,197,94,0.1);color:var(--green)}
 .qst-f{background:rgba(239,68,68,0.1);color:var(--red)}
 .stitch-bar{background:var(--gold-bg);border:1px solid var(--gold-border);border-radius:10px;padding:16px;margin-top:16px}
-/* Strip all other sides of the site — Generation Hub (4 tabs) is everything */
+/* Strip all other sides of the site — Edit Studio (one workspace) is everything */
 #dashView, #fwdView, #revView, #charView { display: none !important; }
+#mhTabBar { display: none !important; }
+[data-mh-unified="1"] .mh-tab-pane { display: block !important; margin-bottom: 28px; }
+.mh-section-label { font-family: var(--mono); font-size: 10px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--gold); margin: 0 0 10px; padding: 8px 12px; background: var(--surface); border: 1px solid var(--gold-border); border-radius: 8px; }
 
 /* New 4-tab Generation Hub styles */
 .mh-tab-pane { padding: 4px 0; }
@@ -666,26 +668,16 @@ window.safeSignIn = safeSignIn;
 <div id="mediaView" style="display:none">
   <div class="ws">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:10px">
-      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-        <span style="font-family:var(--display);font-size:22px;font-weight:800">🎬 Generation Hub</span>
-        <a href="/timeline/" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:linear-gradient(135deg,rgba(96,165,250,0.22),rgba(96,165,250,0.08));border:1px solid rgba(96,165,250,0.45);border-radius:8px;color:#93c5fd;font-family:var(--body);font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap" title="New flowchart UI: script → clips → generate → export">⚡ Timeline Studio →</a>
+      <div>
+        <span style="font-family:var(--display);font-size:22px;font-weight:800">🎬 Edit Studio</span>
+        <div style="font-size:12px;color:var(--text2);margin-top:4px">One workspace — script → characters → generate shots → timeline → export MP4. Scroll down.</div>
       </div>
       <div id="mhProjInfo" style="font-size:12px;color:var(--dim)"></div>
     </div>
-    <a href="/timeline/" style="display:block;text-decoration:none;margin-bottom:12px;padding:14px 16px;background:linear-gradient(135deg,rgba(96,165,250,0.14),rgba(96,165,250,0.04));border:1px solid rgba(96,165,250,0.35);border-radius:10px">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-        <div>
-          <div style="font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#60a5fa;margin-bottom:3px">New · deployed on shotbreak.io</div>
-          <div style="font-family:var(--display);font-size:16px;font-weight:800;color:#fff;margin-bottom:2px">Timeline Studio — not this page</div>
-          <div style="font-size:12px;color:var(--text2);line-height:1.4">Separate app for your text-to-video flowchart: import script → auto clip boxes → batch generate → approve → stitch MP4. Generation Hub (here) is the older per-shot workflow.</div>
-        </div>
-        <div style="padding:10px 18px;background:#2563eb;color:#fff;border-radius:8px;font-weight:800;font-size:13px;white-space:nowrap">Open Timeline Studio →</div>
-      </div>
-    </a>
     <div id="sbLocalStatus" style="display:none;font-size:11px;color:var(--dim);padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;margin-bottom:10px;font-family:var(--mono);line-height:1.45"></div>
 
-    <!-- Just the 4 options - the modular building blocks for your movie. Extremely modular. -->
-    <div style="display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap;background:var(--surface);padding:6px;border-radius:10px;border:1px solid var(--gold-border)">
+    <!-- Tab bar hidden — unified edit workspace shows all sections stacked -->
+    <div id="mhTabBar" style="display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap;background:var(--surface);padding:6px;border-radius:10px;border:1px solid var(--gold-border)">
       <button onclick="mhSwitchTab('script')" id="mhTabScript" class="b b-gold b-s" style="flex:1;min-width:110px;background:var(--gold);color:#000">Script</button>
       <button onclick="mhSwitchTab('characters')" id="mhTabCharacters" class="b b-g b-s" style="flex:1;min-width:110px">Characters</button>
       <button onclick="mhSwitchTab('generate')" id="mhTabGenerate" class="b b-g b-s" style="flex:1;min-width:110px">Generate</button>
@@ -698,8 +690,9 @@ window.safeSignIn = safeSignIn;
     <!-- NEW 4-TAB CONTENT AREA -->
     <div id="mhTabContent" style="min-height:420px">
 
-      <!-- SCRIPT TAB -->
+      <!-- SCRIPT (section 1) -->
       <div id="mhTabPaneScript" class="mh-tab-pane" style="display:block">
+        <div class="mh-section-label">① Script — paste &amp; lock</div>
         <div class="mh-panel">
           <div id="mhScriptBox" style="margin-top:12px">
             <textarea id="mhScriptMain" rows="8" style="width:100%;background:#0a0a0f;border:1px solid var(--border);color:#fff;padding:12px;font-family:var(--mono);font-size:13px" placeholder="Paste or lock your script here..."></textarea>
@@ -716,8 +709,9 @@ window.safeSignIn = safeSignIn;
         </div>
       </div>
 
-      <!-- CHARACTERS TAB (now owns Locations too for photo-matching coherence per user) -->
+      <!-- CHARACTERS (section 2) -->
       <div id="mhTabPaneCharacters" class="mh-tab-pane" style="display:none">
+        <div class="mh-section-label">② Characters &amp; locations — reference photos</div>
         <div class="mh-panel">
           <div style="margin-bottom:8px;font-size:12px;color:var(--dim)">Characters + Locations live here so you can generate reference photos for perfect visual matching across your entire movie. All locked photos feed the per-shot video prompts in the Generate tab.</div>
 
@@ -752,8 +746,9 @@ window.safeSignIn = safeSignIn;
         </div>
       </div>
 
-      <!-- GENERATE TAB (includes Settings) -->
+      <!-- GENERATE (section 3) -->
       <div id="mhTabPaneGenerate" class="mh-tab-pane" style="display:none">
+        <div class="mh-section-label">③ Generate — per-shot video clips</div>
         <div class="mh-panel">
 
           <!-- QUICK BASELINE VIDEO GEN - anytime as long as script locked (user requirement) -->
@@ -836,11 +831,12 @@ window.safeSignIn = safeSignIn;
         </div>
       </div>
 
-      <!-- EDIT / UPSCALE TAB — full inline timeline editor (no extra "open editor" hop) -->
+      <!-- EDIT / TIMELINE / EXPORT (section 4) -->
       <div id="mhTabPaneEdit" class="mh-tab-pane" style="display:none">
+        <div class="mh-section-label">④ Edit — timeline, trim, export MP4</div>
         <div class="mh-panel">
-          <h3 style="margin:0 0 6px">Editor</h3>
-          <div class="sub" style="margin-bottom:14px">Arrange generated clips on the timeline. Upload MP4s, trim, crossfade, then export a single MP4. Quality tools are below the editor.</div>
+          <h3 style="margin:0 0 6px">Timeline &amp; Export</h3>
+          <div class="sub" style="margin-bottom:14px">Everything above feeds here. Arrange clips, trim, crossfade, export final MP4.</div>
 
           <div id="mhEditorGate" style="display:none;padding:20px;background:var(--surface2);border-radius:8px;text-align:center;color:var(--dim)">
             Generate some clips on the Generate tab first, or upload MP4s below.
@@ -911,8 +907,7 @@ window.safeSignIn = safeSignIn;
               </div>
             </div>
 
-            <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
-              <button class="b b-g b-s" onclick="mhSwitchTab('generate')">← Back to Generate</button>
+            <div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap">
               <div style="display:flex;gap:8px;flex-wrap:wrap">
                 <button class="b b-gold b-s" onclick="document.getElementById('mhEditUploadInput').click()" title="Upload MP4 video files from your computer">📁 Upload MP4s</button>
                 <input type="file" id="mhEditUploadInput" accept="video/mp4,video/*" multiple style="display:none" onchange="mhEditUploadFiles(this.files)"/>
@@ -1225,7 +1220,7 @@ window.safeSignIn = safeSignIn;
       if (el) el.style.display = 'none';
     });
     if (typeof window.mhSwitchTab === 'function') {
-      try { window.mhSwitchTab('script'); } catch (e) {}
+      try { if (window.mhEnsureUnifiedStudio) window.mhEnsureUnifiedStudio(); } catch (e) {}
     }
   }
 
@@ -1886,26 +1881,21 @@ function enterApp(){
 }
 
 function showDash(){
-  // STRIPPED: The site has no other sides at all. The Generation Hub with its 4 tabs (Script, Characters, Generate+Settings, Edit/Upscale) IS the entire site.
-  // Scripts load straight in. No separate dashboard, fwd/rev, char studio, etc.
   const hub = document.getElementById('mediaView');
   document.querySelectorAll('#dashView, #fwdView, #revView, #charView').forEach(el => { if (el) el.style.display = 'none'; });
   if (hub) {
     hub.style.display = 'block';
-    if (typeof mhSwitchTab === 'function') mhSwitchTab('script');
+    if (typeof mhEnsureUnifiedStudio === 'function') mhEnsureUnifiedStudio();
   }
 }
 
 function showMode(m){
-  // STRIPPED: No other sides to the site. The entire experience is the Generation Hub with 4 tabs.
-  // All other views (fwd, rev, char studio separate, old dash) are hidden/deprecated.
   document.querySelectorAll('#dashView, #fwdView, #revView, #charView').forEach(el => el.style.display = 'none');
   const hub = document.getElementById('mediaView');
   if (hub) {
     hub.style.display = 'block';
-    // Default to the 4-tab Generation Hub experience
-    if (typeof mhSwitchTab === 'function') {
-      mhSwitchTab('script');
+    if (typeof mhEnsureUnifiedStudio === 'function') {
+      mhEnsureUnifiedStudio();
     }
   }
   document.getElementById('uMenu').classList.remove('open');
@@ -7548,9 +7538,9 @@ function mhShowQualityPanel(){
 
 // Direct entry to the Generation Hub (the entire site now). Scripts load straight here.
 function openMediaHubGenerate(){
-  showMode('media');  // forces only the 4-tab Generation Hub, no other sides
+  showMode('media');
+  if (typeof mhEnsureUnifiedStudio === 'function') mhEnsureUnifiedStudio();
   setTimeout(() => {
-    if (typeof mhSwitchTab === 'function') mhSwitchTab('script');
     const p = projectLoad();
     if (p && p.script) {
       const scriptTa = document.getElementById('mhScriptMain');
@@ -7610,26 +7600,18 @@ function sendFwdToMediaHubAgents(){
 
 let _mhApprovedPoints = { script: [], characters: {}, generate: {} }; // per-entity accumulation
 
-function mhSwitchTab(tab) {
-  // Update button styles
-  ['script','characters','generate','edit'].forEach(t => {
-    const btn = document.getElementById('mhTab' + t.charAt(0).toUpperCase() + t.slice(1));
-    if (btn) {
-      if (t === tab) {
-        btn.style.background = 'var(--gold)';
-        btn.style.color = '#000';
-      } else {
-        btn.style.background = '';
-        btn.style.color = '';
-      }
-    }
-  });
+function mhIsUnifiedStudio() {
+  return document.body.getAttribute('data-mh-unified') === '1';
+}
 
-  // Show/hide panes
-  document.querySelectorAll('.mh-tab-pane').forEach(p => p.style.display = 'none');
-  const pane = document.getElementById('mhTabPane' + tab.charAt(0).toUpperCase() + tab.slice(1));
-  if (pane) pane.style.display = 'block';
+function mhEnsureUnifiedStudio() {
+  if (mhIsUnifiedStudio()) return;
+  document.body.setAttribute('data-mh-unified', '1');
+  document.querySelectorAll('.mh-tab-pane').forEach(p => { p.style.display = 'block'; });
+  ['script', 'characters', 'generate', 'edit'].forEach(t => mhRunTabInit(t));
+}
 
+function mhRunTabInit(tab) {
   // Lazy init for character boxes + render photos
   if (tab === 'characters') {
     if (!document.getElementById('mhCharAgentArea').innerHTML) {
@@ -7698,11 +7680,14 @@ function mhSwitchTab(tab) {
     mhLoadPersistedClips();
     mhSyncEditorAfterGen(false);
     mhRenderEditor();
-    setTimeout(() => {
-      const pane = document.getElementById('mhTabPaneEdit');
-      if (pane) pane.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 80);
   }
+}
+
+function mhSwitchTab(tab) {
+  mhEnsureUnifiedStudio();
+  mhRunTabInit(tab);
+  const pane = document.getElementById('mhTabPane' + tab.charAt(0).toUpperCase() + tab.slice(1));
+  if (pane) pane.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function mhRebuildCharAgentBoxes() {
