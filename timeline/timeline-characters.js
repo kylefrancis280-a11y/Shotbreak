@@ -14,14 +14,16 @@ window.SBCharacters = (function(){
     return out;
   }
 
-  function renderList(chars, onSelect){
+  function renderList(chars, selected){
     const names=Object.keys(chars);
     if(!names.length)return '<div class="empty-hint">Characters come from the same script parse as your timeline clips. Re-import your script, or click <strong>+ Add Character</strong>.</div>';
     return '<div class="char-grid">'+names.map(n=>{
       const c=chars[n];
       const thumb=c.refUrl?'<img src="'+esc(c.refUrl)+'" alt="">':'<span class="ph">👤</span>';
       const lock=c.faceLock?'<span class="lock-badge">🔒 Face lock</span>':'';
-      return '<div class="char-card" data-name="'+esc(n)+'">'+
+      const sel=selected===n?' selected':'';
+      return '<div class="char-card'+sel+'" data-name="'+esc(n)+'">'+
+        '<button type="button" class="char-del" data-del="'+esc(n)+'" title="Delete character" aria-label="Delete '+esc(n)+'">×</button>'+
         '<div class="char-thumb">'+thumb+'</div>'+
         '<div class="char-name">'+esc(n)+'</div>'+lock+
         '<div class="char-meta">'+esc(c.emotion||'Neutral')+' · '+esc(c.voice||'Natural')+'</div></div>';
@@ -43,6 +45,7 @@ window.SBCharacters = (function(){
       (c.refUrl?'<div class="ref-preview"><img src="'+esc(c.refUrl)+'" alt="ref"></div>':'')+
       '<button type="button" class="tb-btn gold" id="btnUploadRef">Upload reference image</button>'+
       (c.refUrl?'<button type="button" class="tb-btn" id="btnClearRef">Remove reference</button>':'')+
+      '<button type="button" class="tb-btn char-delete-btn" id="btnDeleteChar">Delete character</button>'+
       '</div>';
   }
 

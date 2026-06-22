@@ -342,14 +342,37 @@ function renderAssembly(){
   ['a-title','a-credits','a-music'].forEach((id,i)=>{const k=['titleText','creditsText','musicHint'][i];$(id).oninput=e=>{state.assembly[k]=e.target.value;save()}});
 }
 
+function deleteCharacter(name){
+  const up=String(name||'').trim();
+  if(!up||!state.characters[up])return;
+  if(!confirm('Delete "'+up+'"? They will be removed from the character list and all clips.'))return;
+  pushHistory();
+  delete state.characters[up];
+  state.clips.forEach(c=>{
+    if(!c.characters)return;
+    c.characters=c.characters.filter(n=>String(n).toUpperCase().trim()!==up);
+  });
+  const remaining=Object.keys(state.characters);
+  state.selectedChar=remaining.includes(state.selectedChar)?state.selectedChar:(remaining[0]||null);
+  save();
+  renderCharacters();
+  renderTimeline();
+  toast('Deleted '+up);
+}
+
 function renderCharacters(){
-  let listHtml=SBCharacters.renderList(state.characters);
+  let listHtml=SBCharacters.renderList(state.characters,state.selectedChar);
   if(!Object.keys(state.characters).length&&state.clips.length){
     listHtml='<div style="padding:10px 12px;margin-bottom:10px;background:rgba(212,168,67,.08);border:1px solid rgba(212,168,67,.35);border-radius:8px;font-size:12px;line-height:1.5;color:var(--text2)">'+
       '<strong style="color:var(--gold)">Characters empty</strong> — click <strong>↻ Sync from parse</strong> or <strong>re-import</strong> your script (Import / Paste). Names must be in screenplay format (ALL CAPS cue lines or <em>Name: dialogue</em>).</div>'+listHtml;
   }
   $('charListPanel').innerHTML=listHtml;
-  $('charListPanel').querySelectorAll('.char-card').forEach(el=>{el.onclick=()=>{state.selectedChar=el.dataset.name;renderCharEditor()}});
+  $('charListPanel').querySelectorAll('.char-card').forEach(el=>{
+    el.onclick=()=>{state.selectedChar=el.dataset.name;renderCharacters()};
+  });
+  $('charListPanel').querySelectorAll('.char-del').forEach(btn=>{
+    btn.onclick=e=>{e.stopPropagation();deleteCharacter(btn.dataset.del)};
+  });
   const stripNames=charsForStrip();
   if($('charsStrip'))$('charsStrip').classList.toggle('hidden',!stripNames.length);
   $('charChips').innerHTML=stripNames.map(n=>'<span class="char-chip">'+esc(n)+'</span>').join('');
@@ -366,6 +389,7 @@ function renderCharEditor(){
   });
   const up=$('btnUploadRef');if(up)up.onclick=()=>uploadRef(state.selectedChar);
   const clr=$('btnClearRef');if(clr)clr.onclick=()=>{pushHistory();c.refUrl=null;save();renderCharacters()};
+  const del=$('btnDeleteChar');if(del)del.onclick=()=>deleteCharacter(state.selectedChar);
 }
 async function uploadRef(name){
   const inp=document.createElement('input');inp.type='file';inp.accept='image/*';
