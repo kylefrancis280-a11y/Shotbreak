@@ -2,7 +2,8 @@
 window.SBCharacters = (function(){
   const DEFAULTS = {
     description:'', refUrl:null, faceLock:false, bodyType:'Average',
-    wardrobe:'', voice:'Natural', lipSync:true, emotion:'Neutral', lockMethod:'ip-adapter'
+    wardrobe:'', voice:'Natural', lipSync:true, emotion:'Neutral', lockMethod:'ip-adapter',
+    role:'lead'
   };
 
   function normalize(raw){
@@ -39,6 +40,7 @@ window.SBCharacters = (function(){
       field('Wardrobe','wardrobe','input',c.wardrobe)+
       field('Voice profile','voice','select',c.voice,['Natural','Deep','Soft','Gravel','Young','Elder'])+
       field('Default emotion','emotion','select',c.emotion,['Neutral','Tense','Joy','Fear','Anger','Sad','Noir'])+
+      field('Cast role','role','select',c.role||'lead',['lead','supporting','background','crowd','voice_only'])+
       '<div class="field"><label><span>Face lock (I2V)</span><span class="toggle'+(c.faceLock?' on':'')+'" data-k="faceLock"></span></label></div>'+
       '<div class="field"><label><span>Lip-sync enable</span><span class="toggle'+(c.lipSync?' on':'')+'" data-k="lipSync"></span></label></div>'+
       '<div class="field"><label>Lock method</label><select data-k="lockMethod"><option value="ip-adapter"'+(c.lockMethod==='ip-adapter'?' selected':'')+'>IP-Adapter</option><option value="lora"'+(c.lockMethod==='lora'?' selected':'')+'>LoRA</option></select></div>'+
@@ -59,13 +61,21 @@ window.SBCharacters = (function(){
 
   function getRefForClip(chars, clip){
     const names=clip.characters||[];
-    for(const n of names){
+    const rank={lead:0,supporting:1,background:2,crowd:9,voice_only:10};
+    const sorted=names.slice().sort((a,b)=>{
+      const ra=rank[(chars[a]&&chars[a].role)||'lead']||5;
+      const rb=rank[(chars[b]&&chars[b].role)||'lead']||5;
+      return ra-rb;
+    });
+    for(const n of sorted){
       const c=chars[n];
-      if(c&&c.faceLock&&c.refUrl)return{url:c.refUrl,name:n};
+      if(!c||c.role==='crowd'||c.role==='voice_only')continue;
+      if(c.faceLock&&c.refUrl&&String(c.refUrl).startsWith('https://'))return{url:c.refUrl,name:n};
     }
-    for(const n of names){
+    for(const n of sorted){
       const c=chars[n];
-      if(c&&c.refUrl)return{url:c.refUrl,name:n};
+      if(!c||c.role==='crowd'||c.role==='voice_only')continue;
+      if(c.refUrl&&String(c.refUrl).startsWith('https://'))return{url:c.refUrl,name:n};
     }
     return null;
   }

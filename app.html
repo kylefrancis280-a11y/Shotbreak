@@ -30,6 +30,7 @@
 <script src="js/config.js?v=20260617"></script>
 <script src="js/auth.js?v=20260617"></script>
 <script src="js/model-config.js?v=20260624k"></script>
+<script src="js/mastery-resolver.js?v=20260624m"></script>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Anybody:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -854,6 +855,7 @@ window.safeSignIn = safeSignIn;
           <div style="margin-top:18px;padding-top:12px;border-top:1px solid var(--border)">
             <h5 style="color:var(--gold);margin:0 0 6px;font-size:13px">📍 Location Photo Library (for coherence matching)</h5>
             <div style="font-size:11px;color:var(--dim);margin-bottom:8px">Add location reference photos here. Generate or upload plates. These + time/busy/weather feed every shot's prompt automatically.</div>
+            <div id="mhLocBibleArea" style="margin-bottom:10px"></div>
             <div id="mhLocPhotoArea" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"></div>
             <button class="b b-gold b-s" onclick="addLocationPhoto()">+ Add / Generate Location Photo</button>
             <div style="margin-top:10px" id="locBreakdownInputs">
@@ -3418,6 +3420,9 @@ function ensureProjectAssets(p) {
   if (!p.assets.characterPhotos) p.assets.characterPhotos = {};
   if (!p.assets.videos) p.assets.videos = {};
   if (!p.assets.locationPhotos) p.assets.locationPhotos = [];
+  if (window.SBMastery && typeof window.SBMastery.ensureMasteryProject === 'function') {
+    window.SBMastery.ensureMasteryProject(p);
+  }
   return p;
 }
 
@@ -3980,6 +3985,8 @@ function mhEnter(){
               if(src.wardrobe_default){
                 c.wardrobe = { top: src.wardrobe_default, bottom:'', footwear:'', outerwear:'', accessory:'' };
               }
+              if(src.consistency_phrase) c.consistencyPhrase = src.consistency_phrase;
+              if(src.role) c.role = src.role;
               if(typeof ensureCharacterSchema === 'function') ensureCharacterSchema(c);
               return c;
             });
@@ -4016,6 +4023,24 @@ function mhEnter(){
               }
             }
           });
+          if(!p.locationBible) p.locationBible = [];
+          Object.keys(wfLocs).forEach(function(locName){
+            const src = wfLocs[locName] || {};
+            const key = (window.SBMastery && window.SBMastery.normalizeLocationKey)
+              ? window.SBMastery.normalizeLocationKey(locName) : locName.toUpperCase();
+            if(!p.locationBible.some(function(l){ return l.key === key; })){
+              p.locationBible.push({
+                name: locName,
+                key: key,
+                description: src.description || '',
+                plateUrl: src.reference_image_url || null,
+                locked: !!src.reference_image_url,
+                consistencyPhrase: src.consistency_phrase || '',
+                sceneIndices: []
+              });
+            }
+          });
+          if(window.SBMastery) window.SBMastery.syncLocationBible(p);
           // If reference images came through the staged shots, mirror them
           // into rD.characterImages so legacy Generation Hub UI shows them as
           // locked references too (without re-uploading).
@@ -5331,6 +5356,7 @@ function ensureCharacterSchema(c){
   ['top','bottom','footwear','outerwear','accessory'].forEach(k=>{if(typeof c.wardrobe[k]==='undefined')c.wardrobe[k]=''});
   if(typeof c.continueFromIdx!=='number')c.continueFromIdx=-1;
   if(typeof c.descCustom!=='boolean')c.descCustom=!!c.description;
+  if(window.SBMastery)window.SBMastery.ensureCharacterMastery(c);
   return c;
 }
 
@@ -5441,6 +5467,7 @@ function mhRenderCharacters(){
     h+=mhCharRenderCard(p,i);
   });
   list.innerHTML=h;
+  if(typeof renderLocationPhotos==='function')renderLocationPhotos();
 
   // v85.1 workflow lock: when this Generation Hub session was opened from /workflow/,
   // hide the destructive "Re-extract from Script" button (its destination,
@@ -5513,6 +5540,15 @@ function mhCharRenderCard(p,i){
   p.characterBible.forEach((other,j)=>{
     if(j===i)return;
     h+='<option value="'+j+'"'+(c.continueFromIdx===j?' selected':'')+'>'+esc(other.name)+'</option>';
+  });
+  h+='</select>';
+  h+='</div>';
+
+  h+='<div class="char-continue-row" style="margin-top:6px">';
+  h+='<label>Cast role:</label>';
+  h+='<select '+(locked?'disabled':'')+' onchange="mhCharSetRole('+i+',this.value)">';
+  (window.SBMastery?window.SBMastery.CHAR_ROLES:['lead','supporting','background','crowd','voice_only']).forEach(function(r){
+    h+='<option value="'+r+'"'+(c.role===r?' selected':'')+'>'+r+'</option>';
   });
   h+='</select>';
   h+='</div>';
@@ -5798,11 +5834,18 @@ function mhCharUpdate(idx,field,val){
   p.characterBible[idx][field]=val;
   projectSave(p);
 }
+function mhCharSetRole(idx, role){
+  const p=projectLoad();if(!p||!p.characterBible[idx])return;
+  p.characterBible[idx].role=role;
+  if(window.SBMastery)window.SBMastery.ensureCharacterMastery(p.characterBible[idx]);
+  projectSave(p);
+}
 function mhCharToggleLock(idx){
   const p=projectLoad();if(!p||!p.characterBible[idx])return;
   const c=p.characterBible[idx];
   if(!c.locked&&!c.imageUrl){alert('Generate a reference image first before locking.');return}
   c.locked=!c.locked;
+  if(window.SBMastery)window.SBMastery.ensureCharacterMastery(c);
   projectSave(p);
   mhRenderCharacters();
 }
@@ -6011,6 +6054,7 @@ async function mhGenerateScene(si){
     const prompt=mhBuildPrompt(p,si,shi,bibleCharacters,p.characterDescriptions);
     if(!j){j={sceneIdx:si,shotIdx:shi,prompt,status:'queue',requestId:null,videoUrl:null,error:null};_mhGenState.jobs.push(j)}
     else{j.prompt=prompt;j.status='queue';j.videoUrl=null;j.error=null;j.requestId=null}
+    mhEnrichJobWithMastery(p,j);
     sceneJobs.push(j);
   }
   mhRenderGenProgress();
@@ -6033,8 +6077,12 @@ async function mhRunSingleJob(j,model){
     const h=await window.hdrs();
     // Submit — short, fast request. Returns a request_id for polling.
     const vs = (typeof window.getVideoSettings === 'function') ? window.getVideoSettings('app') : { model: model, duration: 6, aspect_ratio: '16:9', resolution: '720p', provider: 'wavespeed' };
+    const p=projectLoad()||{};
+    mhEnrichJobWithMastery(p,j);
     const submitBody={action:'submit',model:vs.model||model,prompt:j.prompt,duration:vs.duration,aspect_ratio:vs.aspect_ratio,resolution:vs.resolution,provider:vs.provider};
     if (j.character_image_url) submitBody.character_image_url = j.character_image_url;
+    if (j.location_image_url) submitBody.location_image_url = j.location_image_url;
+    if (j.reference_images && j.reference_images.length) submitBody.reference_images = j.reference_images;
     const r=await fetch(sbVideoProxy(),{method:'POST',headers:h,body:JSON.stringify(submitBody)});
     let d;try{d=await r.json()}catch(e){d={error:'Bad JSON: '+e.message}}
     if(!r.ok||!d.request_id){
@@ -6213,12 +6261,14 @@ async function mhStartGeneration(){
   const jobs=[];
   const batchModel = (document.getElementById('videoModelSelect') ? document.getElementById('videoModelSelect').value : 'seedance-2.0-turbo');
   p.scenes.forEach((s,si)=>s.shots.forEach((sh,shi)=>{
-    jobs.push({
+    const job={
       sceneIdx:si,shotIdx:shi,
       prompt:mhBuildPrompt(p,si,shi,bibleCharacters,p.characterDescriptions),
       status:'queue',requestId:null,videoUrl:null,error:null,
       model: batchModel
-    });
+    };
+    mhEnrichJobWithMastery(p,job);
+    jobs.push(job);
   }));
   _mhGenState={running:true,jobs,model,stitchMode,project:p};
   window._mhGenCancelAll=false;
@@ -7985,20 +8035,75 @@ async function addLocationPhoto() {
   alert('✅ Location plate generated using ' + locModel + ' is DONE!\nIt appears in the Location Photo Library.');
 }
 
+function mhRenderLocationBible(){
+  const area=document.getElementById('mhLocBibleArea');
+  if(!area)return;
+  const p=projectLoad()||{};
+  if(window.SBMastery)window.SBMastery.syncLocationBible(p);
+  const locs=(p.locationBible||[]).filter(l=>l&&l.name);
+  if(!locs.length){
+    area.innerHTML='<div style="font-size:10px;color:var(--dim)">Lock Script to populate locations from scene headings.</div>';
+    return;
+  }
+  let h='<div style="font-size:10px;color:var(--gold);font-weight:700;margin-bottom:6px">📍 Location Bible ('+locs.length+')</div>';
+  h+='<div style="display:flex;flex-direction:column;gap:6px">';
+  locs.forEach(function(loc, li){
+    const locked=!!loc.locked;
+    const hasPlate=!!loc.plateUrl;
+    h+='<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--surface2);border:1px solid '+(locked?'var(--gold-border)':'var(--border)')+';border-radius:6px;font-size:11px">';
+    if(hasPlate)h+='<img src="'+esc(loc.plateUrl)+'" style="width:42px;height:28px;object-fit:cover;border-radius:3px"/>';
+    h+='<div style="flex:1;min-width:0"><div style="font-weight:600;color:var(--text)">'+esc(loc.name)+'</div>';
+    h+='<div style="font-size:9px;color:var(--dim)">Scenes: '+((loc.sceneIndices||[]).map(function(x){return x+1}).join(', ')||'—')+'</div></div>';
+    h+='<button class="b b-xs '+(locked?'b-g':'b-gold')+'" onclick="mhLocToggleLock('+li+')">'+(locked?'🔒':'Lock')+'</button>';
+    h+='</div>';
+  });
+  h+='</div>';
+  area.innerHTML=h;
+}
+function mhLocToggleLock(locIdx){
+  const p=projectLoad();if(!p)return;
+  if(window.SBMastery)window.SBMastery.syncLocationBible(p);
+  const loc=(p.locationBible||[])[locIdx];
+  if(!loc)return;
+  loc.locked=!loc.locked;
+  if(window.SBMastery)window.SBMastery.ensureLocationEntry(loc);
+  projectSave(p);
+  mhRenderLocationBible();
+}
+function mhLocAssignPhoto(photoIndex, locKey){
+  const p=projectLoad();if(!p||!p.assets||!p.assets.locationPhotos)return;
+  const ph=p.assets.locationPhotos[photoIndex];
+  if(!ph)return;
+  ph.locationKey=locKey||'';
+  if(window.SBMastery)window.SBMastery.syncLocationBible(p);
+  if(locKey){
+    const loc=(p.locationBible||[]).find(l=>l.key===locKey);
+    if(loc&&ph.url)loc.plateUrl=ph.url;
+  }
+  projectSave(p);
+  mhRenderLocationBible();
+  renderLocationPhotos();
+}
 function renderLocationPhotos() {
   const area = document.getElementById('mhLocPhotoArea');
   if (!area) return;
   const p = projectLoad() || {};
+  if(window.SBMastery)window.SBMastery.syncLocationBible(p);
+  mhRenderLocationBible();
   const photos = (p.assets && p.assets.locationPhotos) || [];
   if (!photos.length) {
     area.innerHTML = '<span style="color:var(--dim);font-size:11px">No location plates yet. Add some for visual coherence.</span>';
     return;
   }
   area.innerHTML = photos.map((ph, i) => `
-    <div class="ref-photo-wrap" style="width:110px;text-align:center;border:1px solid var(--border);border-radius:6px;overflow:hidden;background:#111">
+    <div class="ref-photo-wrap" style="width:120px;text-align:center;border:1px solid var(--border);border-radius:6px;overflow:hidden;background:#111">
       <button type="button" class="ref-photo-remove" title="Remove this location reference" data-loc-index="${i}">✕</button>
       <img src="${ph.url}" style="width:100%;height:62px;object-fit:cover;display:block" />
       <div style="font-size:9px;padding:3px 4px;color:#aaa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc((ph.prompt||'').slice(0,28))}</div>
+      <select style="width:100%;font-size:9px;margin:2px 0" onchange="mhLocAssignPhoto(${i},this.value)">
+        <option value=""${!ph.locationKey?' selected':''}>— assign location —</option>
+        ${(p.locationBible||[]).map(l=>'<option value="'+esc(l.key)+'"'+(ph.locationKey===l.key?' selected':'')+'>'+esc(l.name)+'</option>').join('')}
+      </select>
       ${ph.provider ? sbProviderBadge(ph.provider) : ''}
     </div>`).join('');
 }
@@ -8826,6 +8931,16 @@ function appendJot(key, sel, type) {
   sel.selectedIndex = 0;
 }
 
+function mhEnrichJobWithMastery(p, j){
+  if(!window.SBMastery||!p||!j)return j;
+  const m=window.SBMastery.resolveShotMastery(p,j.sceneIdx,j.shotIdx);
+  j.prompt=window.SBMastery.enrichPrompt(j.prompt||'',m);
+  j.character_image_url=m.character_image_url||null;
+  j.location_image_url=m.location_image_url||null;
+  j.reference_images=m.reference_images||[];
+  return j;
+}
+
 // Generate video for ONE per-shot box using its exact current prompt (with jots), chars/photos, location.
 // Sends the per-shot prompt (jots stripped) plus character/location refs to WaveSpeed or local renderer.
 async function generateVideoForShot(key, btn, opts) {
@@ -8866,9 +8981,16 @@ async function generateVideoForShot(key, btn, opts) {
     resolution: vs.resolution,
     provider: vs.provider,
     shotKey: key,
-    character_image_url: (charRefUrl && (charRefUrl.startsWith('http') || charRefUrl.startsWith('data:'))) ? charRefUrl : null,
+    character_image_url: (charRefUrl && charRefUrl.startsWith('https://')) ? charRefUrl : null,
     location: ui.loc
   };
+  if(window.SBMastery){
+    const mastery=window.SBMastery.resolveShotMastery(p,si,shi);
+    if(!payload.character_image_url&&mastery.character_image_url)payload.character_image_url=mastery.character_image_url;
+    if(mastery.location_image_url)payload.location_image_url=mastery.location_image_url;
+    if(mastery.reference_images&&mastery.reference_images.length)payload.reference_images=mastery.reference_images;
+    payload.prompt=window.SBMastery.enrichPrompt(payload.prompt,mastery);
+  }
 
   mhUpsertGenJob(si, shi, { prompt: finalPromptForVideo, status: 'submit', model: videoModel, error: null, localGenerated: false });
   mhRenderShotClipPreview(key);

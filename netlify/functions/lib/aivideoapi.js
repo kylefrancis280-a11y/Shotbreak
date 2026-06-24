@@ -107,14 +107,17 @@ function humanizeAIVideoAPIError(err) {
   return parsed.message || 'AI Video API request failed';
 }
 
-async function submitAIVideoAPISora({ prompt, duration, aspect_ratio, character_image_url }) {
+async function submitAIVideoAPISora({ prompt, duration, aspect_ratio, character_image_url, location_image_url }) {
   const input = {
     prompt,
     duration: clampAIVideoDuration(duration),
     aspect_ratio: aspect_ratio === '9:16' ? '9:16' : '16:9',
   };
-  if (character_image_url && String(character_image_url).startsWith('https://')) {
-    input.image_urls = [character_image_url];
+  const refUrl = (character_image_url && String(character_image_url).startsWith('https://'))
+    ? character_image_url
+    : ((location_image_url && String(location_image_url).startsWith('https://')) ? location_image_url : null);
+  if (refUrl) {
+    input.image_urls = [refUrl];
   }
 
   const res = await callAIVideoAPI('/v1/videos/generations', {

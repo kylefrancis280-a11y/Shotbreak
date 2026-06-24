@@ -719,7 +719,14 @@ async function runJob(clip){
     const pollModel=vs?vs.model:state.global.model;
     const pollProv=vs?vs.provider:((typeof window.inferVideoProvider==='function')?window.inferVideoProvider(pollModel):(pollModel&&pollModel.includes('grok')?'grok-imagine':pollModel&&pollModel.includes('sora')?'aivideoapi':'wavespeed'));
     const body={action:'submit',model:pollModel,prompt,duration:dur,aspect_ratio:asp,resolution:vs?vs.resolution:(state.global.quality||'720p'),provider:pollProv};
-    if(ref)body.character_image_url=ref.url;
+    if(ref&&ref.url&&String(ref.url).startsWith('https://'))body.character_image_url=ref.url;
+    if(window.SBMastery){
+      const mastery=window.SBMastery.resolveForTimeline(state,clip);
+      if(!body.character_image_url&&mastery.character_image_url)body.character_image_url=mastery.character_image_url;
+      if(mastery.location_image_url)body.location_image_url=mastery.location_image_url;
+      if(mastery.reference_images&&mastery.reference_images.length)body.reference_images=mastery.reference_images;
+      body.prompt=window.SBMastery.enrichPrompt(body.prompt,mastery);
+    }
     const sub=await fetch('/.netlify/functions/generate-video',{method:'POST',headers:h,body:JSON.stringify(body)});
     const sd=await sub.json();
     if(!sub.ok||!sd.request_id)throw new Error(formatGenError(sd,sub.status));

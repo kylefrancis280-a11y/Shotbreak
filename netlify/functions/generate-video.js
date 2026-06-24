@@ -347,12 +347,20 @@ function clampVeoResolution(res) {
 
 function collectRefImageUrls(fields) {
   const urls = [];
-  const primary = pickRefImageUrl(fields);
-  if (primary) urls.push(primary);
+  if (fields.character_image_url && isSafeUrl(fields.character_image_url)) {
+    urls.push(fields.character_image_url);
+  }
+  if (fields.location_image_url && isSafeUrl(fields.location_image_url) && !urls.includes(fields.location_image_url)) {
+    urls.push(fields.location_image_url);
+  }
   if (Array.isArray(fields.reference_images)) {
     for (const r of fields.reference_images) {
       if (r && isSafeUrl(r) && !urls.includes(r)) urls.push(r);
     }
+  }
+  if (!urls.length) {
+    const primary = pickRefImageUrl(fields);
+    if (primary) urls.push(primary);
   }
   return urls.slice(0, 3);
 }
@@ -399,6 +407,7 @@ function clampSeedanceResolution(res) {
 
 function pickRefImageUrl(body) {
   if (body.character_image_url && isSafeUrl(body.character_image_url)) return body.character_image_url;
+  if (body.location_image_url && isSafeUrl(body.location_image_url)) return body.location_image_url;
   if (Array.isArray(body.reference_images)) {
     for (const r of body.reference_images) {
       if (r && isSafeUrl(r)) return r;
@@ -845,10 +854,18 @@ exports.handler = async function (event) {
       let finalPrompt = prompt;
 
       // Always do the final vision polish if we have refs + Grok key (intelligence layer is shared)
-      if (character_image_url && isSafeUrl(character_image_url) && hasGrokKey) {
+      const polishRefUrls = collectRefImageUrls({
+        character_image_url,
+        location_image_url: body.location_image_url,
+        reference_images: body.reference_images,
+      }).filter((u) => String(u).startsWith('https://'));
+      if (polishRefUrls.length && hasGrokKey) {
         try {
-          const polishSys = UNTRUSTED_RULE + ' You are the final prompt polish pass for a film. Rewrite the draft to match the reference image visually. Output only the improved prompt text (max ~280 tokens).';
-          const polishPayload = { text: wrapUserContent('draft', sanitizeField(prompt, 2000) + '\nShot key: ' + sanitizeField(shotKey || '', 200)), images: [{url: character_image_url}] };
+          const polishSys = UNTRUSTED_RULE + ' You are the final prompt polish pass for a film. Rewrite the draft to match the reference image(s) visually (characters and location). Output only the improved prompt text (max ~280 tokens).';
+          const polishPayload = {
+            text: wrapUserContent('draft', sanitizeField(prompt, 2000) + '\nShot key: ' + sanitizeField(shotKey || '', 200)),
+            images: polishRefUrls.slice(0, 3).map((url) => ({ url })),
+          };
           const polish = await callGrok(polishSys, polishPayload);
           if (polish && polish.output && polish.output.length > 30) finalPrompt = polish.output.trim();
         } catch (e) { /* non-fatal */ }
@@ -901,6 +918,7 @@ exports.handler = async function (event) {
           duration,
           aspect_ratio,
           character_image_url: refUrl || character_image_url,
+          location_image_url: body.location_image_url,
         });
         return jsonResponse(event, 200, {
           ...avRes,
