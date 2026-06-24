@@ -8,6 +8,9 @@
 [functions."generate-video"]
   timeout = 60
 
+[functions."serve-openai-video"]
+  timeout = 60
+
 [[headers]]
   for = "/*"
   [headers.values]

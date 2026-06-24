@@ -691,20 +691,23 @@ async function runJob(clip){
     const vs=(typeof window.getVideoSettings==='function')?window.getVideoSettings('timeline'):null;
     const dur=vs?vs.duration:Math.min(15,Math.max(3,parseInt(state.global.clipDuration,10)||clip.durationSec||5));
     const asp=vs?vs.aspect_ratio:(state.global.aspectRatio||'16:9');
-    const body={action:'submit',model:vs?vs.model:state.global.model,prompt,duration:dur,aspect_ratio:asp,resolution:vs?vs.resolution:(state.global.quality||'720p'),provider:vs?vs.provider:(state.global.model&&state.global.model.includes('grok')?'grok-imagine':'wavespeed')};
+    const pollModel=vs?vs.model:state.global.model;
+    const pollProv=vs?vs.provider:((typeof window.inferVideoProvider==='function')?window.inferVideoProvider(pollModel):(pollModel&&pollModel.includes('grok')?'grok-imagine':pollModel&&pollModel.includes('sora')?'openai':'wavespeed'));
+    const body={action:'submit',model:pollModel,prompt,duration:dur,aspect_ratio:asp,resolution:vs?vs.resolution:(state.global.quality||'720p'),provider:pollProv};
     if(ref)body.character_image_url=ref.url;
     const sub=await fetch('/.netlify/functions/generate-video',{method:'POST',headers:h,body:JSON.stringify(body)});
     const sd=await sub.json();
     if(!sub.ok||!sd.request_id)throw new Error(formatGenError(sd,sub.status));
     clip.requestId=sd.request_id;
+    const jobProv=sd.provider||pollProv;
     const t0=Date.now();
     while(Date.now()-t0<480000){
       await new Promise(r=>setTimeout(r,5000));
-      const pollBody={action:'status',request_id:clip.requestId,model:state.global.model,provider:state.global.model&&state.global.model.includes('grok')?'grok-imagine':'wavespeed'};
+      const pollBody={action:'status',request_id:clip.requestId,model:pollModel,provider:jobProv};
       const pr=await fetch('/.netlify/functions/generate-video',{method:'POST',headers:h,body:JSON.stringify(pollBody)});
       const pd=await pr.json();const st=(pd.status||pd.state||'').toUpperCase();
       if(st==='COMPLETED'||st==='SUCCESS'||st==='SUCCEEDED'||st==='DONE'){
-        const rr=await fetch('/.netlify/functions/generate-video',{method:'POST',headers:h,body:JSON.stringify({action:'result',request_id:clip.requestId,model:state.global.model,provider:pollBody.provider})});
+        const rr=await fetch('/.netlify/functions/generate-video',{method:'POST',headers:h,body:JSON.stringify({action:'result',request_id:clip.requestId,model:pollModel,provider:jobProv})});
         const rd=await rr.json();
         clip.videoUrl=rd.video_url||rd.url||(rd.video&&rd.video.url);
         if(!clip.videoUrl)throw new Error('No video URL');
