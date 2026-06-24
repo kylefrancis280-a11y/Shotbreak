@@ -1,10 +1,11 @@
 const https = require('https');
 const crypto = require('crypto');
+const { firstEnv } = require('./env');
 
 const OPENAI_VIDEO_MAX_DATA_URL_BYTES = 2.5 * 1024 * 1024;
 
 function getOpenAIApiKey() {
-  return process.env.OPENAI_API_KEY || process.env.SORA_API_KEY || '';
+  return firstEnv(['OPENAI_API_KEY', 'SORA_API_KEY', 'OPENAI_KEY']);
 }
 
 function callOpenAI(path, payload, method = 'POST') {
@@ -136,7 +137,7 @@ function humanizeOpenAIError(err) {
 
 function signOpenAIStreamUrl(videoId, event) {
   const exp = Date.now() + 3600000;
-  const secret = getOpenAIApiKey() || 'shotbreak';
+  const secret = getOpenAIApiKey() || firstEnv(['NETLIFY_SITE_ID']) || 'shotbreak';
   const sig = crypto.createHmac('sha256', secret).update(videoId + '|' + exp).digest('hex');
   const host = (event && event.headers && (event.headers.host || event.headers.Host)) || 'shotbreak.io';
   const proto = (event && event.headers && event.headers['x-forwarded-proto']) || 'https';
@@ -146,7 +147,7 @@ function signOpenAIStreamUrl(videoId, event) {
 function verifyOpenAIStreamSig(videoId, exp, sig) {
   if (!videoId || !exp || !sig) return false;
   if (Date.now() > Number(exp)) return false;
-  const secret = getOpenAIApiKey() || 'shotbreak';
+  const secret = getOpenAIApiKey() || firstEnv(['NETLIFY_SITE_ID']) || 'shotbreak';
   const expected = crypto.createHmac('sha256', secret).update(videoId + '|' + exp).digest('hex');
   try {
     const a = Buffer.from(sig, 'hex');

@@ -12,6 +12,7 @@ const {
   getOpenAIVideoStatus,
   getOpenAIVideoResult,
 } = require('./lib/openai-video');
+const { env, hasEnv } = require('./lib/env');
 
 function jsonResponse(event, statusCode, body) {
   return {
@@ -610,6 +611,20 @@ exports.handler = async function (event) {
   }
   const isOwner = !!authResult.isOwner;
 
+  if (action === 'providers') {
+    const openaiKey = getOpenAIApiKey();
+    return jsonResponse(event, 200, {
+      openai: !!openaiKey,
+      openai_key_len: openaiKey ? openaiKey.length : 0,
+      wavespeed: hasEnv('WAVESPEED_API_KEY'),
+      grok: hasEnv('XAI_API_KEY') || hasEnv('GROK_API_KEY'),
+      deploy_context: env('CONTEXT') || env('NETLIFY_CONTEXT') || null,
+      hint: openaiKey
+        ? 'OpenAI key is visible to Netlify Functions.'
+        : 'OPENAI_API_KEY missing at runtime. In Netlify UI set scope to All (or Functions + Production), save, then Trigger deploy.',
+    });
+  }
+
   // === PICTURE GEN - model aware routing with constraints enforced on client
   // Models (exact user list): wan-2.7, flux-xai (XAI direct "Flux (pulling thru XAI API)"), nano-banana, nano-banana-pro, gpt-image-2 "GPT 2.0" (via WaveSpeed)
   // Always enrich prompt with Grok vision first for coherence with locked refs.
@@ -780,9 +795,11 @@ exports.handler = async function (event) {
       if (isSoraModel(videoModel) && wantsOpenAI && !hasOpenAIKey) {
         return jsonResponse(event, 503, {
           error: 'OpenAI Sora not configured on server',
-          detail: 'Set OPENAI_API_KEY in Netlify environment variables (Production + Deploy previews), then redeploy.',
+          detail: 'Set OPENAI_API_KEY in Netlify → Environment variables. Scope must include Functions (use "All scopes" if unsure). Save, then Deploys → Trigger deploy. POST {action:"providers"} to verify.',
           model: videoModel,
           provider: 'openai',
+          openai: false,
+          wavespeed: hasWsKey,
         });
       }
       if (isGrokImagineVideo && hasGrokKey) {
