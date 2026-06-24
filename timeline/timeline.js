@@ -73,19 +73,32 @@ function cleanClipDescription(clip){
   return desc;
 }
 
+function pickVideoUrl(d){
+  if(!d)return null;
+  if(d.video_url)return d.video_url;
+  if(d.url)return d.url;
+  if(d.video&&d.video.url)return d.video.url;
+  const out=d.raw&&d.raw.output;
+  if(out&&Array.isArray(out.urls)&&out.urls[0])return out.urls[0];
+  return null;
+}
+
 function formatGenError(sd,status){
   const err=String((sd&&sd.error)||'').trim();
   const det=String((sd&&sd.detail)||'').trim();
-  const raw=String((sd&&sd.raw&&sd.raw.message)||(sd&&sd.raw)||'').trim();
-  const blob=(err+' '+det+' '+raw).toLowerCase();
-  if(/aivideoapi|insufficient_credits|insufficient credits/.test(blob)){
+  const code=String((sd&&sd.raw&&sd.raw.error&&sd.raw.error.code)||'').toLowerCase();
+  const blob=(err+' '+det).toLowerCase();
+  if(code==='insufficient_credits'||/insufficient_credits|balance is too low/.test(blob)){
     return'AI Video API credits exhausted — top up at https://aivideoapi.ai/dashboard/billing';
   }
-  if(/insufficient|balance|credit|quota|billing|payment|funds/.test(blob)){
-    return'Video API credits exhausted on server — top up billing for the configured provider.';
+  if(code==='spend_limit_exceeded'||/spend_limit_exceeded/.test(blob)){
+    return'AI Video API key spend limit reached — raise limits at https://aivideoapi.ai/api-keys';
   }
-  if(/unauthorized|invalid.*key|api key|forbidden/.test(blob)){
-    return'Video API key misconfigured on server ('+(det||err||'check Netlify env')+').';
+  if(code==='ip_not_allowed'||/ip_not_allowed|ip blocked/.test(blob)){
+    return'AI Video API IP blocked — clear IP allowlist on your key at https://aivideoapi.ai/api-keys';
+  }
+  if(code==='invalid_api_key'||/invalid_api_key/.test(blob)){
+    return'AI Video API key invalid — https://aivideoapi.ai/api-keys';
   }
   if(/aivideoapi.*not configured|set_aivideoapi_key/i.test(blob)){
     return'Sora 2 not configured. Owner: run fix-aivideoapi-sora.ps1 with key from https://aivideoapi.ai/api-keys';
@@ -93,9 +106,12 @@ function formatGenError(sd,status){
   if(/openai.*not configured|set openai_api_key/i.test(blob)){
     return'OpenAI Sora not configured. Owner: POST {action:"set_openai_key",api_key:"sk-..."} to generate-video.';
   }
+  if(/unauthorized|invalid.*key|api key/.test(blob)&&!/invalid_request/.test(blob)){
+    return'Video API key misconfigured on server ('+(det||err||'check Netlify env')+').';
+  }
   if(status===401)return'Session expired — sign out and sign back in.';
   if(status===503)return det||err||'Video service unavailable (API keys not configured).';
-  return det||err||raw||'Video submit failed';
+  return det||err||'Video generation failed';
 }
 
 function repairCorruptClips(){
@@ -717,11 +733,15 @@ async function runJob(clip){
       const pr=await fetch('/.netlify/functions/generate-video',{method:'POST',headers:h,body:JSON.stringify(pollBody)});
       const pd=await pr.json();const st=(pd.status||pd.state||'').toUpperCase();
       if(st==='COMPLETED'||st==='SUCCESS'||st==='SUCCEEDED'||st==='DONE'){
-        const rr=await fetch('/.netlify/functions/generate-video',{method:'POST',headers:h,body:JSON.stringify({action:'result',request_id:clip.requestId,model:pollModel,provider:jobProv})});
-        const rd=await rr.json();
-        clip.videoUrl=rd.video_url||rd.url||(rd.video&&rd.video.url);
-        if(!clip.videoUrl)throw new Error('No video URL');
-        clip.status='done';save();renderAll();return;
+        let videoUrl=pickVideoUrl(pd);
+        if(!videoUrl){
+          const rr=await fetch('/.netlify/functions/generate-video',{method:'POST',headers:h,body:JSON.stringify({action:'result',request_id:clip.requestId,model:pollModel,provider:jobProv})});
+          const rd=await rr.json();
+          videoUrl=pickVideoUrl(rd);
+        }
+        if(!videoUrl)throw new Error('No video URL in provider response');
+        clip.videoUrl=videoUrl;
+        clip.status='done';clip.error=null;save();renderAll();return;
       }
       if(st==='FAILED'||st==='ERROR')throw new Error(formatGenError(pd,pr.status));
     }

@@ -70,18 +70,41 @@ function extractAIVideoAPIUrl(res) {
   return null;
 }
 
+function parseAIVideoAPIError(err) {
+  const msg = String(err && err.message ? err.message : err || '');
+  const m = msg.match(/AI Video API (\d{3}) \(([^)]+)\):\s*(.*)$/i);
+  return {
+    message: msg,
+    httpStatus: m ? Number(m[1]) : null,
+    code: m ? String(m[2]).toLowerCase() : '',
+    detail: m ? m[3] : msg,
+  };
+}
+
 function humanizeAIVideoAPIError(err) {
-  const blob = String(err && err.message ? err.message : err || '').toLowerCase();
-  if (/insufficient_credits|insufficient credits|balance is too low|402/.test(blob)) {
+  const parsed = parseAIVideoAPIError(err);
+  const code = parsed.code;
+  const status = parsed.httpStatus;
+
+  if (code === 'insufficient_credits' || status === 402) {
     return 'AI Video API credits exhausted. Top up at https://aivideoapi.ai/dashboard/billing';
   }
-  if (/invalid_api_key|401|unauthorized/.test(blob)) {
+  if (code === 'spend_limit_exceeded') {
+    return 'AI Video API key spend limit reached (hourly/daily/total). Raise limits in https://aivideoapi.ai/api-keys';
+  }
+  if (code === 'invalid_api_key' || status === 401) {
     return 'AI Video API key invalid. Check key at https://aivideoapi.ai/api-keys';
   }
-  if (/ip_not_allowed|403/.test(blob)) {
-    return 'AI Video API IP blocked — add Netlify egress IP to key allowlist in aivideoapi dashboard.';
+  if (code === 'ip_not_allowed' || status === 403) {
+    return 'AI Video API IP blocked — clear IP allowlist on your key or add Netlify egress IPs in https://aivideoapi.ai/api-keys';
   }
-  return String(err && err.message ? err.message : err || 'AI Video API request failed');
+  if (code === 'invalid_request' || status === 400) {
+    return parsed.detail || 'AI Video API rejected the request (check prompt, duration 4/8/12, aspect 16:9 or 9:16, and HTTPS image refs only).';
+  }
+  if (code === 'upstream_error' || status === 503) {
+    return parsed.detail || 'AI Video API upstream error — prompt may be blocked or provider temporarily unavailable.';
+  }
+  return parsed.message || 'AI Video API request failed';
 }
 
 async function submitAIVideoAPISora({ prompt, duration, aspect_ratio, character_image_url }) {
@@ -90,7 +113,7 @@ async function submitAIVideoAPISora({ prompt, duration, aspect_ratio, character_
     duration: clampAIVideoDuration(duration),
     aspect_ratio: aspect_ratio === '9:16' ? '9:16' : '16:9',
   };
-  if (character_image_url) {
+  if (character_image_url && String(character_image_url).startsWith('https://')) {
     input.image_urls = [character_image_url];
   }
 
@@ -146,6 +169,7 @@ module.exports = {
   isAIVideoAPIJob,
   clampAIVideoDuration,
   extractAIVideoAPIUrl,
+  parseAIVideoAPIError,
   humanizeAIVideoAPIError,
   submitAIVideoAPISora,
   getAIVideoAPITaskStatus,
