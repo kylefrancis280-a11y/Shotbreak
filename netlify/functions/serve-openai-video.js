@@ -11,7 +11,7 @@ exports.handler = async function (event) {
   if (event.httpMethod !== 'GET') {
     return { statusCode: 405, body: 'Method not allowed' };
   }
-  if (!getOpenAIApiKey()) {
+  if (!(await getOpenAIApiKey())) {
     return { statusCode: 503, body: 'OPENAI_API_KEY not configured' };
   }
 
@@ -20,7 +20,7 @@ exports.handler = async function (event) {
   const exp = params.exp;
   const sig = params.sig;
 
-  if (!verifyOpenAIStreamSig(vid, exp, sig)) {
+  if (!(await verifyOpenAIStreamSig(vid, exp, sig))) {
     return { statusCode: 403, body: 'Invalid or expired video token' };
   }
 

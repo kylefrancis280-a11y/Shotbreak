@@ -85,7 +85,7 @@ function formatGenError(sd,status){
     return'Video API key misconfigured on server ('+(det||err||'check Netlify env')+').';
   }
   if(/openai.*not configured|set openai_api_key/i.test(blob)){
-    return'OpenAI Sora not configured — Netlify needs OPENAI_API_KEY with Functions scope (use All scopes), then Trigger deploy. In console: fetch providers via generate-video {action:"providers"}.';
+    return'OpenAI Sora not configured. Owner: run fix-openai-sora.ps1 OR in console: fetch(...,{body:JSON.stringify({action:"set_openai_key",api_key:"sk-..."})}).';
   }
   if(status===401)return'Session expired — sign out and sign back in.';
   if(status===503)return det||err||'Video service unavailable (API keys not configured).';

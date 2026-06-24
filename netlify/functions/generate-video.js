@@ -13,6 +13,7 @@ const {
   getOpenAIVideoResult,
 } = require('./lib/openai-video');
 const { env, hasEnv } = require('./lib/env');
+const { storeOpenAIApiKey, openAIKeyDiagnostics } = require('./lib/server-secrets');
 
 function jsonResponse(event, statusCode, body) {
   return {
@@ -612,17 +613,37 @@ exports.handler = async function (event) {
   const isOwner = !!authResult.isOwner;
 
   if (action === 'providers') {
-    const openaiKey = getOpenAIApiKey();
+    const diag = await openAIKeyDiagnostics();
     return jsonResponse(event, 200, {
-      openai: !!openaiKey,
-      openai_key_len: openaiKey ? openaiKey.length : 0,
+      ...diag,
       wavespeed: hasEnv('WAVESPEED_API_KEY'),
       grok: hasEnv('XAI_API_KEY') || hasEnv('GROK_API_KEY'),
       deploy_context: env('CONTEXT') || env('NETLIFY_CONTEXT') || null,
-      hint: openaiKey
-        ? 'OpenAI key is visible to Netlify Functions.'
-        : 'OPENAI_API_KEY missing at runtime. In Netlify UI set scope to All (or Functions + Production), save, then Trigger deploy.',
+      hint: diag.openai
+        ? (diag.openai_env ? 'OpenAI key from Netlify env.' : 'OpenAI key from Firebase server_secrets.')
+        : 'No OpenAI key. Netlify OPENAI_API_KEY (Functions scope) OR owner action set_openai_key.',
     });
+  }
+
+  if (action === 'set_openai_key') {
+    if (!isOwner) {
+      return jsonResponse(event, 403, { error: 'Owner only — sign in as kylef/scott/steve owner' });
+    }
+    const apiKey = body.api_key || body.openai_api_key;
+    if (!apiKey || !String(apiKey).trim().startsWith('sk-')) {
+      return jsonResponse(event, 400, { error: 'api_key required (must start with sk-)' });
+    }
+    try {
+      await storeOpenAIApiKey(apiKey);
+      const diag = await openAIKeyDiagnostics();
+      return jsonResponse(event, 200, {
+        ok: true,
+        message: 'OpenAI key stored in Firebase server_secrets (server-only).',
+        ...diag,
+      });
+    } catch (e) {
+      return jsonResponse(event, 500, { error: 'Failed to store OpenAI key', detail: e.message });
+    }
   }
 
   // === PICTURE GEN - model aware routing with constraints enforced on client
@@ -766,7 +787,7 @@ exports.handler = async function (event) {
     const videoModel = body.model || 'seedance-2.0-turbo';
     const hasWsKey = !!process.env.WAVESPEED_API_KEY;
     const hasGrokKey = !!(process.env.XAI_API_KEY || process.env.GROK_API_KEY);
-    const hasOpenAIKey = !!getOpenAIApiKey();
+    const hasOpenAIKey = !!(await getOpenAIApiKey());
 
     if (!hasWsKey && !hasGrokKey && !hasOpenAIKey) {
       return jsonResponse(event, 503, {
@@ -795,7 +816,7 @@ exports.handler = async function (event) {
       if (isSoraModel(videoModel) && wantsOpenAI && !hasOpenAIKey) {
         return jsonResponse(event, 503, {
           error: 'OpenAI Sora not configured on server',
-          detail: 'Set OPENAI_API_KEY in Netlify → Environment variables. Scope must include Functions (use "All scopes" if unsure). Save, then Deploys → Trigger deploy. POST {action:"providers"} to verify.',
+          detail: 'No OpenAI key in Netlify env or Firebase. Owner: POST {action:"set_openai_key",api_key:"sk-..."} or set OPENAI_API_KEY in Netlify (Functions scope) and redeploy.',
           model: videoModel,
           provider: 'openai',
           openai: false,
@@ -871,7 +892,7 @@ exports.handler = async function (event) {
         });
       }
     } catch (err) {
-      const detail = isSoraModel(videoModel) && getOpenAIApiKey()
+      const detail = isSoraModel(videoModel) && (await getOpenAIApiKey())
         ? humanizeOpenAIError(err)
         : (err.message || String(err));
       return {
@@ -892,7 +913,7 @@ exports.handler = async function (event) {
     if (isGrokJob && !(process.env.XAI_API_KEY || process.env.GROK_API_KEY)) {
       return jsonResponse(event, 503, { request_id, status: 'FAILED', error: 'XAI_API_KEY not configured', provider: 'grok-imagine' });
     }
-    if (isOpenAIJob && !getOpenAIApiKey()) {
+    if (isOpenAIJob && !(await getOpenAIApiKey())) {
       return jsonResponse(event, 503, { request_id, status: 'FAILED', error: 'OPENAI_API_KEY not configured', provider: 'openai' });
     }
     if (!isGrokJob && !isOpenAIJob && !process.env.WAVESPEED_API_KEY) {
@@ -965,7 +986,7 @@ exports.handler = async function (event) {
     if (isGrokJob && !(process.env.XAI_API_KEY || process.env.GROK_API_KEY)) {
       return jsonResponse(event, 503, { request_id, status: 'FAILED', error: 'XAI_API_KEY not configured', provider: 'grok-imagine' });
     }
-    if (isOpenAIJob && !getOpenAIApiKey()) {
+    if (isOpenAIJob && !(await getOpenAIApiKey())) {
       return jsonResponse(event, 503, { request_id, status: 'FAILED', error: 'OPENAI_API_KEY not configured', provider: 'openai' });
     }
     if (!isGrokJob && !isOpenAIJob && !process.env.WAVESPEED_API_KEY) {

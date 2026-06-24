@@ -1,18 +1,19 @@
 const https = require('https');
 const crypto = require('crypto');
 const { firstEnv } = require('./env');
+const { resolveOpenAIApiKey } = require('./server-secrets');
 
 const OPENAI_VIDEO_MAX_DATA_URL_BYTES = 2.5 * 1024 * 1024;
 
-function getOpenAIApiKey() {
-  return firstEnv(['OPENAI_API_KEY', 'SORA_API_KEY', 'OPENAI_KEY']);
+async function getOpenAIApiKey() {
+  return resolveOpenAIApiKey();
 }
 
-function callOpenAI(path, payload, method = 'POST') {
-  return new Promise((resolve, reject) => {
-    const key = getOpenAIApiKey();
-    if (!key) return reject(new Error('OPENAI_API_KEY not configured'));
+async function callOpenAI(path, payload, method = 'POST') {
+  const key = await getOpenAIApiKey();
+  if (!key) throw new Error('OPENAI_API_KEY not configured');
 
+  return new Promise((resolve, reject) => {
     const isGet = method.toUpperCase() === 'GET';
     const headers = { Authorization: 'Bearer ' + key };
     let data = null;
@@ -60,11 +61,11 @@ function callOpenAI(path, payload, method = 'POST') {
   });
 }
 
-function downloadOpenAIVideoContent(videoId) {
-  return new Promise((resolve, reject) => {
-    const key = getOpenAIApiKey();
-    if (!key) return reject(new Error('OPENAI_API_KEY not configured'));
+async function downloadOpenAIVideoContent(videoId) {
+  const key = await getOpenAIApiKey();
+  if (!key) throw new Error('OPENAI_API_KEY not configured');
 
+  return new Promise((resolve, reject) => {
     const options = {
       hostname: 'api.openai.com',
       port: 443,
@@ -130,24 +131,24 @@ function humanizeOpenAIError(err) {
     return 'OpenAI API credits or quota exhausted. Check billing at platform.openai.com.';
   }
   if (/unauthorized|invalid.*key|api key|forbidden|access denied/.test(blob)) {
-    return 'OpenAI API key invalid or missing. Set OPENAI_API_KEY in Netlify env (Deploy + Preview).';
+    return 'OpenAI API key invalid or missing. Set OPENAI_API_KEY in Netlify or use owner set_openai_key.';
   }
   return String(err && err.message ? err.message : err || 'OpenAI video request failed');
 }
 
-function signOpenAIStreamUrl(videoId, event) {
+async function signOpenAIStreamUrl(videoId, event) {
   const exp = Date.now() + 3600000;
-  const secret = getOpenAIApiKey() || firstEnv(['NETLIFY_SITE_ID']) || 'shotbreak';
+  const secret = (await getOpenAIApiKey()) || firstEnv(['NETLIFY_SITE_ID']) || 'shotbreak';
   const sig = crypto.createHmac('sha256', secret).update(videoId + '|' + exp).digest('hex');
   const host = (event && event.headers && (event.headers.host || event.headers.Host)) || 'shotbreak.io';
   const proto = (event && event.headers && event.headers['x-forwarded-proto']) || 'https';
   return proto + '://' + host + '/.netlify/functions/serve-openai-video?vid=' + encodeURIComponent(videoId) + '&exp=' + exp + '&sig=' + sig;
 }
 
-function verifyOpenAIStreamSig(videoId, exp, sig) {
+async function verifyOpenAIStreamSig(videoId, exp, sig) {
   if (!videoId || !exp || !sig) return false;
   if (Date.now() > Number(exp)) return false;
-  const secret = getOpenAIApiKey() || firstEnv(['NETLIFY_SITE_ID']) || 'shotbreak';
+  const secret = (await getOpenAIApiKey()) || firstEnv(['NETLIFY_SITE_ID']) || 'shotbreak';
   const expected = crypto.createHmac('sha256', secret).update(videoId + '|' + exp).digest('hex');
   try {
     const a = Buffer.from(sig, 'hex');
@@ -159,7 +160,7 @@ function verifyOpenAIStreamSig(videoId, exp, sig) {
   }
 }
 
-function bufferToVideoDeliveryUrl(buf, videoId, event) {
+async function bufferToVideoDeliveryUrl(buf, videoId, event) {
   if (!buf || !buf.length) return null;
   if (buf.length <= OPENAI_VIDEO_MAX_DATA_URL_BYTES) {
     return 'data:video/mp4;base64,' + buf.toString('base64');
@@ -216,7 +217,7 @@ async function getOpenAIVideoResult(request_id, event) {
     return { request_id, video_url: null, status: st, provider: 'openai', raw: res };
   }
   const buf = await downloadOpenAIVideoContent(request_id);
-  const video_url = bufferToVideoDeliveryUrl(buf, request_id, event);
+  const video_url = await bufferToVideoDeliveryUrl(buf, request_id, event);
   return { request_id, video_url, status: st, provider: 'openai', raw: res };
 }
 
