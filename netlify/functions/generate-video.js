@@ -775,7 +775,16 @@ exports.handler = async function (event) {
       }
 
       const isGrokImagineVideo = videoModel === 'grok-imagine' || videoModel.includes('grok-imagine');
+      const wantsOpenAI = body.provider === 'openai';
       const isSoraDirect = isSoraModel(videoModel) && hasOpenAIKey;
+      if (isSoraModel(videoModel) && wantsOpenAI && !hasOpenAIKey) {
+        return jsonResponse(event, 503, {
+          error: 'OpenAI Sora not configured on server',
+          detail: 'Set OPENAI_API_KEY in Netlify environment variables (Production + Deploy previews), then redeploy.',
+          model: videoModel,
+          provider: 'openai',
+        });
+      }
       if (isGrokImagineVideo && hasGrokKey) {
         // Direct XAI Grok Imagine for video (exact "Grok Imagine (done through XAI API)" per user list)
         const grokRes = await submitGrokImagineVideo({
@@ -840,6 +849,7 @@ exports.handler = async function (event) {
           status: st,
           model: videoModel,
           provider: 'wavespeed',
+          fallback: isSoraModel(videoModel) && !hasOpenAIKey ? 'OPENAI_API_KEY not set — routed sora-2 via WaveSpeed' : undefined,
           raw: result
         });
       }
@@ -857,7 +867,7 @@ exports.handler = async function (event) {
 
   if (action === 'status' && request_id) {
     const isGrokJob = isGrokVideoJob(request_id, body.provider, body.model || model);
-    const isOpenAIJob = isOpenAIVideoJob(request_id, body.provider, body.model || model);
+    const isOpenAIJob = isOpenAIVideoJob(request_id, body.provider);
     if (request_id.includes('demo_')) {
       const prov = isGrokJob ? 'grok-imagine' : (isOpenAIJob ? 'openai' : 'wavespeed');
       return jsonResponse(event, 400, { request_id, status: 'FAILED', error: 'Demo job id — configure API keys and resubmit', provider: prov });
@@ -901,7 +911,7 @@ exports.handler = async function (event) {
 
   if (action === 'cancel' && request_id) {
     const isGrokJob = request_id.startsWith('grok_');
-    const isOpenAIJob = isOpenAIVideoJob(request_id, body.provider, body.model || model);
+    const isOpenAIJob = isOpenAIVideoJob(request_id, body.provider);
     let providerNote = 'Client polling stopped; provider job may still finish on their side.';
     if (!isGrokJob && !isOpenAIJob && process.env.WAVESPEED_API_KEY && !isFakeWaveSpeedId(request_id)) {
       try {
@@ -930,7 +940,7 @@ exports.handler = async function (event) {
 
   if (action === 'result' && request_id) {
     const isGrokJob = isGrokVideoJob(request_id, body.provider, body.model || model);
-    const isOpenAIJob = isOpenAIVideoJob(request_id, body.provider, body.model || model);
+    const isOpenAIJob = isOpenAIVideoJob(request_id, body.provider);
     if (request_id.includes('demo_')) {
       const prov = isGrokJob ? 'grok-imagine' : (isOpenAIJob ? 'openai' : 'wavespeed');
       return jsonResponse(event, 400, { request_id, status: 'FAILED', error: 'Demo job id — configure API keys and resubmit', provider: prov });

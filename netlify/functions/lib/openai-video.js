@@ -96,9 +96,8 @@ function normalizeOpenAIVideoStatus(st) {
   return 'PROCESSING';
 }
 
-function isOpenAIVideoJob(request_id, provider, model) {
+function isOpenAIVideoJob(request_id, provider) {
   if (provider === 'openai') return true;
-  if (model && String(model).toLowerCase().includes('sora')) return true;
   if (request_id && String(request_id).startsWith('video_')) return true;
   return false;
 }

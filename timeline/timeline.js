@@ -84,6 +84,9 @@ function formatGenError(sd,status){
   if(/unauthorized|invalid.*key|api key|forbidden/.test(blob)){
     return'Video API key misconfigured on server ('+(det||err||'check Netlify env')+').';
   }
+  if(/openai.*not configured|set openai_api_key/i.test(blob)){
+    return'OpenAI Sora not configured — add OPENAI_API_KEY in Netlify env (Production + Previews), redeploy, then retry.';
+  }
   if(status===401)return'Session expired — sign out and sign back in.';
   if(status===503)return det||err||'Video service unavailable (API keys not configured).';
   return det||err||raw||'Video submit failed';
@@ -699,7 +702,8 @@ async function runJob(clip){
     const sd=await sub.json();
     if(!sub.ok||!sd.request_id)throw new Error(formatGenError(sd,sub.status));
     clip.requestId=sd.request_id;
-    const jobProv=sd.provider||pollProv;
+    clip.provider=sd.provider||pollProv;
+    const jobProv=clip.provider;
     const t0=Date.now();
     while(Date.now()-t0<480000){
       await new Promise(r=>setTimeout(r,5000));
