@@ -310,13 +310,20 @@
       return (ROLE_RANK[a.role] || 9) - (ROLE_RANK[b.role] || 9);
     });
 
-    var locName = (clip.params && clip.params.scene && clip.params.scene.location) || clip.heading || '';
+    var meta = parseHeadingMeta(clip.heading || '');
+    var locName = (clip.params && clip.params.scene && clip.params.scene.location) || meta.name || '';
     var locUrl = null;
     var bible = state.locationBible || [];
-    var key = normalizeLocationKey(locName.replace(/^\s*(INT\.|EXT\.)\s+/i, ''));
+    var key = meta.key || normalizeLocationKey(String(locName).replace(/^\s*(INT\.|EXT\.)\s+/i, ''));
     var locEntry = bible.find(function (l) { return l.key === key; });
-    if (locEntry && isHttpsUrl(locEntry.plateUrl)) locUrl = locEntry.plateUrl;
-    if (locEntry && locEntry.description) promptBits.unshift('Location: ' + locEntry.description.slice(0, 160));
+    if (locEntry && locEntry.locked) {
+      if (isHttpsUrl(locEntry.plateUrl)) locUrl = locEntry.plateUrl;
+      if (locEntry.consistencyPhrase) {
+        promptBits.unshift('Location: ' + locEntry.consistencyPhrase);
+      } else if (locEntry.description) {
+        promptBits.unshift('Location: ' + locEntry.description.slice(0, 160));
+      }
+    }
 
     var reference_images = [];
     charRefs.forEach(function (cr) {

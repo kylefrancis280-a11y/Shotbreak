@@ -53,17 +53,72 @@ window.SBParser = (function(){
     if(/\b(crash|sudden)\b/.test(x))return'HANDHELD';
     return'STATIC';
   }
+  function parseSceneHeading(heading){
+    const h=String(heading||'').trim();
+    if(!h)return{key:'',name:'',timeOfDay:'',raw:''};
+    const normKey=name=>String(name||'').trim().toUpperCase().replace(/\s+/g,' ');
+
+    let m=h.match(/^\s*(?:(?:SC|SCENE)\s*\d+[A-Z]?[.\s\-—]*\s*)?(INT\.|EXT\.|INT\/EXT\.|I\/E\.?)\s+(.+?)(?:\s*[-—–]\s*(.+))?$/i);
+    if(m){
+      const name=m[2].trim();
+      const tod=(m[3]||'').trim();
+      return{key:normKey(name),name,timeOfDay:tod,raw:h};
+    }
+
+    m=h.match(/^(?:(?:SCENE\s+)?\d+[A-Z]?[.\s]+)\s*([A-Z][A-Z0-9\s'\-/&,]+?)\s+[-—–]\s+(DAY|NIGHT|MORNING|EVENING|DUSK|DAWN|CONTINUOUS|LATER|MOMENTS(?:\s+LATER)?)/i);
+    if(m){
+      const name=m[1].trim();
+      return{key:normKey(name),name,timeOfDay:m[2].trim(),raw:h};
+    }
+
+    if(/^(FLASHBACK|FLASH\s*CUT|MONTAGE|DREAM|INTERCUT|BACK\s+TO|LATER|TIME\s+CUT|SERIES\s+OF\s+SHOTS)\b/i.test(h)){
+      const name=h.split(/\s*[-—–]\s*/)[0].trim();
+      return{key:normKey(name),name,timeOfDay:'',raw:h};
+    }
+
+    return{key:'',name:'',timeOfDay:'',raw:h};
+  }
+
   function inferLocation(heading){
-    if(!heading)return'';
-    const m=heading.match(/^(?:INT\.|EXT\.|INT\/EXT\.)\s+([^-]+)/i);
-    return m?m[1].trim():'';
+    return parseSceneHeading(heading).name;
   }
   function inferTOD(heading){
+    const meta=parseSceneHeading(heading);
+    if(meta.timeOfDay){
+      const t=meta.timeOfDay.toLowerCase();
+      if(/\bnight\b/.test(t))return'Night';
+      if(/\bdawn\b/.test(t))return'Dawn';
+      if(/\bdusk\b/.test(t))return'Dusk';
+      if(/\bmorning\b/.test(t))return'Morning';
+      if(/\bevening\b/.test(t))return'Evening';
+      return meta.timeOfDay;
+    }
     if(!heading)return'Day';
     if(/\bNIGHT\b/i.test(heading))return'Night';
     if(/\bDAWN\b/i.test(heading))return'Dawn';
     if(/\bDUSK\b/i.test(heading))return'Dusk';
     return'Day';
+  }
+
+  /** Scan screenplay lines for sluglines — works even when shot parser lumped scenes into SCENE 1. */
+  function extractLocationsFromText(text){
+    const out={};
+    const norm=normalizeScriptText(text);
+    if(!norm.trim())return out;
+    norm.split('\n').forEach(line=>{
+      const t=line.trim();
+      if(!t||!isSH(t))return;
+      const meta=parseSceneHeading(t);
+      if(!meta.key)return;
+      if(!out[meta.key]){
+        out[meta.key]={name:meta.name,key:meta.key,heading:t,timeOfDay:meta.timeOfDay||'',clipIndices:[]};
+      }else if(out[meta.key].heading!==t&&!out[meta.key].headings){
+        out[meta.key].headings=[out[meta.key].heading,t];
+      }else if(out[meta.key].headings&&out[meta.key].headings.indexOf(t)<0){
+        out[meta.key].headings.push(t);
+      }
+    });
+    return out;
   }
 
   const CAP_FALSE_POS=new Set([
@@ -137,7 +192,7 @@ window.SBParser = (function(){
     if(!cn||cn.length<2||cn.length>40)return;
     if(!isLikelyPersonName(cn,{fromCue:!!opts.fromCue}))return;
     if(chars[cn]===undefined)chars[cn]=desc||'';
-    else if(desc&&!chars[cn])chars[cn]=desc;
+    else if(desc&&(!chars[cn]||String(desc).length>String(chars[cn]).length))chars[cn]=desc;
   }
 
   function isCharCueLine(t){
@@ -345,11 +400,14 @@ window.SBParser = (function(){
   function isClipReconstruction(text){
     if(!text||!String(text).trim())return false;
     const t=String(text);
+    const slugHits=(t.match(/^\s*(?:INT\.|EXT\.|INT\/EXT\.|I\/E\.)/gim)||[]).length;
+    const lineCount=countLines(t);
+    if(slugHits>=2&&lineCount>=12)return false;
     const dlgHits=(t.match(/delivering dialogue\./gi)||[]).length;
     const closeHits=(t.match(/Close on\s+[A-Z]/gi)||[]).length;
     const scene1=(t.match(/^SCENE 1\s*$/gim)||[]).length;
-    if(dlgHits>=2||(closeHits>=2&&dlgHits>=1))return true;
-    if(scene1>=5&&dlgHits>=1)return true;
+    if(dlgHits>=4||(closeHits>=4&&dlgHits>=2))return true;
+    if(scene1>=8&&dlgHits>=2&&slugHits<2)return true;
     return false;
   }
 
@@ -551,5 +609,5 @@ window.SBParser = (function(){
     return normalizeScriptText(pages.join('\n\n'));
   }
 
-  return{parse,scenesToClips,readFile,extractCharactersFromText,mergeCharMaps,filterCharacterMap,isLikelyPersonName,LABEL_CUE_RE,normalizeScriptText,normalizeScriptTextDetailed,unflattenScreenplay,isScriptFlattened,isClipReconstruction,parseQualityWarning};
+  return{parse,scenesToClips,readFile,extractCharactersFromText,extractLocationsFromText,parseSceneHeading,inferLocation,mergeCharMaps,filterCharacterMap,isLikelyPersonName,LABEL_CUE_RE,normalizeScriptText,normalizeScriptTextDetailed,unflattenScreenplay,isScriptFlattened,isClipReconstruction,parseQualityWarning};
 })();

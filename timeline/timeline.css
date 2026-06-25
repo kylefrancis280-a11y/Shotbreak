@@ -181,6 +181,19 @@ button,input,select,textarea{font-family:inherit}
 .ref-preview img{width:100%;object-fit:cover}
 .char-chip.on{border-color:var(--gold);color:var(--gold)}
 
+/* ── locations ── */
+.loc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-bottom:12px}
+.loc-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px;cursor:pointer;transition:.12s}
+.loc-card:hover{border-color:var(--gold)}
+.loc-card.selected{border-color:var(--gold);box-shadow:0 0 0 1px rgba(212,168,67,.25)}
+.loc-thumb{height:64px;border-radius:6px;background:var(--surface3);display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:6px}
+.loc-thumb img{width:100%;height:100%;object-fit:cover}
+.loc-thumb .ph{font-size:22px;opacity:.35}
+.loc-name{font-weight:700;font-size:11px;line-height:1.25}
+.loc-meta{font-size:9px;color:var(--dim);margin-top:3px}
+.loc-editor-wrap{margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
+.loc-editor h4{font-family:var(--display);margin-bottom:10px;font-size:13px}
+
 /* ── script editor ── */
 .script-editor{
   width:100%;min-height:200px;max-height:42vh;resize:vertical;
