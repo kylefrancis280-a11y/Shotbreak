@@ -3,7 +3,7 @@
 'use strict';
 
 const STORAGE_KEY='SB_Timeline_v1';
-const BOOT_VERSION='20260625c';
+const BOOT_VERSION='20260625d';
 const OWNER_EMAILS=new Set(['kyle@shotbreak.io','scott@shotbreak.io','steve@shotbreak.io']);
 const CHAR_SKIP=new Set(['INT','EXT','FADE','CUT','CLOSE','WIDE','THE','AND','RAIN','WATER','ROOF','SCENE','OPENING','SEQUENCE','DIALOGUE','ACTION','REACTION','CLIMAX','RESOLUTION','EPILOGUE','TRANSITION','ABANDONED','WAREHOUSE','BUILDING','STREET','NIGHT','DAY','MORNING','EVENING','LOCATION','INTERIOR','EXTERIOR']);
 const JUNK_CLOSE_ON_RE=/^Close on\s+((?:OPENING|TITLE|CLOSING|END|CREDIT|TEASER|PROLOGUE)\s+(?:SEQUENCE|SCENE|CREDITS)|SEQUENCE|DIALOGUE|ACTION|REACTION|TRANSITION|CLIMAX|RESOLUTION|EPILOGUE|CHARACTER\s+INTRO|OPENING\s+SCENE)/i;
@@ -119,6 +119,7 @@ function repairCorruptClips(){
   if(!state.clips.length)return false;
   let changed=false;
   state.clips.forEach(c=>{
+    harvestTraitsFromClip(c);
     const desc=String(c.description||'');
     if(JUNK_CLOSE_ON_RE.test(desc)||(desc.includes('delivering dialogue')&&desc.match(/Close on\s+[A-Z]/i)&&!isValidCharacterName((desc.match(/Close on\s+([A-Z][A-Z0-9 .'\-]{1,40})/i)||[])[1]))){
       const dlg=c.dialogue||'';
@@ -165,13 +166,102 @@ function cleanLocName(s){
 }
 function locKeyName(name){return cleanLocName(name).toUpperCase().replace(/\s+/g,' ')}
 
+function screenplayText(){
+  const t=(state.scriptText||'').trim();
+  return t&&!isClipReconstruction(t)?state.scriptText:'';
+}
+
+function charactersNeedHydration(){
+  const keys=Object.keys(state.characters||{});
+  if(!keys.length)return true;
+  return keys.some(k=>{const c=state.characters[k];return!c||!String(c.description||'').trim();});
+}
+
+function isDescriptiveTrait(s){
+  const d=String(s||'').trim();
+  if(!d||d.length<3)return false;
+  if(/^(v\.?o\.?|o\.?s\.?|cont'?d|whispering|shouting|beat|pause)$/i.test(d))return false;
+  return /\d|s|hair|suit|jacket|eyes|weathered|military|tall|old|young|beard|scar|worn|tailored|silver|grey|gray|dark|pale/i.test(d)||d.length>12;
+}
+
+function inferLocFromClipText(clip){
+  const fields=[clip.params&&clip.params.scene&&clip.params.scene.location,clip.heading,clip.description,clip.dialogue,clip.label];
+  for(let i=0;i<fields.length;i++){
+    const raw=String(fields[i]||'').trim();
+    if(!raw)continue;
+    const direct=cleanLocName(raw);
+    if(direct.length>2&&!/^SCENE\s*\d*$/i.test(direct)&&!/^(DAY|NIGHT|MORNING|EVENING)$/i.test(direct))return direct;
+    const slug=raw.match(/(?:^|\n)\s*(?:INT\.|EXT\.|INT\/EXT\.|I\/E\.?)\s+([^\n]+)/i);
+    if(slug){
+      const loc=cleanLocName(slug[1].split(/\s*[-—–]\s*/)[0]);
+      if(loc.length>2&&!/^SCENE\s*\d*$/i.test(loc))return loc;
+    }
+    const atM=raw.match(/\b(?:at|in|inside|outside|near)\s+(?:the\s+)?([A-Z][A-Za-z0-9 .'\-/&,]{4,80})/);
+    if(atM){
+      const loc=cleanLocName(atM[1].replace(/[.,;]+$/, ''));
+      if(loc.length>4)return loc;
+    }
+  }
+  return'';
+}
+
+function harvestTraitsFromClip(clip){
+  const desc=String(clip.description||'');
+  const patterns=[
+    /Close on\s+([A-Z][A-Z0-9 .'\-]{1,30})\s*\(([^)]+)\)/i,
+    /\b([A-Z][A-Z0-9 .'\-]{1,30})\s*\(([^)]{4,200})\)/i
+  ];
+  for(let pi=0;pi<patterns.length;pi++){
+    const m=desc.match(patterns[pi]);
+    if(!m||!isValidCharacterName(m[1])||!isDescriptiveTrait(m[2]))continue;
+    const up=String(m[1]).toUpperCase().trim();
+    if(!state.characters[up])state.characters[up]=Object.assign({},SBCharacters.DEFAULTS);
+    const c=state.characters[up];
+    const trait=m[2].trim();
+    if(!c.description||trait.length>String(c.description).length)c.description=trait;
+    if(!(clip.characters||[]).some(n=>String(n).toUpperCase().trim()===up)){
+      clip.characters=clip.characters||[];
+      clip.characters.push(up);
+    }
+    return up;
+  }
+  return null;
+}
+
+function mineProjectMetadata(){
+  let changed=false;
+  state.clips.forEach(clip=>{
+    ensureClip(clip);
+    harvestTraitsFromClip(clip);
+    const loc=inferLocFromClipText(clip);
+    if(loc&&(!clip.params.scene.location||String(clip.params.scene.location).trim()==='')){
+      clip.params.scene.location=loc;
+      changed=true;
+    }
+  });
+  const pm=state.parseResult&&state.parseResult.characters;
+  if(pm){
+    Object.keys(pm).forEach(k=>{
+      const up=String(k).toUpperCase().trim();
+      if(!up||!isValidCharacterName(up))return;
+      if(!state.characters[up])state.characters[up]=Object.assign({},SBCharacters.DEFAULTS);
+      const d=String(pm[k]||'').trim();
+      if(d&&(!state.characters[up].description||d.length>String(state.characters[up].description).length)){
+        state.characters[up].description=d;
+        changed=true;
+      }
+    });
+  }
+  if(changed)save();
+}
+
 function bootstrapLocationsInline(){
   const bible=state.locationBible||[];
   const byKey={};
   bible.forEach(l=>{if(l&&l.key){if(!l.clipIndices)l.clipIndices=[];byKey[l.key]=l}});
   state.clips.forEach((clip,ci)=>{
     ensureClip(clip);
-    let name=cleanLocName(clip.params&&clip.params.scene&&clip.params.scene.location);
+    let name=cleanLocName(clip.params&&clip.params.scene&&clip.params.scene.location)||inferLocFromClipText(clip);
     const heading=clip.heading||'';
     if(SBParser&&SBParser.parseSceneHeading){
       const m=SBParser.parseSceneHeading(heading);
@@ -189,8 +279,8 @@ function bootstrapLocationsInline(){
     if(loc.clipIndices.indexOf(ci)<0)loc.clipIndices.push(ci);
     if(heading&&heading!=='SCENE 1'&&!loc.description)loc.description=heading;
   });
-  const blob=(state.scriptText||'').trim();
-  if(blob&&SBParser&&SBParser.extractLocationsFromText){
+  const blob=screenplayText()||(state.scriptText||'').trim();
+  if(blob&&!isClipReconstruction(blob)&&SBParser&&SBParser.extractLocationsFromText){
     Object.values(SBParser.extractLocationsFromText(blob)).forEach(row=>{
       if(!row||!row.key)return;
       if(!byKey[row.key]){
@@ -250,6 +340,7 @@ function ensureCharactersFromClips(){
       if(!up||!isValidCharacterName(up))return;
       if(!state.characters[up]){state.characters[up]=Object.assign({},SBCharacters.DEFAULTS);added++}
     });
+    harvestTraitsFromClip(c);
     const desc=String(c.description||'');
     const closeM=desc.match(/Close on\s+([A-Z][A-Z0-9 .'\-]{1,30})/i);
     if(closeM&&isValidCharacterName(closeM[1])){
@@ -261,17 +352,19 @@ function ensureCharactersFromClips(){
 }
 
 function bootstrapMastery(force){
+  mineProjectMetadata();
   ensureCharactersFromClips();
   repairCharactersFromClips();
-  let blob=(state.scriptText||'').trim();
-  if(!blob)blob=clipTextBlob();
+  const script=screenplayText();
   try{
-    if(blob&&SBParser&&SBParser.parse&&!isClipReconstruction(blob)){
-      const norm=normalizeImportedScript(blob).text;
+    if(script&&SBParser&&SBParser.parse){
+      const norm=normalizeImportedScript(script).text;
       if(force||!state.parseResult||!state.parseResult.scenes){
         state.parseResult=SBParser.parse(norm,parseInt(state.global.clipDuration,10)||5);
       }
-      if(!Object.keys(state.characters).length)syncCharactersFromParse(state.parseResult,norm);
+      if(force||charactersNeedHydration())syncCharactersFromParse(state.parseResult,norm);
+    }else if(state.parseResult&&(force||charactersNeedHydration())){
+      syncCharactersFromParse(state.parseResult,script||'');
     }
   }catch(e){console.warn('[Shotbreak] parse',e)}
   backfillClipLocationsFromParse();
@@ -281,21 +374,28 @@ function bootstrapMastery(force){
   }
   try{hydrateAllCharacters(force)}catch(e){console.warn('[Shotbreak] hydrateAllCharacters',e)}
   const charFilled=bootstrapCharactersInline();
+  const names=Object.keys(state.characters);
+  if(names.length&&!state.selectedChar)state.selectedChar=names[0];
+  if((state.locationBible||[]).length&&!state.selectedLoc)state.selectedLoc=state.locationBible[0].key;
   save();
   const locN=(state.locationBible||[]).length;
   const el=$('tbBuildVer');
-  if(el)el.textContent='build '+BOOT_VERSION+' · '+locN+' loc · '+charFilled+'/'+Object.keys(state.characters).length+' chars';
-  return{locN,charFilled,total:Object.keys(state.characters).length};
+  if(el)el.textContent='build '+BOOT_VERSION+' · '+locN+' loc · '+charFilled+'/'+names.length+' chars';
+  return{locN,charFilled,total:names.length};
+}
+
+function masterySyncMessage(r){
+  if(!r.total&&!r.locN)return'Nothing to sync — open ✎ Script, re-import your .txt/.pdf, then Re-parse timeline';
+  return r.charFilled+'/'+r.total+' chars · '+r.locN+' locations synced';
 }
 
 function hydrateAllCharacters(force){
-  let blob=(state.scriptText||'').trim();
-  if(!blob)blob=clipTextBlob();
+  const script=screenplayText();
+  let blob=script||clipTextBlob();
   if(!blob.trim()&&!state.clips.length)return;
 
-  const clipRecon=isClipReconstruction(blob);
-  if(blob.trim()&&SBParser.parse&&!clipRecon){
-    const norm=normalizeImportedScript(blob).text;
+  if(script&&SBParser&&SBParser.parse){
+    const norm=normalizeImportedScript(script).text;
     const dur=parseInt(state.global.clipDuration,10)||5;
     if(force||!state.parseResult||!Object.keys(state.parseResult.characters||{}).length){
       state.parseResult=SBParser.parse(norm,dur);
@@ -310,7 +410,7 @@ function hydrateAllCharacters(force){
         state.characters[up].description=d;
       }
     });
-    if(!Object.keys(state.characters).length)syncCharactersFromParse(state.parseResult,norm);
+    if(force||charactersNeedHydration())syncCharactersFromParse(state.parseResult,norm);
     if(SBCharacters&&typeof SBCharacters.hydrate==='function')SBCharacters.hydrate(state.characters,norm,state.clips,parseMap);
     else bootstrapCharactersInline();
   }else{
@@ -319,8 +419,8 @@ function hydrateAllCharacters(force){
       repairCharactersFromClips();
     }
     let parseMap=(state.parseResult&&state.parseResult.characters)||{};
-    if(blob.trim()&&SBParser.extractCharactersFromText&&!clipRecon){
-      parseMap=SBParser.mergeCharMaps(parseMap,SBParser.extractCharactersFromText(blob));
+    if(script&&SBParser.extractCharactersFromText){
+      parseMap=SBParser.mergeCharMaps(parseMap,SBParser.extractCharactersFromText(script));
     }
     if(SBCharacters&&typeof SBCharacters.hydrate==='function')SBCharacters.hydrate(state.characters,blob,state.clips,parseMap);
     else bootstrapCharactersInline();
@@ -1181,7 +1281,7 @@ function bindUI(){
     pushHistory();
     const r=bootstrapMastery(true);
     renderCharacters();renderLocations();
-    toast(r.charFilled+'/'+r.total+' chars · '+r.locN+' locations synced');
+    toast(masterySyncMessage(r));
   };
   const btnResyncLocs=$('btnResyncLocs');
   if(btnResyncLocs)btnResyncLocs.onclick=()=>{
@@ -1189,7 +1289,7 @@ function bindUI(){
     pushHistory();
     const r=bootstrapMastery(true);
     renderLocations();renderCharacters();
-    toast(r.locN+' locations · '+r.charFilled+'/'+r.total+' chars synced');
+    toast(masterySyncMessage(r));
     const panel=$('locationsPanel');if(panel)panel.open=true;
   };
   $('btnAddChar').onclick=()=>{const n=prompt('Character name:');if(!n)return;pushHistory();state.characters[n.toUpperCase()]=Object.assign({},SBCharacters.DEFAULTS);state.selectedChar=n.toUpperCase();save();renderCharacters()};
