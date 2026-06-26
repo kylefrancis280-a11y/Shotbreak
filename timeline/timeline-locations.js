@@ -227,8 +227,12 @@ window.SBLocations = (function () {
     if (!key || !loc) {
       return '<div class="empty-hint">Select a location to lock its look, upload a reference plate, and feed every matching clip on generate.</div>';
     }
+    const aliasNote = (loc.aliases && loc.aliases.length)
+      ? '<div class="empty-hint" style="margin-bottom:8px">Also used as: <strong>' + esc(loc.aliases.join(', ')) + '</strong> — all clips share this lock.</div>'
+      : '';
     return '<div class="loc-editor">' +
       '<h4>📍 ' + esc(loc.name) + '</h4>' +
+      aliasNote +
       '<div class="field"><label>Scene heading / description</label><textarea data-k="description">' + esc(loc.description || '') + '</textarea></div>' +
       '<div class="field"><label>Consistency phrase (injected into prompt when locked)</label><input data-k="consistencyPhrase" value="' + esc(loc.consistencyPhrase || '') + '" placeholder="e.g. rain-slick neon alley, same brick walls"></div>' +
       '<div class="field"><label><span>Lock location</span><span class="toggle' + (loc.locked ? ' on' : '') + '" data-k="locked"></span></label></div>' +

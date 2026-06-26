@@ -3,7 +3,7 @@
 'use strict';
 
 const STORAGE_KEY='SB_Timeline_v1';
-const BOOT_VERSION='20260627a';
+const BOOT_VERSION='20260627b';
 const OWNER_EMAILS=new Set(['kyle@shotbreak.io','scott@shotbreak.io','steve@shotbreak.io']);
 const CHAR_SKIP=new Set(['INT','EXT','FADE','CUT','CLOSE','WIDE','THE','AND','RAIN','WATER','ROOF','SCENE','OPENING','SEQUENCE','DIALOGUE','ACTION','REACTION','CLIMAX','RESOLUTION','EPILOGUE','TRANSITION','ABANDONED','WAREHOUSE','BUILDING','STREET','NIGHT','DAY','MORNING','EVENING','LOCATION','INTERIOR','EXTERIOR']);
 const JUNK_CLOSE_ON_RE=/^Close on\s+((?:OPENING|TITLE|CLOSING|END|CREDIT|TEASER|PROLOGUE)\s+(?:SEQUENCE|SCENE|CREDITS)|SEQUENCE|DIALOGUE|ACTION|REACTION|TRANSITION|CLIMAX|RESOLUTION|EPILOGUE|CHARACTER\s+INTRO|OPENING\s+SCENE)/i;
@@ -179,9 +179,13 @@ function cleanLocName(s){
     .trim();
 }
 function canonicalLocName(name){
+  const script=String((state&&state.scriptText)||'');
+  if(window.SBLocEnrich&&typeof SBLocEnrich.canonicalLocName==='function'){
+    return SBLocEnrich.canonicalLocName(name,script);
+  }
   const n=cleanLocName(name);
   if(!n)return'';
-  if(/montreal[\s-]*trudeau|montréal[\s-]*trudeau|pierre\s+elliott\s+trudeau|\byul\b.*airport|aéroport.*trudeau/i.test(n))return'Pierre Trudeau International Airport';
+  if(/montreal[\s-]*trudeau|montréal[\s-]*trudeau|pierre\s+elliott\s+trudeau|\byul\b|aéroport.*trudeau/i.test(n))return'Pierre Trudeau International Airport';
   if(/^pierre\s+trudeau\b/i.test(n)&&/airport/i.test(n))return'Pierre Trudeau International Airport';
   return n;
 }
@@ -570,6 +574,15 @@ function bootstrapStructure(force,opts){
   if(window.SBLocations&&typeof SBLocations.syncAll==='function'){
     try{state.locationBible=SBLocations.syncAll(state,extractionText())}catch(e){console.warn('[Shotbreak] SBLocations',e)}
   }
+  if(window.SBLocEnrich&&typeof SBLocEnrich.buildLocalAliasMap==='function'){
+    try{
+      const trusted=(state.locationBible||[]).map(function(l){return l&&l.key;}).filter(Boolean);
+      const aliasMap=SBLocEnrich.buildLocalAliasMap(trusted,state.scriptText||'');
+      SBLocEnrich.mergeLocationBible(state,aliasMap);
+      SBLocEnrich.applyAliasesToClips(state,aliasMap);
+      if(window.SBContinuity&&typeof SBContinuity.applyGraph==='function')SBContinuity.applyGraph(state);
+    }catch(e){console.warn('[Shotbreak] SBLocEnrich local merge',e)}
+  }
   repairAllCharacterDescriptions();
   applyCastRoles(state.characters,state.clips);
   const names=Object.keys(state.characters);
@@ -623,10 +636,29 @@ async function syncMasteryWithAgent(force){
     try{hydrateAllCharacters(true)}catch(e){}
     bootstrapCharactersInline();
   }
+  let locMsg='';
+  if(window.SBLocEnrich&&typeof SBLocEnrich.enrichViaAgent==='function'){
+    try{
+      if(auth&&auth.currentUser)toast('Merging locations across scenes…');
+      const lr=await SBLocEnrich.enrichViaAgent(state,{getHeaders:hdrs});
+      if(lr.ok){
+        locMsg=' · '+lr.total+' loc'+(lr.merged?' ('+lr.merged+' merged)':'')+(lr.enriched?' · AI atmosphere':'' );
+      }else if(lr.merged){
+        locMsg=' · '+lr.merged+' location'+(lr.merged===1?'':'s')+' merged locally';
+        if(lr.fallback)locMsg+=' (sign in for AI atmosphere)';
+      }else if(lr.reason==='not_signed_in'){
+        locMsg=' · sign in to merge locations with AI';
+      }
+      renderLocations();
+    }catch(e){
+      console.warn('[Shotbreak] enrichLocations',e);
+      locMsg=' · location merge fallback';
+    }
+  }
   repairAllCharacterDescriptions();
   save();
   const stats=masteryStats();
-  stats.agentMsg=agentMsg;
+  stats.agentMsg=agentMsg+locMsg;
   return stats;
 }
 
