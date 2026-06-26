@@ -1678,8 +1678,11 @@ async function finalExport(){
 }
 
 function sendEditor(){
-  const ok=state.clips.filter(c=>c.status==='approved'&&c.videoUrl);
-  if(!ok.length)return toast('Approve clips first');
+  const withVideo=state.clips.filter(c=>c.videoUrl);
+  if(!withVideo.length)return toast('Generate clips first');
+  const approved=withVideo.filter(c=>c.status==='approved');
+  const ok=approved.length?approved:withVideo;
+  if(!approved.length)toast('Sending unapproved clips — approve for final export');
   const payload=ok.map((c,i)=>({id:c.id,name:'Clip '+c.num,src:c.videoUrl,duration:clipDur(c),order:i,transition:c.edit.transition}));
   try{const prev=JSON.parse(localStorage.getItem('SB_Generated')||'[]');const next=Array.isArray(prev)?prev:[];
     payload.forEach(p=>next.push({...p,source:'timeline',createdAt:Date.now()}));

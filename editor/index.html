@@ -473,12 +473,14 @@
   </div>
 </div>
 
-<script src="js/auth.js"></script>
-<script src="js/config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/config.js"></script>
 <script>
-  // Firebase config now loaded from the single source js/config.js (see SECURITY.md).
-  // Old literal kept temporarily for the first safe deploy.
-  firebase.initializeApp(window.SHOTBREAK_CONFIG.firebase);
+  if (window.firebase && window.SHOTBREAK_CONFIG && window.SHOTBREAK_CONFIG.firebase) {
+    try { firebase.initializeApp(window.SHOTBREAK_CONFIG.firebase); } catch (e) { console.warn('[Editor] firebase init', e); }
+  }
 
   // Rehydrate owner token from localStorage (set by app.html on owner login).
   (function(){
@@ -505,11 +507,6 @@
 <script src="/agents/client.js?v=69"></script>
 
 <!-- Editor engine -->
-<script src="/editor/timeline-engine.js?v=69"></script>
-
-<script>
-  // Main editor initialization code would go here (full version in local PATCHED file)
-  console.log('[Editor] Cleaned editor loaded with auth unification');
-</script>
+<script src="/editor/timeline-engine.js?v=20260627e"></script>
 </body>
 </html>
