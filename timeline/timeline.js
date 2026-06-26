@@ -3,7 +3,7 @@
 'use strict';
 
 const STORAGE_KEY='SB_Timeline_v1';
-const BOOT_VERSION='20260626c';
+const BOOT_VERSION='20260626d';
 const OWNER_EMAILS=new Set(['kyle@shotbreak.io','scott@shotbreak.io','steve@shotbreak.io']);
 const CHAR_SKIP=new Set(['INT','EXT','FADE','CUT','CLOSE','WIDE','THE','AND','RAIN','WATER','ROOF','SCENE','OPENING','SEQUENCE','DIALOGUE','ACTION','REACTION','CLIMAX','RESOLUTION','EPILOGUE','TRANSITION','ABANDONED','WAREHOUSE','BUILDING','STREET','NIGHT','DAY','MORNING','EVENING','LOCATION','INTERIOR','EXTERIOR']);
 const JUNK_CLOSE_ON_RE=/^Close on\s+((?:OPENING|TITLE|CLOSING|END|CREDIT|TEASER|PROLOGUE)\s+(?:SEQUENCE|SCENE|CREDITS)|SEQUENCE|DIALOGUE|ACTION|REACTION|TRANSITION|CLIMAX|RESOLUTION|EPILOGUE|CHARACTER\s+INTRO|OPENING\s+SCENE)/i;
@@ -178,7 +178,14 @@ function cleanLocName(s){
     .replace(/\s+/g,' ')
     .trim();
 }
-function locKeyName(name){const n=cleanLocName(name);return n?n.toUpperCase().replace(/\s+/g,' '):''}
+function canonicalLocName(name){
+  const n=cleanLocName(name);
+  if(!n)return'';
+  if(/montreal[\s-]*trudeau|montréal[\s-]*trudeau|pierre\s+elliott\s+trudeau|\byul\b.*airport|aéroport.*trudeau/i.test(n))return'Pierre Trudeau International Airport';
+  if(/^pierre\s+trudeau\b/i.test(n)&&/airport/i.test(n))return'Pierre Trudeau International Airport';
+  return n;
+}
+function locKeyName(name){const n=canonicalLocName(name);return n?n.toUpperCase().replace(/\s+/g,' '):''}
 
 function scriptHasSluglines(text){
   return /^\s*(?:INT\.|EXT\.|INT\/EXT\.|I\/E\.)/im.test(String(text||''));
@@ -199,12 +206,12 @@ function parseLocFromText(raw){
   if(!t)return'';
   const locTag=t.match(/\bLocation:\s*([^.;\n]{3,120})/i);
   if(locTag){
-    const n=cleanLocName(locTag[1].trim());
+    const n=canonicalLocName(locTag[1].trim());
     if(n.length>2&&!/^SCENE\s*\d*$/i.test(n))return n;
   }
   const slug=t.match(/\b(?:INT\.|EXT\.|INT\/EXT\.|I\/E\.?)\s+([^\n.!?\]]{2,120})/i);
   if(slug){
-    const n=cleanLocName(slug[1].split(/\s*[-—–]\s*/)[0].trim());
+    const n=canonicalLocName(slug[1].split(/\s*[-—–]\s*/)[0].trim());
     if(n.length>2&&!/^SCENE\s*\d*$/i.test(n)&&!/^(DAY|NIGHT|MORNING|EVENING|CONTINUOUS)$/i.test(n))return n;
   }
   const atM=t.match(/\b(?:at|in|inside|outside|near)\s+(?:the\s+)?([A-Za-z][A-Za-z0-9 .'\-/&,]{4,100})/i);
@@ -218,7 +225,7 @@ function parseLocFromText(raw){
 }
 
 function upsertLocEntry(bible,byKey,name,heading,ci){
-  const clean=cleanLocName(name);
+  const clean=canonicalLocName(name);
   if(!clean||clean.length<2||/^SCENE\s*\d*$/i.test(clean))return false;
   const key=locKeyName(clean);
   if(!key)return false;
@@ -555,6 +562,7 @@ function bootstrapStructure(force,opts){
   }catch(e){console.warn('[Shotbreak] parse',e)}
   if(force)state.locationBible=[];
   backfillClipLocationsFromParse();
+  ensureShotOneLocation();
   bootstrapLocationsInline();
   if(window.SBLocations&&typeof SBLocations.syncAll==='function'){
     try{state.locationBible=SBLocations.syncAll(state,extractionText())}catch(e){console.warn('[Shotbreak] SBLocations',e)}
@@ -684,6 +692,31 @@ function openSidePanelsIfNeeded(){
     if(label==='Characters'||label==='Locations')panel.open=true;
   });
 }
+function ensureShotOneLocation(){
+  if(!state.clips.length)return false;
+  const scenes=state.parseResult&&state.parseResult.scenes;
+  if(!scenes||!scenes.length)return false;
+  const clip=state.clips[0];
+  const heading=scenes[0].heading||'';
+  const loc=canonicalLocName(
+    SBParser.inferLocation?SBParser.inferLocation(heading):
+    (SBParser.parseSceneHeading?SBParser.parseSceneHeading(heading).name:'')
+  );
+  if(!loc)return false;
+  ensureClip(clip);
+  let changed=false;
+  if(clip.sceneIdx==null){clip.sceneIdx=0;changed=true}
+  const raw=getClipLocationRaw(clip);
+  if(!raw||raw==='SCENE 1'||/^at\s+/i.test(raw)){
+    clip.params.scene.location=loc;changed=true;
+  }
+  if(heading&&heading!=='SCENE 1'&&(!clip.heading||clip.heading==='SCENE 1')){
+    clip.heading=heading;changed=true;
+  }
+  if(changed)save();
+  return changed;
+}
+
 function backfillClipLocationsFromParse(){
   const scenes=state.parseResult&&state.parseResult.scenes;
   if(!scenes||!state.clips.length)return;
@@ -694,7 +727,7 @@ function backfillClipLocationsFromParse(){
     const heading=scenes[si].heading||'';
     const loc=SBParser.inferLocation?SBParser.inferLocation(heading):(SBParser.parseSceneHeading?SBParser.parseSceneHeading(heading).name:'');
     ensureClip(clip);
-    const cleanLoc=loc?String(loc).replace(/^\s*(?:at|in|on|inside|outside|near)\s+(?:the\s+)?/i,'').trim():'';
+    const cleanLoc=loc?canonicalLocName(String(loc).replace(/^\s*(?:at|in|on|inside|outside|near)\s+(?:the\s+)?/i,'').trim()):'';
     if(cleanLoc&&(!clip.params.scene.location||clip.params.scene.location===''||/^at\s+/i.test(clip.params.scene.location))){
       clip.params.scene.location=cleanLoc;changed=true;
     }
@@ -703,6 +736,7 @@ function backfillClipLocationsFromParse(){
     }
   });
   if(changed)save();
+  ensureShotOneLocation();
 }
 function syncLocationBibleFromClips(){
   bootstrapLocationsInline();
