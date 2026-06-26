@@ -465,7 +465,7 @@ window.SBCharacters = (function () {
   }
 
   return {
-    DEFAULTS, normalize, synthesizeDescription, sanitizeDescription, extractFromClips, inferWardrobe, inferBodyType, enrichAll, hydrate,
+    DEFAULTS, normalize, synthesizeDescription, sanitizeDescription, isWeakAppearanceText, isDialogueDirection, extractFromClips, inferWardrobe, inferBodyType, enrichAll, hydrate,
     renderList, renderEditor, getRefForClip, injectIntoPrompt
   };
 })();

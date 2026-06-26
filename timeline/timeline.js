@@ -3,7 +3,7 @@
 'use strict';
 
 const STORAGE_KEY='SB_Timeline_v1';
-const BOOT_VERSION='20260625k';
+const BOOT_VERSION='20260626a';
 const OWNER_EMAILS=new Set(['kyle@shotbreak.io','scott@shotbreak.io','steve@shotbreak.io']);
 const CHAR_SKIP=new Set(['INT','EXT','FADE','CUT','CLOSE','WIDE','THE','AND','RAIN','WATER','ROOF','SCENE','OPENING','SEQUENCE','DIALOGUE','ACTION','REACTION','CLIMAX','RESOLUTION','EPILOGUE','TRANSITION','ABANDONED','WAREHOUSE','BUILDING','STREET','NIGHT','DAY','MORNING','EVENING','LOCATION','INTERIOR','EXTERIOR']);
 const JUNK_CLOSE_ON_RE=/^Close on\s+((?:OPENING|TITLE|CLOSING|END|CREDIT|TEASER|PROLOGUE)\s+(?:SEQUENCE|SCENE|CREDITS)|SEQUENCE|DIALOGUE|ACTION|REACTION|TRANSITION|CLIMAX|RESOLUTION|EPILOGUE|CHARACTER\s+INTRO|OPENING\s+SCENE)/i;
@@ -509,10 +509,39 @@ function mineCharactersFromClips(){
   return added;
 }
 
-function bootstrapMastery(force){
+function repairAllCharacterDescriptions(){
+  if(window.SBEnrich&&typeof SBEnrich.repairAllCharacterDescriptions==='function'){
+    return SBEnrich.repairAllCharacterDescriptions(state.characters);
+  }
+  if(window.SBCharacters&&typeof SBCharacters.sanitizeDescription==='function'){
+    let n=0;
+    Object.keys(state.characters||{}).forEach(name=>{
+      const c=state.characters[name];
+      if(!c||c._descLocked)return;
+      const clean=SBCharacters.sanitizeDescription(c.description||'',name);
+      if(clean!==(c.description||'')){c.description=clean;n++}
+    });
+    return n;
+  }
+  return 0;
+}
+
+function masteryStats(){
+  const names=Object.keys(state.characters);
+  const charFilled=Object.values(state.characters).filter(c=>c.description&&String(c.description).trim()).length;
+  const locN=(state.locationBible||[]).length;
+  const clipsWithLoc=state.clips.filter(c=>!!parseLocFromText(getClipLocationRaw(c))||!!inferLocFromClipText(c)).length;
+  const el=$('tbBuildVer');
+  if(el)el.textContent='build '+BOOT_VERSION+' · '+locN+' loc ('+clipsWithLoc+'/'+state.clips.length+' clips) · '+charFilled+'/'+names.length+' chars';
+  return{locN,charFilled,total:names.length,clipsWithLoc};
+}
+
+/** Layer 1 — local structure: parse, cast names, locations. No LLM, no heavy hydrate. */
+function bootstrapStructure(force,opts){
+  opts=opts||{};
   mineProjectMetadata();
   ensureCharactersFromClips();
-  mineCharactersFromClips();
+  if(!opts.skipClipMine)mineCharactersFromClips();
   repairCharactersFromClips();
   const script=usableScriptText();
   const extractBlob=extractionText();
@@ -522,7 +551,7 @@ function bootstrapMastery(force){
       state.parseResult=SBParser.parse(norm,parseInt(state.global.clipDuration,10)||5);
       if(norm&&norm!==state.scriptText){state.scriptText=norm;save()}
     }
-    syncCharactersFromParse(state.parseResult||{characters:{},scenes:[]},extractBlob);
+    syncCharactersFromParse(state.parseResult||{characters:{},scenes:[]},extractBlob,{skipHydrate:true});
   }catch(e){console.warn('[Shotbreak] parse',e)}
   if(force)state.locationBible=[];
   backfillClipLocationsFromParse();
@@ -530,26 +559,73 @@ function bootstrapMastery(force){
   if(window.SBLocations&&typeof SBLocations.syncAll==='function'){
     try{state.locationBible=SBLocations.syncAll(state,extractionText())}catch(e){console.warn('[Shotbreak] SBLocations',e)}
   }
-  try{hydrateAllCharacters(force)}catch(e){console.warn('[Shotbreak] hydrateAllCharacters',e)}
-  const charFilled=bootstrapCharactersInline();
+  repairAllCharacterDescriptions();
   applyCastRoles(state.characters,state.clips);
   const names=Object.keys(state.characters);
   if(names.length&&!state.selectedChar)state.selectedChar=names[0];
   if((state.locationBible||[]).length&&!state.selectedLoc)state.selectedLoc=state.locationBible[0].key;
   save();
-  const locN=(state.locationBible||[]).length;
-  const clipsWithLoc=state.clips.filter(c=>!!parseLocFromText(getClipLocationRaw(c))||!!inferLocFromClipText(c)).length;
-  const el=$('tbBuildVer');
-  if(el)el.textContent='build '+BOOT_VERSION+' · '+locN+' loc ('+clipsWithLoc+'/'+state.clips.length+' clips) · '+charFilled+'/'+names.length+' chars';
-  return{locN,charFilled,total:names.length,clipsWithLoc};
+  return masteryStats();
+}
+
+function bootstrapMastery(force,opts){
+  opts=opts||{};
+  const r=bootstrapStructure(force,opts);
+  if(!opts.skipHydrate){
+    try{hydrateAllCharacters(force)}catch(e){console.warn('[Shotbreak] hydrateAllCharacters',e)}
+    bootstrapCharactersInline();
+    repairAllCharacterDescriptions();
+    save();
+    return masteryStats();
+  }
+  return r;
+}
+
+/** Layer 2 — Grok character enricher on explicit sync / import. */
+async function syncMasteryWithAgent(force){
+  const r=bootstrapStructure(force,{skipClipMine:false});
+  let agentMsg='';
+  if(window.SBEnrich&&typeof SBEnrich.enrichViaAgent==='function'){
+    try{
+      if(auth&&auth.currentUser)toast('Extracting character bible…');
+      const ar=await SBEnrich.enrichViaAgent(state,{getHeaders:hdrs});
+      if(ar.ok){
+        agentMsg=' · AI enriched '+ar.merged+'/'+ar.total;
+      }else if(ar.reason==='not_signed_in'||ar.reason==='no_auth'){
+        agentMsg=' · sign in for AI character bible';
+        try{hydrateAllCharacters(true)}catch(e){}
+        bootstrapCharactersInline();
+      }else if(ar.fallback){
+        agentMsg=' · local extract (AI unavailable)';
+        try{hydrateAllCharacters(true)}catch(e){}
+        bootstrapCharactersInline();
+      }else{
+        agentMsg=' · agent: '+ar.reason;
+      }
+    }catch(e){
+      console.warn('[Shotbreak] enrichViaAgent',e);
+      agentMsg=' · local extract fallback';
+      try{hydrateAllCharacters(true)}catch(err){}
+      bootstrapCharactersInline();
+    }
+  }else{
+    try{hydrateAllCharacters(true)}catch(e){}
+    bootstrapCharactersInline();
+  }
+  repairAllCharacterDescriptions();
+  save();
+  const stats=masteryStats();
+  stats.agentMsg=agentMsg;
+  return stats;
 }
 
 function masterySyncMessage(r){
+  const extra=r&&r.agentMsg?r.agentMsg:'';
   if(!r.total&&!r.locN){
     if(r.clipsWithLoc&&!r.locN)return'Found location on '+r.clipsWithLoc+' clips but bible empty — hard refresh (Ctrl+Shift+R)';
     return'No locations found — set Location on a clip (right panel) or re-import script with INT./EXT. lines';
   }
-  return r.charFilled+'/'+r.total+' chars · '+r.locN+' locations synced';
+  return r.charFilled+'/'+r.total+' chars · '+r.locN+' locations synced'+extra;
 }
 
 function hydrateAllCharacters(force){
@@ -591,12 +667,12 @@ function hydrateAllCharacters(force){
   save();
 }
 function ensureCharacterDetails(){
-  if(state.clips.length||state.scriptText)bootstrapMastery(false);
+  if(state.clips.length||state.scriptText)bootstrapMastery(false,{skipHydrate:true});
 }
 function renderAll(){
   $('projectTitle').textContent=state.projectName;
   repairCorruptClips();
-  if(state.clips.length||state.scriptText)bootstrapMastery(false);
+  if(state.clips.length||state.scriptText)bootstrapMastery(false,{skipHydrate:true});
   renderTimeline();renderScriptEditor();renderAssembly();renderCharacters();renderLocations();renderOutput();renderDetail();updateUndo();
   openSidePanelsIfNeeded();
 }
@@ -930,7 +1006,12 @@ function renderCharEditor(){
   $('charEditorPanel').querySelectorAll('[data-k]').forEach(el=>{
     const k=el.dataset.k;
     if(el.classList.contains('toggle')){el.onclick=()=>{pushHistory();c[k]=!c[k];el.classList.toggle('on',c[k]);save();renderCharacters()};return}
-    el.oninput=el.onchange=()=>{c[k]=el.value;save()};
+    el.oninput=el.onchange=()=>{
+      c[k]=el.value;
+      if(k==='description')c._descLocked=true;
+      if(k==='wardrobe')c._wardrobeLocked=true;
+      save();
+    };
   });
   const up=$('btnUploadRef');if(up)up.onclick=()=>uploadRef(state.selectedChar);
   const clr=$('btnClearRef');if(clr)clr.onclick=()=>{pushHistory();c.refUrl=null;save();renderCharacters()};
@@ -1091,7 +1172,8 @@ function trustedCharacterNames(text){
   return trusted;
 }
 
-function syncCharactersFromParse(result,text){
+function syncCharactersFromParse(result,text,opts){
+  opts=opts||{};
   let chars=Object.assign({},collectCastFromProject(),(result&&result.characters)||{});
   const script=scriptForCastExtraction()||text||clipsTextBlob();
   if(script&&SBParser.extractCharactersFromText){
@@ -1123,7 +1205,9 @@ function syncCharactersFromParse(result,text){
     out[up]=merged;
   });
   state.characters=pruneJunkCharacters(out,trustedCharacterNames(text));
-  SBCharacters.hydrate(state.characters,text||state.scriptText||clipTextBlob(),state.clips,(result&&result.characters)||{});
+  if(!opts.skipHydrate){
+    SBCharacters.hydrate(state.characters,text||state.scriptText||clipTextBlob(),state.clips,(result&&result.characters)||{});
+  }
   applyCastRoles(state.characters,state.clips);
   const names=Object.keys(state.characters);
   if(names.length&&!state.selectedChar)state.selectedChar=names[0];
@@ -1263,8 +1347,8 @@ async function importText(text,opts){
   state.clips=SBParser.scenesToClips(result,state.global,dur);
   state.clips.forEach(ensureClip);
   state.locationBible=[];
-  const syncR=bootstrapMastery(true);
   if(state.clips.length)state.selectedId=state.clips[0].id;
+  const syncR=await syncMasteryWithAgent(true);
   save();renderAll();
   const nChars=Object.keys(state.characters).length;
   const nLocs=(state.locationBible||[]).length;
@@ -1495,20 +1579,28 @@ function bindUI(){
   $('btnSaveProj').onclick=exportProject;
   $('btnLoadProj').onclick=loadProject;
   const btnResync=$('btnResyncChars');
-  if(btnResync)btnResync.onclick=()=>{
+  if(btnResync)btnResync.onclick=async()=>{
     pushHistory();
-    const r=bootstrapMastery(true);
-    renderCharacters();renderLocations();
-    toast(masterySyncMessage(r));
+    btnResync.disabled=true;
+    try{
+      const r=await syncMasteryWithAgent(true);
+      renderCharacters();renderLocations();
+      toast(masterySyncMessage(r));
+    }catch(e){toast(e.message||'Character sync failed')}
+    btnResync.disabled=false;
   };
   const btnResyncLocs=$('btnResyncLocs');
-  if(btnResyncLocs)btnResyncLocs.onclick=()=>{
+  if(btnResyncLocs)btnResyncLocs.onclick=async()=>{
     if(!state.clips.length&&!state.scriptText)return toast('Import or re-parse your script first');
     pushHistory();
-    const r=bootstrapMastery(true);
-    renderLocations();renderCharacters();
-    toast(masterySyncMessage(r));
-    const panel=$('locationsPanel');if(panel)panel.open=true;
+    btnResyncLocs.disabled=true;
+    try{
+      const r=await syncMasteryWithAgent(true);
+      renderLocations();renderCharacters();
+      toast(masterySyncMessage(r));
+      const panel=$('locationsPanel');if(panel)panel.open=true;
+    }catch(e){toast(e.message||'Location sync failed')}
+    btnResyncLocs.disabled=false;
   };
   $('btnAddChar').onclick=()=>{const n=prompt('Character name:');if(!n)return;pushHistory();state.characters[n.toUpperCase()]=Object.assign({},SBCharacters.DEFAULTS);state.selectedChar=n.toUpperCase();save();renderCharacters()};
   $('btnClosePreview').onclick=()=>$('previewModal').classList.add('hidden');
@@ -1531,8 +1623,9 @@ function bindUI(){
     if(!isValidCharacterName(n))delete state.characters[n];
   });
   if(state.clips.length||state.scriptText||state.parseResult){
-    const r=bootstrapMastery(true);
-    if(r.locN||r.charFilled)setTimeout(()=>toast('Synced: '+r.locN+' locations · '+r.charFilled+'/'+r.total+' characters'),600);
+    bootstrapMastery(true,{skipHydrate:true});
+    repairAllCharacterDescriptions();
+    save();
   }
   const modelMigrate={'seedance-turbo':'seedance-2.0-turbo','seedance':'seedance-2.0-turbo','veo':'veo-3.1'};
   if(state.global.model&&modelMigrate[state.global.model])state.global.model=modelMigrate[state.global.model];

@@ -11,6 +11,9 @@
 [functions."serve-openai-video"]
   timeout = 60
 
+[functions."enrich-characters"]
+  timeout = 60
+
 [[headers]]
   for = "/*"
   [headers.values]
