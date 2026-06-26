@@ -1,105 +1,18 @@
-const https = require('https');
-
-
-
 const { verify } = require('./lib/verify-token');
 const { corsHeaders } = require('./lib/http');
 const { wrapUserContent, sanitizeField, UNTRUSTED_RULE } = require('./lib/sanitize-prompt');
 const { isSafeUrl } = require('./lib/safe-url');
+const { callGrok: callGrokRaw } = require('./lib/grok-chat');
 
-function callGrok(systemPrompt, userPayload) {
-  // Support vision for better photo-matching cohesiveness:
-  // userPayload can be a string (legacy) or { text: "...", images: [{url: "https://... or data:image/..."}] }
-  // When images present we build a multi-part user content array so Grok *sees* the locked reference photos
-  // and can write prompts that precisely describe + anchor to visible details (scar shape, jacket texture, lighting on skin, etc.).
-  // This is what gives *superior* cohesiveness over passing images only to the final renderer.
-
-  const apiKey = process.env.XAI_API_KEY || process.env.GROK_API_KEY;
-  if (!apiKey) {
-    // No key configured on the function -> immediately return high-quality local-style simulation
-    // so the UI never sees hard errors / 502s. The client will show the "(sim)" note.
+async function callGrok(systemPrompt, userPayload) {
+  const result = await callGrokRaw(systemPrompt, userPayload);
+  if (result.fallback) {
     const sim = (typeof userPayload === 'string' ? userPayload : JSON.stringify(userPayload)).slice(0, 600);
-    return Promise.resolve({ output: '• ' + sim + '\n\n(High-quality local simulation — configure XAI_API_KEY in Netlify for real Grok agent calls.)' });
-  }
-
-  return new Promise((resolve, reject) => {
-    let userContent;
-    let textForLogging = '';
-    if (typeof userPayload === 'string') {
-      userContent = userPayload;
-      textForLogging = userPayload.slice(0, 200);
-    } else if (userPayload && (userPayload.text || userPayload.images)) {
-      const parts = [];
-      if (userPayload.text) {
-        parts.push({ type: 'text', text: userPayload.text });
-        textForLogging = userPayload.text.slice(0, 200);
-      }
-      if (Array.isArray(userPayload.images)) {
-        for (const img of userPayload.images.slice(0, 4)) { // safety: max 4 refs per call
-          if (img && img.url) {
-            parts.push({
-              type: 'image_url',
-              image_url: { url: img.url, detail: 'high' } // high detail for character matching fidelity
-            });
-          }
-        }
-      }
-      userContent = parts.length > 1 ? parts : (parts[0] ? parts[0].text : '');
-    } else {
-      userContent = JSON.stringify(userPayload || {});
-    }
-
-    const body = JSON.stringify({
-      model: 'grok-3-mini', // or grok-2-vision / whatever supports it in the 2026 stack
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userContent }
-      ],
-      temperature: 0.65,
-      max_tokens: 900
-    });
-    const data = Buffer.from(body, 'utf8');
-
-    const options = {
-      hostname: 'api.x.ai',
-      port: 443,
-      path: '/v1/chat/completions',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + apiKey,
-        'Content-Length': data.length
-      }
+    return {
+      output: '• ' + sim + '\n\n(High-quality local simulation — configure XAI_API_KEY in Netlify for real Grok agent calls.)',
     };
-
-    const req = https.request(options, (res) => {
-      let body = '';
-      res.on('data', chunk => body += chunk);
-      res.on('end', () => {
-        if (res.statusCode >= 400) {
-          reject(new Error('Grok API HTTP ' + res.statusCode + ': ' + body.slice(0, 600)));
-          return;
-        }
-        try {
-          const json = JSON.parse(body);
-          const content = json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content;
-          const out = (content && String(content).trim()) ? content : '';
-          if (out) {
-            resolve({ output: out });
-            return;
-          }
-          const errMsg = json.error && (json.error.message || json.error);
-          reject(new Error(errMsg ? String(errMsg) : ('Grok returned empty content: ' + body.slice(0, 400))));
-        } catch (e) {
-          reject(new Error('Failed to parse Grok response: ' + body.slice(0, 400)));
-        }
-      });
-    });
-
-    req.on('error', reject);
-    req.write(data);
-    req.end();
-  });
+  }
+  return result;
 }
 
 function getSystemPromptForAgent(agentId) {

@@ -4,6 +4,7 @@ const { requireAuth } = require('./lib/verify-token');
 const { corsHeaders } = require('./lib/http');
 const { wrapUserContent, sanitizeField, UNTRUSTED_RULE } = require('./lib/sanitize-prompt');
 const { validateCharacterEnrich, filterEnrichedCharacters } = require('./lib/validate-characters');
+const { callGrok } = require('./lib/grok-chat');
 
 const SYSTEM_PROMPT =
   'You are a casting director and continuity supervisor preparing a character bible for AI image/video generation.\n\n' +
@@ -25,6 +26,21 @@ function parseJsonFromModel(raw) {
   return JSON.parse(cleaned);
 }
 
+function fallbackResponse(headers, trustedNames, detail) {
+  return {
+    statusCode: 200,
+    headers,
+    body: JSON.stringify({
+      characters: {},
+      enriched: 0,
+      total: trustedNames.length,
+      provider: 'grok-3-mini',
+      fallback: true,
+      detail: detail || 'Character enrich unavailable',
+    }),
+  };
+}
+
 exports.handler = async function handler(event) {
   const headers = corsHeaders(event);
   if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers, body: '' };
@@ -36,15 +52,6 @@ exports.handler = async function handler(event) {
     await requireAuth(event);
   } catch (e) {
     return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized', fallback: true }) };
-  }
-
-  const apiKey = process.env.GROK_API_KEY || process.env.XAI_API_KEY;
-  if (!apiKey) {
-    return {
-      statusCode: 503,
-      headers,
-      body: JSON.stringify({ error: 'XAI_API_KEY not configured', fallback: true }),
-    };
   }
 
   let body = {};
@@ -72,38 +79,14 @@ exports.handler = async function handler(event) {
     'Return the JSON character bible for every trusted name that has appearance evidence. Use confidence "low" and empty description if no reliable appearance info exists.';
 
   try {
-    const resp = await fetch('https://api.x.ai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + apiKey },
-      body: JSON.stringify({
-        model: 'grok-3-mini',
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: userPrompt },
-        ],
-        temperature: 0.25,
-        max_tokens: 3500,
-      }),
-    });
-
-    if (!resp.ok) {
-      const errText = await resp.text();
-      return {
-        statusCode: 502,
-        headers,
-        body: JSON.stringify({ error: 'Grok API error', detail: errText.slice(0, 400), fallback: true }),
-      };
+    const grok = await callGrok(SYSTEM_PROMPT, userPrompt, { temperature: 0.25, max_tokens: 3500 });
+    if (grok.fallback) {
+      return fallbackResponse(headers, trustedNames, grok.error || 'XAI_API_KEY not configured');
     }
 
-    const data = await resp.json();
-    const raw = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
-    if (!raw) {
-      return { statusCode: 502, headers, body: JSON.stringify({ error: 'Empty model response', fallback: true }) };
-    }
-
-    const parsed = parseJsonFromModel(raw);
+    const parsed = parseJsonFromModel(grok.output);
     if (!validateCharacterEnrich(parsed)) {
-      return { statusCode: 422, headers, body: JSON.stringify({ error: 'Invalid character enrich structure', fallback: true }) };
+      return fallbackResponse(headers, trustedNames, 'Invalid character enrich structure');
     }
 
     const filtered = filterEnrichedCharacters(parsed, trustedNames, sanitizeField);
@@ -118,10 +101,7 @@ exports.handler = async function handler(event) {
       }),
     };
   } catch (e) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: 'Character enrich failed', detail: e.message, fallback: true }),
-    };
+    console.error('[enrich-characters] Grok failed:', e);
+    return fallbackResponse(headers, trustedNames, e.message || 'Character enrich failed');
   }
 };

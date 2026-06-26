@@ -162,6 +162,15 @@ window.SBEnrich = (function () {
       });
       const data = await res.json().catch(function () { return {}; });
 
+      if (data.fallback) {
+        return {
+          ok: false,
+          reason: data.detail || data.error || 'AI unavailable',
+          fallback: true,
+          merged: 0,
+        };
+      }
+
       if (!res.ok) {
         return {
           ok: false,
