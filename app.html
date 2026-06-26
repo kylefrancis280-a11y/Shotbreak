@@ -31,7 +31,8 @@
 <script src="js/auth.js?v=20260617"></script>
 <script src="js/model-config.js?v=20260624k"></script>
 <script src="js/mastery-resolver.js?v=20260624m"></script>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Anybody:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="timeline/parser.js?v=20260626a"></script>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Anybody:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--bg:#050507;--surface:#0c0c12;--surface2:#131319;--surface3:#1a1a22;--border:rgba(255,255,255,0.05);--border2:rgba(255,255,255,0.09);--gold:#d4a843;--gold2:#e8c36a;--gold-bg:rgba(212,168,67,0.05);--gold-border:rgba(212,168,67,0.15);--green:#22c55e;--blue:#60a5fa;--purple:#a78bfa;--red:#f87171;--red-bg:rgba(248,113,113,0.05);--red-border:rgba(248,113,113,0.15);--amber:#eab308;--text:#e8e8ec;--text2:#8e8e9e;--dim:#5a5a6a;--muted:#3a3a46;--display:'Syne',sans-serif;--body:'Anybody',sans-serif;--mono:'JetBrains Mono',monospace;--r:14px;--r-sm:8px}
@@ -2102,7 +2103,7 @@ const upZ=$('upZone'),fIn=$('fileIn'),sIn=$('sIn'),goB=$('goBtn');
 upZ.addEventListener('dragover',e=>{e.preventDefault();upZ.classList.add('drag')});upZ.addEventListener('dragleave',()=>upZ.classList.remove('drag'));
 upZ.addEventListener('drop',e=>{e.preventDefault();upZ.classList.remove('drag');if(e.dataTransfer.files.length)hFile(e.dataTransfer.files[0])});
 fIn.addEventListener('change',e=>{if(e.target.files.length)hFile(e.target.files[0])});
-async function hFile(f){const ext=f.name.split('.').pop().toLowerCase();let t='';try{if(ext==='docx')t=await rDocx(f);else if(ext==='txt'||ext==='fountain')t=await f.text();else if(ext==='fdx')t=await rFdx(f);else{alert('Use .docx .txt .fountain .fdx');return}}catch(e){alert('Error: '+e.message);return}sIn.value=t;uFN=f.name;upZ.style.display='none';$('fInf').style.display='block';$('fInf').innerHTML='<div class="up-file"><span style="font-size:20px">📄</span><div><div style="font-family:var(--mono);font-size:13px;color:var(--gold);font-weight:600">'+esc(f.name)+'</div><div style="font-size:11px;color:var(--dim)">'+(f.size/1024).toFixed(1)+'KB</div></div><span style="margin-left:auto;cursor:pointer;color:var(--dim);font-size:16px" onclick="clrF()">✕</span></div>';uLC()}
+async function hFile(f){const ext=f.name.split('.').pop().toLowerCase();let t='';try{if(ext==='docx')t=await rDocx(f);else if(ext==='txt'||ext==='fountain')t=await f.text();else if(ext==='fdx')t=await rFdx(f);else if(ext==='pdf'&&window.SBParser&&typeof window.SBParser.readFile==='function'){if(!window.pdfjsLib){const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';document.head.appendChild(s);await new Promise((res,rej)=>{s.onload=res;s.onerror=()=>rej(new Error('PDF library failed to load'))})}t=await window.SBParser.readFile(f)}else{alert('Use .docx .txt .fountain .fdx or .pdf');return}}catch(e){alert('Error: '+e.message);return}if(window.SBParser&&window.SBParser.normalizeScriptText)t=window.SBParser.normalizeScriptText(t);sIn.value=t;uFN=f.name;upZ.style.display='none';$('fInf').style.display='block';$('fInf').innerHTML='<div class="up-file"><span style="font-size:20px">📄</span><div><div style="font-family:var(--mono);font-size:13px;color:var(--gold);font-weight:600">'+esc(f.name)+'</div><div style="font-size:11px;color:var(--dim)">'+(f.size/1024).toFixed(1)+'KB</div></div><span style="margin-left:auto;cursor:pointer;color:var(--dim);font-size:16px" onclick="clrF()">✕</span></div>';uLC()}
 async function rDocx(f){const ab=await f.arrayBuffer(),z=await JSZip.loadAsync(ab),x=await z.file('word/document.xml').async('string'),p=new DOMParser,d=p.parseFromString(x,'application/xml'),ns='http://schemas.openxmlformats.org/wordprocessingml/2006/main',ps=d.getElementsByTagNameNS(ns,'p'),ls=[];for(let i=0;i<ps.length;i++){const ts=ps[i].getElementsByTagNameNS(ns,'t');let l='';for(let j=0;j<ts.length;j++)l+=ts[j].textContent;ls.push(l)}return ls.join('\n')}
 async function rFdx(f){const t=await f.text(),p=new DOMParser,d=p.parseFromString(t,'application/xml'),ps=d.getElementsByTagName('Paragraph'),ls=[];for(let i=0;i<ps.length;i++){const tp=ps[i].getAttribute('Type')||'',ts=ps[i].getElementsByTagName('Text');let c='';for(let j=0;j<ts.length;j++)c+=ts[j].textContent;if(['Scene Heading','Action','Character','Dialogue','Parenthetical','Transition'].includes(tp)){ls.push(c);if(tp==='Scene Heading'||tp==='Transition')ls.push('')}}return ls.join('\n')}
 function clrF(){upZ.style.display='';$('fInf').style.display='none';fIn.value='';uFN='';sIn.value='';uLC()}
@@ -2138,7 +2139,7 @@ function isSH(l){
   }
   // Leading scene number followed by obvious location slug
   if(/^\d+[.\s]+\s*[A-Z][A-Z0-9\s'\-]+\s+[-—–]\s+(DAY|NIGHT|MORNING|EVENING|DUSK|DAWN|CONTINUOUS|LATER)\s*$/i.test(t))return true;
-  return false;
+  return /^(INT\.|EXT\.|INT\/EXT\.|I\/E\.)/i.test(t);
 }
 // Skip title page / front matter — lines like "Written by", "Copyright", contact info.
 // These appear before the first real scene and shouldn't become shots.
@@ -2163,10 +2164,17 @@ function iT(t,d,c){const x=t.toLowerCase().replace(/\([^)]*\)/g,'');if(/\b(close
 function iCm(t,s){const x=t.toLowerCase();if(/\b(slow(ly)?|creep)\b/.test(x))return'SLOW DOLLY';if(/\b(pan|scans?)\b/.test(x))return'PAN';if(/\b(follow|track)\b/.test(x)&&s==='TRACKING')return'STEADICAM';if(/\b(crash|sudden)\b/.test(x))return'HANDHELD';return'STATIC'}
 
 function parse(text,durSec){
-  const lines=text.split('\n'),scenes=[],chars={};
-  let cur=null,i=0;
   const durEl=typeof $==='function'?$('durSel'):null;
   const dur=durSec||parseInt(durEl&&durEl.value)||4;
+  if(window.SBParser&&typeof window.SBParser.parse==='function'){
+    const norm=window.SBParser.normalizeScriptText?window.SBParser.normalizeScriptText(text):text;
+    const result=window.SBParser.parse(norm,dur);
+    const warn=window.SBParser.parseQualityWarning?window.SBParser.parseQualityWarning(result):'';
+    if(warn)console.warn('[Shotbreak parse]',warn);
+    return{scenes:result.scenes||[],characters:result.characters||{},characterImages:{}};
+  }
+  const lines=String(text||'').split('\n'),scenes=[],chars={};
+  let cur=null,i=0;
   const dl=dur+'-'+(dur+1)+'s';
   // Track whether we've seen a real scene yet — before that, skip title-page cruft.
   let seenFirstScene=false;
@@ -3821,8 +3829,11 @@ function registerCharName(set,raw){
   set.add(cn);
 }
 function extractCharacterNames(body){
-  const set=new Set();
   const text=body||'';
+  if(window.SBParser&&typeof window.SBParser.extractCharactersFromText==='function'){
+    return Object.keys(window.SBParser.extractCharactersFromText(text)).sort();
+  }
+  const set=new Set();
   if(!text.trim())return[];
   const lines=text.split(/\r?\n/);
   let inDialogue=false;
@@ -3851,8 +3862,14 @@ function extractCharacterNames(body){
 }
 /** Pull character names + optional parenthetical descriptions from script text. */
 function extractCharacterDescriptions(body){
+  const text=body||'';
+  if(window.SBParser&&typeof window.SBParser.extractCharactersFromText==='function'){
+    const chars=window.SBParser.extractCharactersFromText(text);
+    const names=Object.keys(chars).sort();
+    return{names,descriptions:chars};
+  }
   const descs={};
-  const names=extractCharacterNames(body);
+  const names=extractCharacterNames(text);
   names.forEach(n=>{descs[n]='';});
   const lines=(body||'').split(/\r?\n/);
   for(const line of lines){
@@ -8280,8 +8297,12 @@ async function mhParseBox(entityBoxId) {
 function mhLockScriptAndExtract(){
   const ta = document.getElementById('mhScriptMain');
   if(!ta){ alert('Script textarea not found.'); return; }
-  const text = (ta.value || '').trim();
+  let text = (ta.value || '').trim();
   if(!text){ alert('Paste your script in the box first.'); return; }
+  if(window.SBParser&&window.SBParser.normalizeScriptText){
+    text=window.SBParser.normalizeScriptText(text);
+    ta.value=text;
+  }
 
   let p = projectLoad() || {};
   p.script = text;
@@ -8327,12 +8348,21 @@ function mhLockScriptAndExtract(){
   }, 150);
 
   const shotCount = (p.scenes || []).reduce((a, s) => a + (s.shots || []).length, 0);
-  alert(`✅ Script locked — ${shotCount} shot(s), ${charNames.length} character(s), location extracted.\n\nCharacters tab: names + location.\nGenerate tab: per-shot video prompts are ready.`);
+  let parseWarn = '';
+  if (window.SBParser && window.SBParser.parseQualityWarning) {
+    const pr = window.SBParser.parse(text, 5);
+    parseWarn = window.SBParser.parseQualityWarning(pr) || '';
+  }
+  alert(`✅ Script locked — ${shotCount} shot(s), ${charNames.length} character(s), location extracted.\n\nCharacters tab: names + location.\nGenerate tab: per-shot video prompts are ready.${parseWarn ? '\n\n⚠ ' + parseWarn : ''}`);
 }
 
 // Helper: extract locations from standard scene headings
 function extractLocations(script){
   if(!script) return [];
+  if(window.SBParser&&window.SBParser.extractLocationsFromText){
+    const found=window.SBParser.extractLocationsFromText(script);
+    return Object.values(found).map(l=>l.name).filter(Boolean);
+  }
   const re = /^(?:INT\.|EXT\.|I\/E\.|INT\/EXT\.)\s*([^\n\-–—]+)/gim;
   const out = new Set();
   let m;
@@ -8493,7 +8523,15 @@ function mhSplitProseIntoShotChunks(text) {
 
 /** Map the original breakdown parser (parse) into Edit Studio scene + character shape. */
 function mhBuildScenesFromScriptText(text) {
-  const breakdown = (typeof parse === 'function') ? parse(text) : { scenes: [], characters: {} };
+  let breakdown;
+  if (window.SBParser && typeof window.SBParser.parse === 'function') {
+    const norm = window.SBParser.normalizeScriptText ? window.SBParser.normalizeScriptText(text) : text;
+    breakdown = window.SBParser.parse(norm, 5);
+  } else if (typeof parse === 'function') {
+    breakdown = parse(text);
+  } else {
+    breakdown = { scenes: [], characters: {} };
+  }
   const charMap = breakdown.characters || {};
   const allCharNames = Object.keys(charMap).map(cleanCharName).filter(Boolean);
 
