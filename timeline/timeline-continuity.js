@@ -205,6 +205,8 @@ window.SBContinuity = (function () {
       }
     });
 
+    applyCrowdRules(state);
+
     state.continuityGraph = { blocks: blocks, builtAt: Date.now() };
     state.characters = chars;
     return { blocks: blocks, changed: changed };
@@ -219,10 +221,98 @@ window.SBContinuity = (function () {
     return null;
   }
 
+  /** VORSANGER / ninety-clone crowd — one leader + crowd unit, not 90 character cards. */
+  function applyCrowdRules(state) {
+    if (!state) return 0;
+    const script = String(state.scriptText || '');
+    const blob = script + '\n' + (state.clips || []).map(function (c) {
+      return (c.description || '') + ' ' + (c.dialogue || '') + ' ' + (c.heading || '');
+    }).join('\n');
+    if (!/\b(?:ninety|90)\b/i.test(blob) && !/\bidentical(?:ly)?\s+(?:dressed|groomed|clone)/i.test(blob)) {
+      return 0;
+    }
+    if (!window.SBCharacters) return 0;
+    let n = 0;
+    const chars = state.characters || {};
+    const crowdDesc =
+      'Ninety identically dressed ex-military men: same face, short military haircut, dark blue jacket and trousers, sunglasses; disciplined formation';
+    const leaderDesc =
+      '50s, short military haircut, dark blue jacket, sunglasses, ex-military build; prominent white VORSANGER nametag on left chest; visually identical to the other eighty-nine men except for the nametag';
+
+    if (!chars.VORSANGER) {
+      chars.VORSANGER = Object.assign({}, window.SBCharacters.DEFAULTS);
+      n++;
+    }
+    const v = chars.VORSANGER;
+    if (!v._descLocked && (!v.description || v.description.length < 40 || /matching haircut|well groomed man/i.test(v.description))) {
+      v.description = leaderDesc;
+      n++;
+    }
+    v.role = 'lead';
+
+    if (!chars.CROWD_CLONES) {
+      chars.CROWD_CLONES = Object.assign({}, window.SBCharacters.DEFAULTS, { role: 'crowd', description: crowdDesc });
+      n++;
+    } else if (!chars.CROWD_CLONES.description) {
+      chars.CROWD_CLONES.description = crowdDesc;
+      chars.CROWD_CLONES.role = 'crowd';
+      n++;
+    }
+
+    (state.clips || []).forEach(function (clip) {
+      const text = ((clip.description || '') + ' ' + (clip.dialogue || '') + ' ' + (clip.heading || '')).toUpperCase();
+      if (!text.includes('VORSANGER') && !/\b(?:90|NINETY)\b/.test(text) && !/IDENTICAL/.test(text)) return;
+      clip.characters = clip.characters || [];
+      ['VORSANGER'].forEach(function (name) {
+        if (clip.characters.indexOf(name) < 0) clip.characters.push(name);
+      });
+      if (/WIDE|ESTABLISH|BOARD|BUS|TARMAC|CURB|LINE/i.test(text) && clip.characters.indexOf('CROWD_CLONES') < 0) {
+        clip.characters.push('CROWD_CLONES');
+      }
+    });
+
+    state.characters = chars;
+    return n;
+  }
+
+  /** Prev-clip + block-boundary continuity for generate prompts. */
+  function continuityForClip(state, clipIndex) {
+    const clips = state.clips || [];
+    if (clipIndex == null || clipIndex < 1 || !clips[clipIndex]) return null;
+    const prev = clips[clipIndex - 1];
+    const prevBlock = blockForClip(state, clipIndex - 1);
+    const curBlock = blockForClip(state, clipIndex);
+    const blockBreak = !!(prevBlock && curBlock && prevBlock.id !== curBlock.id);
+    const phrase = blockBreak
+      ? 'CONTINUITY (block handoff): Match the END STATE of the previous clip exactly — same character likenesses, lighting, rain, wet ground, reflections, and cinematic style. No visual reset.'
+      : 'CONTINUITY (same scene block): Match characters, wardrobe, and environment from the previous shot in this sequence.';
+    return {
+      prevClipNum: prev.num || clipIndex,
+      prevVideoUrl: prev.videoUrl && String(prev.videoUrl).startsWith('https://') ? prev.videoUrl : null,
+      blockBreak: blockBreak,
+      phrase: phrase,
+      locationName: curBlock && curBlock.locationName ? curBlock.locationName : '',
+    };
+  }
+
+  function enrichPromptWithContinuity(prompt, state, clip) {
+    const ci = (state.clips || []).findIndex(function (c) { return c && c.id === clip.id; });
+    const cont = continuityForClip(state, ci);
+    if (!cont) return prompt;
+    let extra = cont.phrase;
+    if (cont.locationName) extra += ' Location: ' + cont.locationName + '.';
+    if (cont.prevVideoUrl) extra += ' Use previous clip ' + cont.prevClipNum + ' end-frame as strong visual reference.';
+    const out = (extra + ' ' + String(prompt || '')).replace(/\s+/g, ' ').trim();
+    return out.length > 900 ? out.slice(0, 897) + '...' : out;
+  }
+
   return {
     continuityType: continuityType,
     buildBlocks: buildBlocks,
     applyGraph: applyGraph,
+    applyCrowdRules: applyCrowdRules,
     blockForClip: blockForClip,
+    continuityForClip: continuityForClip,
+    enrichPromptWithContinuity: enrichPromptWithContinuity,
   };
 })();

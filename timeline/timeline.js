@@ -3,7 +3,7 @@
 'use strict';
 
 const STORAGE_KEY='SB_Timeline_v1';
-const BOOT_VERSION='20260627b';
+const BOOT_VERSION='20260627c';
 const OWNER_EMAILS=new Set(['kyle@shotbreak.io','scott@shotbreak.io','steve@shotbreak.io']);
 const CHAR_SKIP=new Set(['INT','EXT','FADE','CUT','CLOSE','WIDE','THE','AND','RAIN','WATER','ROOF','SCENE','OPENING','SEQUENCE','DIALOGUE','ACTION','REACTION','CLIMAX','RESOLUTION','EPILOGUE','TRANSITION','ABANDONED','WAREHOUSE','BUILDING','STREET','NIGHT','DAY','MORNING','EVENING','LOCATION','INTERIOR','EXTERIOR']);
 const JUNK_CLOSE_ON_RE=/^Close on\s+((?:OPENING|TITLE|CLOSING|END|CREDIT|TEASER|PROLOGUE)\s+(?:SEQUENCE|SCENE|CREDITS)|SEQUENCE|DIALOGUE|ACTION|REACTION|TRANSITION|CLIMAX|RESOLUTION|EPILOGUE|CHARACTER\s+INTRO|OPENING\s+SCENE)/i;
@@ -165,6 +165,9 @@ function buildPrompt(clip){
   let pr=x.join(' ').replace(/\s+/g,' ').trim();
   const safeClip=Object.assign({},clip,{characters:(clip.characters||[]).filter(n=>isValidCharacterName(n))});
   pr=SBCharacters.injectIntoPrompt(pr,state.characters,safeClip);
+  if(window.SBContinuity&&typeof SBContinuity.enrichPromptWithContinuity==='function'){
+    pr=SBContinuity.enrichPromptWithContinuity(pr,state,clip);
+  }
   return pr.length>900?pr.slice(0,897)+'...':pr||'Cinematic scene shot';
 }
 
@@ -828,13 +831,60 @@ function updateScriptMeta(){
   }
 }
 
+function rebuildScriptFromParse(){
+  const scenes=state.parseResult&&state.parseResult.scenes;
+  if(!scenes||!scenes.length)return'';
+  const parts=[];
+  scenes.forEach(function(sc){
+    if(sc.heading)parts.push(String(sc.heading).trim());
+    (sc.shots||[]).forEach(function(sh){
+      if(sh.description)parts.push(String(sh.description).trim());
+      if(sh.dialogue){
+        const cue=(sh.characters_in_frame&&sh.characters_in_frame[0])||'';
+        if(cue)parts.push(String(cue).toUpperCase().trim());
+        parts.push(String(sh.dialogue).trim());
+      }
+    });
+    parts.push('');
+  });
+  return parts.join('\n').replace(/\n{3,}/g,'\n\n').trim();
+}
+
+async function recoverCorruptScript(){
+  const rebuilt=rebuildScriptFromParse();
+  if(!rebuilt||rebuilt.length<80){
+    toast('No parse data to recover from — import your .txt / .pdf / .fdx file');
+    openScriptPanel();
+    return false;
+  }
+  pushHistory();
+  state.scriptText=rebuilt;
+  const ta=$('scriptEditor');
+  if(ta){ta.value=rebuilt;ta._focused=false}
+  save();
+  renderScriptWarn(rebuilt);
+  updateScriptMeta();
+  if(isClipReconstruction(rebuilt)){
+    toast('Recovery still looks thin — best fix is re-importing your original screenplay file');
+    return false;
+  }
+  await importText(rebuilt,{fromRecovery:true});
+  toast('Recovered screenplay from parse — review in script editor');
+  return true;
+}
+
 function renderScriptWarn(text){
   const el=$('scriptWarn');
   if(!el)return;
   const corrupt=isClipReconstruction(text);
   if(corrupt){
     el.classList.remove('hidden');
-    el.innerHTML='<strong>Not your original screenplay.</strong> This box was auto-filled from broken timeline clip text (repeated SCENE 1 / shot descriptions). Click <strong>+ New script</strong>, then re-import your .txt / .pdf / .fdx — do not re-parse this garbage.';
+    const canRecover=!!(state.parseResult&&state.parseResult.scenes&&state.parseResult.scenes.length);
+    el.innerHTML='<strong>Not your original screenplay.</strong> This box has broken clip-reconstruction text. '+
+      (canRecover?'<button type="button" class="tb-btn gold" id="btnRecoverScript" style="margin:8px 8px 0 0">↻ Recover from parse</button>':'')+
+      ' Or click <strong>+ New script</strong> and re-import your .txt / .pdf / .fdx.';
+    const btn=$('btnRecoverScript');
+    if(btn)btn.onclick=function(){recoverCorruptScript()};
     return;
   }
   if(state.clips.length&&!text.trim()){
@@ -1482,6 +1532,16 @@ async function runJob(clip){
       if(mastery.reference_images&&mastery.reference_images.length)body.reference_images=mastery.reference_images;
       body.prompt=window.SBMastery.enrichPrompt(body.prompt,mastery);
     }
+    if(window.SBContinuity&&typeof SBContinuity.continuityForClip==='function'){
+      const ci=state.clips.findIndex(c=>c.id===clip.id);
+      const cont=SBContinuity.continuityForClip(state,ci);
+      if(cont){
+        body.prompt=SBContinuity.enrichPromptWithContinuity(body.prompt,state,clip);
+        if(cont.prevVideoUrl&&(!body.reference_images||!body.reference_images.length)){
+          body.reference_images=[cont.prevVideoUrl];
+        }
+      }
+    }
     const sub=await fetch('/.netlify/functions/generate-video',{method:'POST',headers:h,body:JSON.stringify(body)});
     const sd=await sub.json();
     if(!sub.ok||!sd.request_id)throw new Error(formatGenError(sd,sub.status));
@@ -1634,6 +1694,8 @@ function bindUI(){
   if(btnScriptImport)btnScriptImport.onclick=()=>$('fileInput').click();
   const btnNewScript=$('btnNewScript');
   if(btnNewScript)btnNewScript.onclick=startNewScript;
+  const btnRecoverScriptBar=$('btnRecoverScriptBar');
+  if(btnRecoverScriptBar)btnRecoverScriptBar.onclick=recoverCorruptScript;
   const btnMenuScript=$('btnMenuScript');
   if(btnMenuScript)btnMenuScript.onclick=()=>{toggleMoreMenu(false);openScriptPanel()};
   const scriptTa=$('scriptEditor');
