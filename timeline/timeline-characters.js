@@ -22,25 +22,74 @@ window.SBCharacters = (function () {
     return String(text || '').replace(/\r\n/g, '\n');
   }
 
+  function isDialogueDirection (text, charName) {
+    const d = String(text || '').trim();
+    if (!d) return true;
+    if (/^(v\.?o\.?|o\.?s\.?|o\.?c\.?|cont'?d|whispering|shouting|beat|pause|sighs|laughing|filtered|into radio|to camera)$/i.test(d)) return true;
+    if (/^(to|at|from|with|into|toward|towards)\s+[A-Za-z][A-Za-z .'\-]{0,30}\.?$/i.test(d)) return true;
+    const up = String(charName || '').toUpperCase().trim();
+    if (up && new RegExp('^to\\s+' + up.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\.?$', 'i').test(d)) return true;
+    return d.length < 4;
+  }
+
+  function collapseRepeatedPhrases (text) {
+    const d = String(text || '').trim();
+    if (!d) return '';
+    const phrases = d.split(/\.\s+/).map(function (p) { return p.trim(); }).filter(Boolean);
+    const seen = new Set();
+    const out = [];
+    phrases.forEach(function (p) {
+      const key = p.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(p);
+    });
+    return out.join('. ').replace(/\.\s*\./g, '.').replace(/\s+/g, ' ').trim();
+  }
+
+  function sanitizeDescription (text, charName) {
+    let d = collapseRepeatedPhrases(text);
+    if (!d) return '';
+    const up = String(charName || '').toUpperCase().trim();
+    if (up) {
+      const esc = up.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      d = d.replace(new RegExp('(?:to\\s+' + esc + '\\.?\\s*){2,}', 'gi'), 'to ' + up + '. ');
+    }
+    return d.trim().slice(0, 420);
+  }
+
+  function isBetterDescription (next, prev, charName) {
+    const n = sanitizeDescription(next, charName);
+    const p = sanitizeDescription(prev, charName);
+    if (!n || isDialogueDirection(n, charName)) return false;
+    if (!p) return n.length >= 8;
+    if (isDialogueDirection(p, charName)) return true;
+    if (n === p) return false;
+    if (n.startsWith(p) && n.length > p.length + 6) {
+      const extra = n.slice(p.length).trim();
+      if (/^(to|at|from|with)\s+/i.test(extra)) return false;
+    }
+    const nParts = n.split(/\.\s+/).filter(Boolean);
+    const pParts = p.split(/\.\s+/).filter(Boolean);
+    if (nParts.length > pParts.length + 1 && n.length > p.length + 20) return false;
+    return n.length > p.length + 4 || (n.length >= 8 && p.length < 8);
+  }
+
   /** Pull appearance from action lines: NAME (traits), NAME, traits, intro sentence. */
   function synthesizeDescription (name, scriptText, hint) {
     const script = normalizeScript(scriptText);
-    if (!script.trim()) return (hint || '').trim();
+    if (!script.trim()) return sanitizeDescription(hint || '', name);
     const upName = String(name || '').toUpperCase();
     const escName = upName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const nameRE = new RegExp('\\b' + escName + '\\b', 'i');
 
     const bruteParen = script.match(new RegExp(escName + '\\s*\\(([^)]{3,200})\\)', 'i'));
-    if (bruteParen && bruteParen[1] && !/^(v\.?o\.?|o\.?s\.?|cont'?d)$/i.test(bruteParen[1].trim())) {
-      const bit = bruteParen[1].trim();
-      if (hint && hint.trim()) return (hint.trim() + '. ' + bit).slice(0, 420);
-      return bit.slice(0, 420);
+    if (bruteParen && bruteParen[1] && !isDialogueDirection(bruteParen[1].trim(), name)) {
+      return sanitizeDescription(bruteParen[1].trim(), name);
     }
     const bruteComma = script.match(new RegExp(escName + '\\s*,\\s*([^.!?\\n]{4,200})', 'i'));
-    if (bruteComma && bruteComma[1]) {
-      const bit = bruteComma[1].trim();
-      if (hint && hint.trim()) return (hint.trim() + '. ' + bit).slice(0, 420);
-      return bit.slice(0, 420);
+    if (bruteComma && bruteComma[1] && !isDialogueDirection(bruteComma[1].trim(), name)) {
+      return sanitizeDescription(bruteComma[1].trim(), name);
     }
 
     const lines = script.split('\n');
@@ -101,18 +150,19 @@ window.SBCharacters = (function () {
     }
 
     const parts = [];
-    if (hint && hint.trim()) parts.push(hint.trim());
-    if (parenTraits) parts.push(parenTraits);
-    else if (commaTraits) parts.push(commaTraits);
+    if (parenTraits && !isDialogueDirection(parenTraits, name)) parts.push(parenTraits);
+    else if (commaTraits && !isDialogueDirection(commaTraits, name)) parts.push(commaTraits);
     else if (introSentence) {
-      parts.push(introSentence.replace(nameRE, '').replace(/^\s*[,.\-–—:\s]+/, '').trim());
+      const bit = introSentence.replace(nameRE, '').replace(/^\s*[,.\-–—:\s]+/, '').trim();
+      if (bit && !isDialogueDirection(bit, name)) parts.push(bit);
     }
     if (parts.join(' ').length < 24 && laterActions.length) {
-      parts.push(laterActions[0].replace(nameRE, '').replace(/^\s*[,.\-–—:\s]+/, '').trim().substring(0, 160));
+      const bit = laterActions[0].replace(nameRE, '').replace(/^\s*[,.\-–—:\s]+/, '').trim().substring(0, 160);
+      if (bit && !isDialogueDirection(bit, name)) parts.push(bit);
     }
 
-    if (!parts.length) return (hint || '').trim();
-    return parts.filter(Boolean).join('. ').replace(/\s+/g, ' ').replace(/\.\s*\./g, '.').trim().slice(0, 420);
+    if (!parts.length) return sanitizeDescription(hint || '', name);
+    return sanitizeDescription(parts.filter(Boolean).join('. '), name);
   }
 
   function inferWardrobe (desc) {
@@ -180,7 +230,7 @@ window.SBCharacters = (function () {
         const m = desc.match(re);
         if (!m || !m[1]) return;
         const bit = m[1].trim().replace(/,?\s*delivering dialogue\.?/i, '').trim();
-        if (!bit || /^(v\.?o\.?|o\.?s\.?|cont'?d)$/i.test(bit)) return;
+        if (!bit || isDialogueDirection(bit, name)) return;
         if (parts.indexOf(bit) < 0) parts.push(bit);
       });
       if (dlg && parts.length < 2) {
@@ -208,23 +258,25 @@ window.SBCharacters = (function () {
       const c = characters[name];
       if (!c) return;
       const up = String(name).toUpperCase();
-      let hint = c.description || '';
-      if (parseChars) {
-        const parsed = parseChars[up] || parseChars[name];
-        if (parsed && String(parsed).trim()) hint = String(parsed).trim();
-      }
-      const fromClips = extractFromClips(name, clips);
-      if (fromClips && fromClips.length > hint.length) hint = fromClips;
-
-      const syn = blob.trim() ? synthesizeDescription(name, blob, hint) : hint;
-      let best = [syn, fromClips, hint].filter(Boolean).sort(function (a, b) { return b.length - a.length; })[0] || '';
+      const parseHint = parseChars && String((parseChars[up] || parseChars[name]) || '').trim();
+      const fromClips = sanitizeDescription(extractFromClips(name, clips), name);
+      const syn = blob.trim() ? synthesizeDescription(name, blob, parseHint || '') : '';
+      const candidates = [syn, fromClips, parseHint].map(function (x) {
+        return sanitizeDescription(x, name);
+      }).filter(function (x) {
+        return x && !isDialogueDirection(x, name);
+      });
+      let best = candidates.sort(function (a, b) { return b.length - a.length; })[0] || '';
       if (!best || best.length < 8) {
-        const fb = fallbackFromClips(name, clips);
-        if (fb && fb.length > (best || '').length) best = fb;
+        const fb = sanitizeDescription(fallbackFromClips(name, clips), name);
+        if (fb && !isDialogueDirection(fb, name) && fb.length > (best || '').length) best = fb;
       }
 
-      if (best && (!c.description || !String(c.description).trim() || best.length > String(c.description).length + 4)) {
+      const current = sanitizeDescription(c.description || '', name);
+      if (best && isBetterDescription(best, current, name)) {
         c.description = best;
+      } else if (current !== c.description) {
+        c.description = current;
       }
       if (!c.wardrobe || !String(c.wardrobe).trim()) {
         const w = inferWardrobe(c.description);
@@ -368,7 +420,7 @@ window.SBCharacters = (function () {
   }
 
   return {
-    DEFAULTS, normalize, synthesizeDescription, extractFromClips, inferWardrobe, inferBodyType, enrichAll, hydrate,
+    DEFAULTS, normalize, synthesizeDescription, sanitizeDescription, extractFromClips, inferWardrobe, inferBodyType, enrichAll, hydrate,
     renderList, renderEditor, getRefForClip, injectIntoPrompt
   };
 })();
