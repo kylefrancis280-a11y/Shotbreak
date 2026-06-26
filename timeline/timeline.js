@@ -3,7 +3,7 @@
 'use strict';
 
 const STORAGE_KEY='SB_Timeline_v1';
-const BOOT_VERSION='20260625j';
+const BOOT_VERSION='20260625k';
 const OWNER_EMAILS=new Set(['kyle@shotbreak.io','scott@shotbreak.io','steve@shotbreak.io']);
 const CHAR_SKIP=new Set(['INT','EXT','FADE','CUT','CLOSE','WIDE','THE','AND','RAIN','WATER','ROOF','SCENE','OPENING','SEQUENCE','DIALOGUE','ACTION','REACTION','CLIMAX','RESOLUTION','EPILOGUE','TRANSITION','ABANDONED','WAREHOUSE','BUILDING','STREET','NIGHT','DAY','MORNING','EVENING','LOCATION','INTERIOR','EXTERIOR']);
 const JUNK_CLOSE_ON_RE=/^Close on\s+((?:OPENING|TITLE|CLOSING|END|CREDIT|TEASER|PROLOGUE)\s+(?:SEQUENCE|SCENE|CREDITS)|SEQUENCE|DIALOGUE|ACTION|REACTION|TRANSITION|CLIMAX|RESOLUTION|EPILOGUE|CHARACTER\s+INTRO|OPENING\s+SCENE)/i;
@@ -434,12 +434,8 @@ function bootstrapCharactersInline(){
       if(!inClip)continue;
       const desc=String(clip.description||'');
       const m=desc.match(new RegExp(up.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'\\s*\\(([^)]+)\\)','i'));
-      if(m&&m[1]){c.description=m[1].trim();return}
-      if(clip.dialogue&&String(clip.dialogue).trim()){
-        c.description='Dialogue (clip '+(clip.num||i+1)+'): "'+String(clip.dialogue).trim().slice(0,140)+'"';
-        return;
-      }
-      if(desc.length>12&&!/^Close on\s+/i.test(desc)){c.description=desc.slice(0,300);return}
+      if(m&&m[1]&&isDescriptiveTrait(m[1])){c.description=m[1].trim();return}
+      if(desc.length>12&&!/^Close on\s+/i.test(desc)&&isDescriptiveTrait(desc)){c.description=desc.slice(0,300);return}
     }
   });
   try{

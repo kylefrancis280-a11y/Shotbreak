@@ -36,6 +36,9 @@ window.SBCharacters = (function () {
   function isWeakAppearanceText (text, charName) {
     const d = String(text || '').trim();
     if (!d || isDialogueDirection(d, charName)) return true;
+    if (/^Dialogue\s+(?:in\s+clip|\(clip)/i.test(d)) return true;
+    if (/^["'][^"']{1,120}["']\.?$/.test(d)) return true;
+    if (/^[^.!?\n]{1,50}!(\s*\([^)]{1,60}\))?\.?$/.test(d) && !/\b(hair|suit|jacket|eyes|beard|uniform|weathered|athletic|\d{2}s|wearing|dressed)\b/i.test(d)) return true;
     if (/reads\s*["']\s*["']/i.test(d)) return true;
     if (/^(his|her|their)\s+(?:nametag|name\s*tag|nameplate|badge)\s+reads\b/i.test(d)) return true;
     if (/\b(?:nametag|name\s*tag|nameplate|badge)\s+reads\s*["']\s*["']/i.test(d)) return true;
@@ -77,6 +80,7 @@ window.SBCharacters = (function () {
       d = d.replace(new RegExp('(?:to\\s+' + esc + '\\.?\\s*){2,}', 'gi'), 'to ' + up + '. ');
       d = d.replace(new RegExp('(?:his|her|their)\\s+nametag\\s+reads\\s*["\']\\s*["\']\\.?', 'gi'), '');
     }
+    d = d.replace(/^Dialogue\s+(?:in\s+clip|\(clip)\s*\d+[^.]*\.?\s*/gi, '');
     const phrases = d.split(/\.\s+/).map(function (p) { return p.trim(); }).filter(function (p) {
       return p && !isWeakAppearanceText(p, charName) && !isDialogueDirection(p, charName);
     });
@@ -243,9 +247,6 @@ window.SBCharacters = (function () {
         if (!isWeakAppearanceText(stripped, name)) return stripped;
         if (!isWeakAppearanceText(full, name)) return full;
       }
-      if (clip.dialogue && String(clip.dialogue).trim()) {
-        return 'Dialogue in clip ' + (clip.num || (i + 1)) + ': "' + String(clip.dialogue).trim().slice(0, 120) + '"';
-      }
     }
     return '';
   }
@@ -319,8 +320,8 @@ window.SBCharacters = (function () {
       const current = sanitizeDescription(c.description || '', name);
       if (best && isBetterDescription(best, current, name)) {
         c.description = best;
-      } else if (current !== c.description) {
-        c.description = current;
+      } else {
+        c.description = current || '';
       }
       if (!c.wardrobe || !String(c.wardrobe).trim()) {
         const w = inferWardrobe(c.description);
@@ -452,8 +453,8 @@ window.SBCharacters = (function () {
         c.description = String(fromParse).trim();
         return;
       }
-      const fb = fallbackFromClips(name, clips);
-      if (fb) c.description = fb;
+      const fb = sanitizeDescription(fallbackFromClips(name, clips), name);
+      if (fb && !isWeakAppearanceText(fb, name)) c.description = fb;
     });
     Object.keys(characters).forEach(function (name) {
       const c = characters[name];
