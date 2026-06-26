@@ -570,12 +570,35 @@ window.SBParser = (function(){
           if(u.length>=2){const r=resCN(u,chars);if(chars[r]!==undefined&&isCastMember(r)&&!m.includes(r))m.push(r)}
         });
         m=m.filter(n=>isCastMember(n));
+        if(!m.length&&cur.shots.length){
+          const prev=cur.shots[cur.shots.length-1];
+          if(prev&&prev.characters_in_frame&&prev.characters_in_frame.length)m=prev.characters_in_frame.slice();
+        }
         cur.shots.push({type:iT(s,!1,m.length),camera:iCm(s,iT(s,!1,m.length)),duration:dl,description:s,dialogue:null,characters_in_frame:m,cine:{}});
       }
       i++;
     }
     const enriched=filterCharacterMap(mergeCharMaps(chars,extractCharactersFromText(text)));
     attachCharactersToShots(scenes,enriched);
+    scenes.forEach(sc=>{
+      const parts=[sc.heading||''];
+      (sc.shots||[]).forEach(sh=>{
+        parts.push(sh.description||'');
+        if(sh.dialogue)parts.push(sh.dialogue);
+      });
+      sc.background_cast=extractBackgroundCastFromText(parts.join('\n'));
+      const present=new Set();
+      let carry=[];
+      (sc.shots||[]).forEach(sh=>{
+        let frame=(sh.characters_in_frame||[]).filter(n=>isCastMember(n));
+        if(!frame.length&&carry.length)frame=carry.slice();
+        else if(frame.length)carry=frame.slice();
+        sh.characters_in_frame=frame;
+        frame.forEach(n=>present.add(cleanCharName(n)));
+      });
+      Object.keys(sc.background_cast||{}).forEach(n=>present.add(cleanCharName(n)));
+      sc.characters_present=[...present];
+    });
     return{scenes,characters:enriched};
   }
 

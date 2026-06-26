@@ -3,7 +3,7 @@
 'use strict';
 
 const STORAGE_KEY='SB_Timeline_v1';
-const BOOT_VERSION='20260626d';
+const BOOT_VERSION='20260627a';
 const OWNER_EMAILS=new Set(['kyle@shotbreak.io','scott@shotbreak.io','steve@shotbreak.io']);
 const CHAR_SKIP=new Set(['INT','EXT','FADE','CUT','CLOSE','WIDE','THE','AND','RAIN','WATER','ROOF','SCENE','OPENING','SEQUENCE','DIALOGUE','ACTION','REACTION','CLIMAX','RESOLUTION','EPILOGUE','TRANSITION','ABANDONED','WAREHOUSE','BUILDING','STREET','NIGHT','DAY','MORNING','EVENING','LOCATION','INTERIOR','EXTERIOR']);
 const JUNK_CLOSE_ON_RE=/^Close on\s+((?:OPENING|TITLE|CLOSING|END|CREDIT|TEASER|PROLOGUE)\s+(?:SEQUENCE|SCENE|CREDITS)|SEQUENCE|DIALOGUE|ACTION|REACTION|TRANSITION|CLIMAX|RESOLUTION|EPILOGUE|CHARACTER\s+INTRO|OPENING\s+SCENE)/i;
@@ -564,6 +564,9 @@ function bootstrapStructure(force,opts){
   backfillClipLocationsFromParse();
   ensureShotOneLocation();
   bootstrapLocationsInline();
+  if(window.SBContinuity&&typeof SBContinuity.applyGraph==='function'){
+    try{SBContinuity.applyGraph(state)}catch(e){console.warn('[Shotbreak] SBContinuity',e)}
+  }
   if(window.SBLocations&&typeof SBLocations.syncAll==='function'){
     try{state.locationBible=SBLocations.syncAll(state,extractionText())}catch(e){console.warn('[Shotbreak] SBLocations',e)}
   }
@@ -962,6 +965,17 @@ function renderDetail(){
       locHint='<div style="font-size:11px;color:var(--gold);margin-bottom:10px;padding:8px 10px;background:rgba(212,168,67,.08);border:1px solid rgba(212,168,67,.3);border-radius:8px">🔒 Location locked: <strong>'+esc(locEntry.name)+'</strong>'+(locEntry.plateUrl?' · plate attached':'')+'</div>';
     }else if(meta.name){
       locHint='<div style="font-size:11px;color:var(--dim);margin-bottom:10px">📍 '+esc(meta.name)+' — lock in <strong>Locations</strong> panel below timeline</div>';
+    }
+  }
+  if(window.SBContinuity&&typeof SBContinuity.blockForClip==='function'){
+    const ci=state.clips.findIndex(c=>c.id===clip.id);
+    const blk=SBContinuity.blockForClip(state,ci);
+    if(blk){
+      const cast=[].concat(blk.leads||[],blk.supporting||[],blk.background||[]).filter(Boolean);
+      const castPreview=cast.slice(0,6).join(', ')+(cast.length>6?'…':'');
+      locHint+='<div style="font-size:11px;color:var(--text2);margin-bottom:10px;padding:8px 10px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:8px">🔗 Scene block · '+esc(blk.continuity||'new')+
+        (blk.locationName?' · <strong>'+esc(blk.locationName)+'</strong>':'')+
+        (castPreview?' · cast: '+esc(castPreview):'')+'</div>';
     }
   }
   body.innerHTML=locHint+
