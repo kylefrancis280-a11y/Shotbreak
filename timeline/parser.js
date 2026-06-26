@@ -100,7 +100,25 @@ window.SBParser = (function(){
     return'Day';
   }
 
-  /** Scan screenplay lines for sluglines — works even when shot parser lumped scenes into SCENE 1. */
+  function countCueLines(text){
+    return (String(text||'').match(/^\s*[A-Z][A-Z0-9 .'\-]{1,35}\s*$/gm)||[]).length;
+  }
+
+  function upsertLocationRow(out,heading){
+    const t=String(heading||'').trim();
+    if(!t)return;
+    const meta=parseSceneHeading(t);
+    if(!meta.key)return;
+    if(!out[meta.key]){
+      out[meta.key]={name:meta.name,key:meta.key,heading:t,timeOfDay:meta.timeOfDay||'',clipIndices:[]};
+    }else if(out[meta.key].heading!==t&&!out[meta.key].headings){
+      out[meta.key].headings=[out[meta.key].heading,t];
+    }else if(out[meta.key].headings&&out[meta.key].headings.indexOf(t)<0){
+      out[meta.key].headings.push(t);
+    }
+  }
+
+  /** Scan screenplay for sluglines — line-start and embedded (flattened PDF). */
   function extractLocationsFromText(text){
     const out={};
     const norm=normalizeScriptText(text);
@@ -108,16 +126,21 @@ window.SBParser = (function(){
     norm.split('\n').forEach(line=>{
       const t=line.trim();
       if(!t||!isSH(t))return;
-      const meta=parseSceneHeading(t);
-      if(!meta.key)return;
-      if(!out[meta.key]){
-        out[meta.key]={name:meta.name,key:meta.key,heading:t,timeOfDay:meta.timeOfDay||'',clipIndices:[]};
-      }else if(out[meta.key].heading!==t&&!out[meta.key].headings){
-        out[meta.key].headings=[out[meta.key].heading,t];
-      }else if(out[meta.key].headings&&out[meta.key].headings.indexOf(t)<0){
-        out[meta.key].headings.push(t);
-      }
+      upsertLocationRow(out,t);
     });
+    const inlineRe=/\b(?:INT\.|EXT\.|INT\/EXT\.|I\/E\.?)\s+([A-Za-z0-9][A-Za-z0-9 .'\-/&,]{2,90}?)(?:\s*[-—–]\s*(DAY|NIGHT|MORNING|EVENING|DUSK|DAWN|CONTINUOUS|LATER|MOMENTS(?:\s+LATER)?))?(?=[.!?\s]|$)/gi;
+    let m;
+    while((m=inlineRe.exec(norm))!==null){
+      const head=(/^(INT|EXT)/i.test(m[0])?m[0].trim():('INT. '+m[1].trim()+(m[2]?' - '+m[2]:'')));
+      upsertLocationRow(out,head);
+    }
+    const locTagRe=/^\s*Location:\s*([^\n]{3,120})/gim;
+    while((m=locTagRe.exec(norm))!==null){
+      const name=String(m[1]||'').trim().replace(/[.,;]+$/, '');
+      if(name.length>2&&!/^SCENE\s*\d*$/i.test(name)){
+        upsertLocationRow(out,'INT. '+name+' - DAY');
+      }
+    }
     return out;
   }
 
@@ -241,7 +264,7 @@ window.SBParser = (function(){
   function filterCharacterMap(chars){
     const out={};
     Object.entries(chars||{}).forEach(([n,d])=>{
-      if(isCastMember(n,{fromCue:true}))out[cleanCharName(n)]=d;
+      if(isCastMember(n))out[cleanCharName(n)]=d;
     });
     return out;
   }
@@ -254,7 +277,8 @@ window.SBParser = (function(){
     const patterns=[
       /(?:^|[\n.!?]\s*)(?:A|AN|TWO|THREE|FOUR|SEVERAL)\s+([A-Z][A-Z0-9 .'\-]{2,28}(?:\s+[A-Z][A-Z0-9 .'\-]{2,28}){0,3})\s*\(([^)]{3,160})\)/gi,
       /(?:^|\n)\s*(?:A|AN)\s+([A-Z][A-Z0-9 .'\-]{2,28}(?:\s+[A-Z][A-Z0-9 .'\-]{2,28}){0,2})\s+(?=[a-z])/gi,
-      /(?:^|\n)\s*([A-Z][A-Z0-9 .'\-]{2,28}(?:\s+[A-Z][A-Z0-9 .'\-]{2,28}){1,3})\s*\(([^)]{3,160})\)\s*(?=[a-z])/gi
+      /(?:^|\n)\s*([A-Z][A-Z0-9 .'\-]{2,28}(?:\s+[A-Z][A-Z0-9 .'\-]{2,28}){0,3})\s*\(([^)]{3,160})\)\s*(?=[a-z])/gi,
+      /(?:^|[\n.!?]\s*)([A-Z][A-Z0-9 .'\-]{2,28})\s*\(([^)]{3,160})\)\s*(?=[a-z])/gi
     ];
     patterns.forEach(re=>{
       let m;
@@ -444,14 +468,17 @@ window.SBParser = (function(){
   function isClipReconstruction(text){
     if(!text||!String(text).trim())return false;
     const t=String(text);
-    const slugHits=(t.match(/^\s*(?:INT\.|EXT\.|INT\/EXT\.|I\/E\.)/gim)||[]).length;
+    const slugHits=(t.match(/(?:^|\s)(?:INT\.|EXT\.|INT\/EXT\.|I\/E\.)/gim)||[]).length;
     const lineCount=countLines(t);
+    const cueHits=countCueLines(t);
+    if(slugHits>=1&&(lineCount>=8||cueHits>=3))return false;
+    if(cueHits>=6)return false;
     if(slugHits>=2&&lineCount>=12)return false;
     const dlgHits=(t.match(/delivering dialogue\./gi)||[]).length;
     const closeHits=(t.match(/Close on\s+[A-Z]/gi)||[]).length;
     const scene1=(t.match(/^SCENE 1\s*$/gim)||[]).length;
-    if(dlgHits>=4||(closeHits>=4&&dlgHits>=2))return true;
-    if(scene1>=8&&dlgHits>=2&&slugHits<2)return true;
+    if(dlgHits>=6||(closeHits>=6&&dlgHits>=3))return true;
+    if(scene1>=10&&dlgHits>=3&&slugHits<1&&cueHits<3)return true;
     return false;
   }
 
@@ -463,10 +490,10 @@ window.SBParser = (function(){
 
   function attachCharactersToShots(scenes,chars){
     if(!scenes||!chars)return;
-    const names=Object.keys(chars).filter(n=>isCastMember(n,{fromCue:true}));
+    const names=Object.keys(chars).filter(n=>isCastMember(n));
     scenes.forEach(sc=>{
       (sc.shots||[]).forEach(sh=>{
-        const found=new Set((sh.characters_in_frame||[]).filter(n=>isCastMember(n,{fromCue:true})));
+        const found=new Set((sh.characters_in_frame||[]).filter(n=>isCastMember(n)));
         const blob=((sh.description||'')+' '+(sh.dialogue||'')).toUpperCase();
         names.forEach(n=>{
           if(nameInBlob(n,blob))found.add(cleanCharName(n));
@@ -540,9 +567,9 @@ window.SBParser = (function(){
         }
         s.split(/\s+/).forEach(w=>{
           const u=w.replace(/[^A-Z]/g,'');
-          if(u.length>=2){const r=resCN(u,chars);if(chars[r]!==undefined&&isCastMember(r,{fromCue:true})&&!m.includes(r))m.push(r)}
+          if(u.length>=2){const r=resCN(u,chars);if(chars[r]!==undefined&&isCastMember(r)&&!m.includes(r))m.push(r)}
         });
-        m=m.filter(n=>isCastMember(n,{fromCue:true}));
+        m=m.filter(n=>isCastMember(n));
         cur.shots.push({type:iT(s,!1,m.length),camera:iCm(s,iT(s,!1,m.length)),duration:dl,description:s,dialogue:null,characters_in_frame:m,cine:{}});
       }
       i++;
@@ -653,5 +680,5 @@ window.SBParser = (function(){
     return normalizeScriptText(pages.join('\n\n'));
   }
 
-  return{parse,scenesToClips,readFile,extractCharactersFromText,extractBackgroundCastFromText,extractLocationsFromText,parseSceneHeading,inferLocation,mergeCharMaps,filterCharacterMap,isLikelyPersonName,isCastMember,LABEL_CUE_RE,normalizeScriptText,normalizeScriptTextDetailed,unflattenScreenplay,isScriptFlattened,isClipReconstruction,parseQualityWarning};
+  return{parse,scenesToClips,readFile,extractCharactersFromText,extractBackgroundCastFromText,extractLocationsFromText,parseSceneHeading,inferLocation,mergeCharMaps,filterCharacterMap,isLikelyPersonName,isCastMember,countCueLines,LABEL_CUE_RE,normalizeScriptText,normalizeScriptTextDetailed,unflattenScreenplay,isScriptFlattened,isClipReconstruction,parseQualityWarning};
 })();

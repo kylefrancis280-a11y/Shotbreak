@@ -188,15 +188,16 @@ window.SBLocations = (function () {
     return bible;
   }
 
-  function syncAll (state) {
+  function syncAll (state, scriptOverride) {
     state = state || {};
     let bible = state.locationBible || [];
     bible = syncFromClips(state.clips || [], bible);
     if (state.parseResult && state.parseResult.scenes) {
       bible = mergeFromScenes(state.parseResult.scenes, state.clips || [], bible);
     }
-    if (state.scriptText && /^\s*(?:INT\.|EXT\.|INT\/EXT\.|I\/E\.)/im.test(String(state.scriptText || ''))) {
-      bible = mergeFromScript(state.scriptText, bible);
+    const scriptBlob = String(scriptOverride || state.scriptText || '').trim();
+    if (scriptBlob && (/\b(?:INT\.|EXT\.|INT\/EXT\.|I\/E\.)/i.test(scriptBlob) || /^\s*Location:\s/im.test(scriptBlob))) {
+      bible = mergeFromScript(scriptBlob, bible);
     }
     return bible;
   }
