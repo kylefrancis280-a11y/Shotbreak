@@ -206,6 +206,7 @@ window.SBContinuity = (function () {
     });
 
     applyCrowdRules(state);
+    applyBlockCastRules(state, blocks);
 
     state.continuityGraph = { blocks: blocks, builtAt: Date.now() };
     state.characters = chars;
@@ -275,6 +276,63 @@ window.SBContinuity = (function () {
     return n;
   }
 
+  /** Carry block leads + crowd into every shot in the block (close-ups included). */
+  function applyBlockCastRules(state, blocks) {
+    if (!state || !blocks || !blocks.length) return 0;
+    const script = String(state.scriptText || '');
+    const hasCrowdScript =
+      /\b(?:ninety|90)\b/i.test(script) ||
+      /\bidentical(?:ly)?\s+(?:dressed|groomed|clone)/i.test(script);
+    let n = 0;
+
+    blocks.forEach(function (blk) {
+      const blockBlob = ((blk.locationName || '') + ' ' + (blk.headings || []).join(' ')).toUpperCase();
+      const blockHasVorsanger =
+        blk.leads.indexOf('VORSANGER') >= 0 ||
+        blk.background.indexOf('VORSANGER') >= 0 ||
+        /VORSANGER|(?:\b90\b|NINETY)|IDENTICAL/.test(blockBlob);
+      const blockIsAirport = /AIRPORT|TARMAC|TRUDEAU|TERMINAL|RUNWAY|CURB/.test(blockBlob);
+
+      sortClipIndices(blk.clipIndices).forEach(function (ci) {
+        const clip = state.clips[ci];
+        if (!clip) return;
+        clip.characters = clip.characters || [];
+        const text = ((clip.description || '') + ' ' + (clip.dialogue || '') + ' ' + (clip.heading || '')).toUpperCase();
+        const shotType = String(clip.shotType || (clip.params && clip.params.camera && clip.params.camera.angle) || '').toUpperCase();
+        const needsCrowd =
+          /^(WIDE|ESTABLISHING|MASTER)/.test(shotType) ||
+          /WIDE|ESTABLISH|BOARD|BUS|TARMAC|CURB|LINE|FORMATION/.test(text);
+
+        if (hasCrowdScript || blockHasVorsanger) {
+          if (clip.characters.indexOf('VORSANGER') < 0) {
+            clip.characters.push('VORSANGER');
+            n++;
+          }
+          if (needsCrowd && clip.characters.indexOf('CROWD_CLONES') < 0) {
+            clip.characters.push('CROWD_CLONES');
+            n++;
+          }
+        }
+
+        blk.leads.forEach(function (up) {
+          if (!up || clip.characters.indexOf(up) >= 0) return;
+          if (up === 'VORSANGER' && !(hasCrowdScript || blockHasVorsanger)) return;
+          clip.characters.push(up);
+          n++;
+        });
+
+        if (blockIsAirport && blk.locationName && clip.params && clip.params.scene) {
+          if (!clip.params.scene.location || /^(scene|location)\s*\d*$/i.test(clip.params.scene.location)) {
+            clip.params.scene.location = blk.locationName;
+            n++;
+          }
+        }
+      });
+    });
+
+    return n;
+  }
+
   /** Prev-clip + block-boundary continuity for generate prompts. */
   function continuityForClip(state, clipIndex) {
     const clips = state.clips || [];
@@ -286,12 +344,18 @@ window.SBContinuity = (function () {
     const phrase = blockBreak
       ? 'CONTINUITY (block handoff): Match the END STATE of the previous clip exactly — same character likenesses, lighting, rain, wet ground, reflections, and cinematic style. No visual reset.'
       : 'CONTINUITY (same scene block): Match characters, wardrobe, and environment from the previous shot in this sequence.';
+    const prevUrl = prev.videoUrl ? String(prev.videoUrl) : '';
+    const prevVideoUrl =
+      prevUrl.startsWith('https://') || prevUrl.startsWith('blob:') || prevUrl.startsWith('data:')
+        ? prevUrl
+        : null;
     return {
       prevClipNum: prev.num || clipIndex,
-      prevVideoUrl: prev.videoUrl && String(prev.videoUrl).startsWith('https://') ? prev.videoUrl : null,
+      prevVideoUrl: prevVideoUrl,
       blockBreak: blockBreak,
       phrase: phrase,
       locationName: curBlock && curBlock.locationName ? curBlock.locationName : '',
+      blockLeads: curBlock && curBlock.leads ? curBlock.leads.slice(0, 6) : [],
     };
   }
 
@@ -300,8 +364,18 @@ window.SBContinuity = (function () {
     const cont = continuityForClip(state, ci);
     if (!cont) return prompt;
     let extra = cont.phrase;
-    if (cont.locationName) extra += ' Location: ' + cont.locationName + '.';
-    if (cont.prevVideoUrl) extra += ' Use previous clip ' + cont.prevClipNum + ' end-frame as strong visual reference.';
+    if (cont.locationName) {
+      extra += ' Location: ' + cont.locationName + ' — same physical set as prior shots in this sequence.';
+    }
+    if (cont.blockLeads && cont.blockLeads.length) {
+      extra += ' Characters in this sequence: ' + cont.blockLeads.join(', ') + '.';
+    }
+    if (cont.blockLeads && cont.blockLeads.indexOf('VORSANGER') >= 0) {
+      extra += ' VORSANGER wears white nametag; clone crowd matches prior shots.';
+    }
+    if (cont.prevVideoUrl) {
+      extra += ' Match the END FRAME of previous clip ' + cont.prevClipNum + ' exactly (wardrobe, lighting, environment).';
+    }
     const out = (extra + ' ' + String(prompt || '')).replace(/\s+/g, ' ').trim();
     return out.length > 900 ? out.slice(0, 897) + '...' : out;
   }
@@ -311,6 +385,7 @@ window.SBContinuity = (function () {
     buildBlocks: buildBlocks,
     applyGraph: applyGraph,
     applyCrowdRules: applyCrowdRules,
+    applyBlockCastRules: applyBlockCastRules,
     blockForClip: blockForClip,
     continuityForClip: continuityForClip,
     enrichPromptWithContinuity: enrichPromptWithContinuity,

@@ -3,7 +3,7 @@
 'use strict';
 
 const STORAGE_KEY='SB_Timeline_v1';
-const BOOT_VERSION='20260627c';
+const BOOT_VERSION='20260627d';
 const OWNER_EMAILS=new Set(['kyle@shotbreak.io','scott@shotbreak.io','steve@shotbreak.io']);
 const CHAR_SKIP=new Set(['INT','EXT','FADE','CUT','CLOSE','WIDE','THE','AND','RAIN','WATER','ROOF','SCENE','OPENING','SEQUENCE','DIALOGUE','ACTION','REACTION','CLIMAX','RESOLUTION','EPILOGUE','TRANSITION','ABANDONED','WAREHOUSE','BUILDING','STREET','NIGHT','DAY','MORNING','EVENING','LOCATION','INTERIOR','EXTERIOR']);
 const JUNK_CLOSE_ON_RE=/^Close on\s+((?:OPENING|TITLE|CLOSING|END|CREDIT|TEASER|PROLOGUE)\s+(?:SEQUENCE|SCENE|CREDITS)|SEQUENCE|DIALOGUE|ACTION|REACTION|TRANSITION|CLIMAX|RESOLUTION|EPILOGUE|CHARACTER\s+INTRO|OPENING\s+SCENE)/i;
@@ -1512,6 +1512,45 @@ function duplicateClip(){
   state.clips.push(c);state.selectedId=c.id;save();renderAll();toast('Duplicated');
 }
 
+async function extractVideoEndFrame(videoUrl){
+  const src=String(videoUrl||'');
+  if(!src)return null;
+  return new Promise((resolve)=>{
+    const v=document.createElement('video');
+    v.muted=true;
+    v.playsInline=true;
+    v.preload='auto';
+    if(src.startsWith('https://'))v.crossOrigin='anonymous';
+    let settled=false;
+    const finish=(val)=>{if(settled)return;settled=true;resolve(val||null)};
+    const grab=()=>{
+      try{
+        const w=v.videoWidth,h=v.videoHeight;
+        if(!w||!h){finish(null);return}
+        const c=document.createElement('canvas');
+        c.width=w;c.height=h;
+        c.getContext('2d').drawImage(v,0,0,w,h);
+        finish(c.toDataURL('image/jpeg',0.9));
+      }catch(_){finish(null)}
+    };
+    v.addEventListener('loadedmetadata',()=>{
+      const t=Math.max(0,(v.duration||4)-0.12);
+      v.currentTime=Number.isFinite(t)?t:0;
+    });
+    v.addEventListener('seeked',grab);
+    v.addEventListener('error',()=>finish(null));
+    setTimeout(()=>finish(null),12000);
+    v.src=src;
+  });
+}
+
+async function resolvePrevClipFrameRef(state,clipIndex){
+  if(clipIndex==null||clipIndex<1||!state.clips[clipIndex])return null;
+  const prev=state.clips[clipIndex-1];
+  if(!prev||!prev.videoUrl)return null;
+  return extractVideoEndFrame(prev.videoUrl);
+}
+
 async function runJob(clip){
   clip.status='generating';clip.error=null;renderAll();
   let prompt=buildPrompt(clip);
@@ -1537,8 +1576,14 @@ async function runJob(clip){
       const cont=SBContinuity.continuityForClip(state,ci);
       if(cont){
         body.prompt=SBContinuity.enrichPromptWithContinuity(body.prompt,state,clip);
-        if(cont.prevVideoUrl&&(!body.reference_images||!body.reference_images.length)){
-          body.reference_images=[cont.prevVideoUrl];
+        if(cont.prevVideoUrl){
+          const prevFrame=await resolvePrevClipFrameRef(state,ci);
+          if(prevFrame){
+            body.prev_frame_image_url=prevFrame;
+            if(!body.character_image_url)body.character_image_url=prevFrame;
+            else if(!body.reference_images)body.reference_images=[prevFrame];
+            else if(body.reference_images.indexOf(prevFrame)<0)body.reference_images.unshift(prevFrame);
+          }
         }
       }
     }
@@ -1575,7 +1620,11 @@ async function genSelected(){if(!curUser)return toast('Sign in');const c=state.c
 async function batchGen(){
   if(!curUser)return toast('Sign in');if(state.queue.running)return;
   state.queue.running=true;$('queueBar').classList.add('on');
-  for(let i=0;i<state.clips.length;i++){$('queueText').textContent='Clip '+(i+1)+' / '+state.clips.length;await runJob(state.clips[i])}
+  for(let i=0;i<state.clips.length;i++){
+    $('queueText').textContent='Clip '+(i+1)+' / '+state.clips.length;
+    if(i>0&&!state.clips[i-1].videoUrl)toast('Clip '+i+' has no video — continuity refs may be weak for clip '+(i+1));
+    await runJob(state.clips[i]);
+  }
   state.queue.running=false;$('queueBar').classList.remove('on');toast('Batch done');
 }
 function approveSelected(){

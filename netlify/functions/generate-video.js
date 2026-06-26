@@ -405,15 +405,26 @@ function clampSeedanceResolution(res) {
   return res === '1080p' ? '1080p' : '720p';
 }
 
+function isVideoUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  return /\.mp4(\?|$)/i.test(url) || /\.webm(\?|$)/i.test(url) || /\.mov(\?|$)/i.test(url);
+}
+
 function pickRefImageUrl(body) {
-  if (body.character_image_url && isSafeUrl(body.character_image_url)) return body.character_image_url;
-  if (body.location_image_url && isSafeUrl(body.location_image_url)) return body.location_image_url;
-  if (Array.isArray(body.reference_images)) {
-    for (const r of body.reference_images) {
-      if (r && isSafeUrl(r)) return r;
-    }
+  const candidates = [
+    body.prev_frame_image_url,
+    body.character_image_url,
+    body.location_image_url,
+    ...(Array.isArray(body.reference_images) ? body.reference_images : []),
+  ];
+  for (const r of candidates) {
+    if (r && isSafeUrl(r) && !isVideoUrl(r)) return r;
   }
   return null;
+}
+
+function pickGrokImageRef(body) {
+  return pickRefImageUrl(body || {});
 }
 
 // Map client model ids (exact user list) to WaveSpeed /api/v3/ path slugs.
@@ -899,11 +910,17 @@ exports.handler = async function (event) {
       }
       if (isGrokImagineVideo && hasGrokKey) {
         // Direct XAI Grok Imagine for video (exact "Grok Imagine (done through XAI API)" per user list)
+        const grokImageRef = pickGrokImageRef({
+          prev_frame_image_url: body.prev_frame_image_url,
+          character_image_url,
+          location_image_url: body.location_image_url,
+          reference_images: body.reference_images,
+        });
         const grokRes = await submitGrokImagineVideo({
           prompt: finalPrompt,
           duration,
           aspect_ratio,
-          character_image_url,
+          character_image_url: grokImageRef || character_image_url,
           resolution: body.resolution
         });
         return jsonResponse(event, 200, {
