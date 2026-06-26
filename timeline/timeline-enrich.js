@@ -109,9 +109,12 @@ window.SBEnrich = (function () {
 
       const desc = window.SBCharacters.sanitizeDescription(row.description || '', up);
       const conf = row.confidence || 'medium';
-      if (desc && !isJunkDescription(desc, up) && conf !== 'low') {
+      const generic = window.SBCharacters.isGenericAppearanceText && window.SBCharacters.isGenericAppearanceText(desc);
+      const specific = window.SBCharacters.hasSpecificAppearanceCues && window.SBCharacters.hasSpecificAppearanceCues(desc);
+      if (desc && !isJunkDescription(desc, up) && !generic && conf !== 'low' && specific) {
         const prev = String(c.description || '').trim();
-        if (!prev || isJunkDescription(prev, up) || (desc.length > prev.length + 8)) {
+        const better = window.SBCharacters.isBetterDescription && window.SBCharacters.isBetterDescription(desc, prev, up);
+        if (!prev || isJunkDescription(prev, up) || better) {
           c.description = desc;
           merged++;
         }

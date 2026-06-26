@@ -13,6 +13,9 @@ const SYSTEM_PROMPT =
   '- "description" = VISIBLE APPEARANCE ONLY (age, build, face, hair, skin, distinguishing marks, clothing visible on body).\n' +
   '- NEVER use spoken dialogue, translations, exclamations, or stage directions as description.\n' +
   '- NEVER output: "Dialogue in clip", "to NAME", "His nametag reads \\"\\"", empty quotes, or parenthetical translations like (Ready!).\n' +
+  '- NEVER use crowd/clone shorthand: "matching haircut", "well groomed man", "identically groomed", "a man wearing".\n' +
+  '- Use concrete traits from evidence: age (50s), hair (short military cut, silver hair), build, jacket color, sunglasses, nametag text for leaders.\n' +
+  '- For VORSANGER or leaders: include prominent white nametag + any parenthetical intro like NAME (50s, silver hair, suit).\n' +
   '- Wardrobe = clothing/uniform/accessories only.\n' +
   '- Only include characters from the trusted cast list. Do NOT invent new names.\n' +
   '- If evidence is thin, return a shorter description or empty string with confidence "low".\n' +

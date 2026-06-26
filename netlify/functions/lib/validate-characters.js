@@ -13,6 +13,10 @@ function isJunkDescription(desc) {
   if (/^(his|her|their)\s+(?:nametag|name\s*tag|nameplate|badge)\s+reads\b/i.test(d)) return true;
   if (/^Close on\b/i.test(d)) return true;
   if (/delivering dialogue\.?$/i.test(d)) return true;
+  if (/\bmatching\s+(?:haircut|hair|look|appearance|style|uniform|outfit|jacket)\b/i.test(d)) return true;
+  if (/\bidentical(?:ly)?\s+(?:groomed|dressed|clothed|styled|matching)\b/i.test(d)) return true;
+  if (/\bwell[- ]groomed\s+man\b/i.test(d) && !/\b(\d{2}s|mid-?\d|late-?\d|early-?\d|military|nametag|silver|scar|beard|stubble)\b/i.test(d)) return true;
+  if (/\b(?:a|the)\s+man\s+(?:with|in|wearing)\b/i.test(d) && !/\b(\d{2}s|nametag|silver|scar|military|ex-?military)\b/i.test(d)) return true;
   return false;
 }
 

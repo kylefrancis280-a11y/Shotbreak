@@ -32,10 +32,32 @@ window.SBCharacters = (function () {
     return d.length < 4;
   }
 
+  /** Crowd/clone shorthand — not a usable single-character bible line. */
+  function isGenericAppearanceText (text) {
+    const d = String(text || '').trim();
+    if (!d) return true;
+    if (/\bmatching\s+(?:haircut|hair|look|appearance|style|uniform|outfit|jacket)\b/i.test(d)) return true;
+    if (/\bidentical(?:ly)?\s+(?:groomed|dressed|clothed|styled|matching)\b/i.test(d)) return true;
+    if (/\bwell[- ]groomed\s+man\b/i.test(d) && !/\b(\d{2}s|mid-?\d|late-?\d|early-?\d|military|nametag|silver|scar|beard|stubble)\b/i.test(d)) return true;
+    if (/\b(?:a|the)\s+man\s+(?:with|in|wearing)\b/i.test(d) && !/\b(\d{2}s|nametag|VORSANGER|silver|scar|military|ex-?military)\b/i.test(d)) return true;
+    if (/\bclone(?:s| men)?\b/i.test(d) && d.length < 120) return true;
+    return false;
+  }
+
+  function hasSpecificAppearanceCues (text) {
+    const d = String(text || '').trim();
+    if (!d) return false;
+    return /\b(\d{2}s|mid-?\d{2}|late-?\d{2}|early-?\d{2}|teen|elderly)\b/i.test(d)
+      || /\b(silver|grey|gray|blond|blonde|bald|crew\s*cut|military[- ]style|close[- ]cropped|stubble|beard|scar|weathered|rugged|athletic|stocky|tall|lean|burly)\b/i.test(d)
+      || /\b(?:nametag|name\s*tag|nameplate|badge)\b/i.test(d)
+      || /\b(ex-?military|pilot|uniform|tailored|leather|trench)\b/i.test(d);
+  }
+
   /** Hollow prop/stage lines — not usable appearance traits for prompts. */
   function isWeakAppearanceText (text, charName) {
     const d = String(text || '').trim();
     if (!d || isDialogueDirection(d, charName)) return true;
+    if (isGenericAppearanceText(d)) return true;
     if (/^Dialogue\s+(?:in\s+clip|\(clip)/i.test(d)) return true;
     if (/^["'][^"']{1,120}["']\.?$/.test(d)) return true;
     if (/^[^.!?\n]{1,50}!(\s*\([^)]{1,60}\))?\.?$/.test(d) && !/\b(hair|suit|jacket|eyes|beard|uniform|weathered|athletic|\d{2}s|wearing|dressed)\b/i.test(d)) return true;
@@ -88,21 +110,36 @@ window.SBCharacters = (function () {
     return d.slice(0, 420);
   }
 
+  function descriptionQualityScore (text) {
+    const d = String(text || '').trim();
+    if (!d) return 0;
+    let score = Math.min(d.length, 80);
+    if (hasSpecificAppearanceCues(d)) score += 40;
+    if (isGenericAppearanceText(d)) score -= 60;
+    if (/\bnametag\b/i.test(d)) score += 25;
+    return score;
+  }
+
   function isBetterDescription (next, prev, charName) {
     const n = sanitizeDescription(next, charName);
     const p = sanitizeDescription(prev, charName);
     if (!n || isDialogueDirection(n, charName) || isWeakAppearanceText(n, charName)) return false;
-    if (!p) return n.length >= 8;
+    if (!p) return n.length >= 8 && hasSpecificAppearanceCues(n);
     if (isDialogueDirection(p, charName) || isWeakAppearanceText(p, charName)) return true;
     if (n === p) return false;
+    const nScore = descriptionQualityScore(n);
+    const pScore = descriptionQualityScore(p);
+    if (nScore > pScore + 8) return true;
+    if (pScore > nScore + 8) return false;
     if (n.startsWith(p) && n.length > p.length + 6) {
       const extra = n.slice(p.length).trim();
       if (/^(to|at|from|with)\s+/i.test(extra)) return false;
+      if (isGenericAppearanceText(extra)) return false;
     }
     const nParts = n.split(/\.\s+/).filter(Boolean);
     const pParts = p.split(/\.\s+/).filter(Boolean);
     if (nParts.length > pParts.length + 1 && n.length > p.length + 20) return false;
-    return n.length > p.length + 4 || (n.length >= 8 && p.length < 8);
+    return n.length > p.length + 4 && hasSpecificAppearanceCues(n);
   }
 
   /** Pull appearance from action lines: NAME (traits), NAME, traits, intro sentence. */
@@ -116,6 +153,14 @@ window.SBCharacters = (function () {
     const bruteParen = script.match(new RegExp(escName + '\\s*\\(([^)]{3,200})\\)', 'i'));
     if (bruteParen && bruteParen[1] && !isWeakAppearanceText(bruteParen[1].trim(), name)) {
       return sanitizeDescription(bruteParen[1].trim(), name);
+    }
+    const leaderNametag = script.match(new RegExp(
+      escName + '[^.!?\\n]{0,80}\\b(?:nametag|name\\s*tag|nameplate|badge)\\b[^.!?\\n]{0,120}|' +
+      '[^.!?\\n]{0,80}\\b(?:nametag|name\\s*tag|nameplate|badge)\\b[^.!?\\n]{0,40}' + escName + '[^.!?\\n]{0,80}',
+      'i'
+    ));
+    if (leaderNametag && leaderNametag[0] && !isWeakAppearanceText(leaderNametag[0].trim(), name)) {
+      return sanitizeDescription(leaderNametag[0].trim(), name);
     }
     const bruteComma = script.match(new RegExp(escName + '\\s*,\\s*([^.!?\\n]{4,200})', 'i'));
     if (bruteComma && bruteComma[1] && !isWeakAppearanceText(bruteComma[1].trim(), name)) {
@@ -311,7 +356,9 @@ window.SBCharacters = (function () {
       }).filter(function (x) {
         return x && !isWeakAppearanceText(x, name);
       });
-      let best = candidates.sort(function (a, b) { return b.length - a.length; })[0] || '';
+      let best = candidates.sort(function (a, b) {
+        return descriptionQualityScore(b) - descriptionQualityScore(a) || b.length - a.length;
+      })[0] || '';
       if (!best || best.length < 8) {
         const fb = sanitizeDescription(fallbackFromClips(name, clips), name);
         if (fb && !isWeakAppearanceText(fb, name) && fb.length > (best || '').length) best = fb;
@@ -465,7 +512,7 @@ window.SBCharacters = (function () {
   }
 
   return {
-    DEFAULTS, normalize, synthesizeDescription, sanitizeDescription, isWeakAppearanceText, isDialogueDirection, extractFromClips, inferWardrobe, inferBodyType, enrichAll, hydrate,
+    DEFAULTS, normalize, synthesizeDescription, sanitizeDescription, isWeakAppearanceText, isGenericAppearanceText, hasSpecificAppearanceCues, isBetterDescription, isDialogueDirection, extractFromClips, inferWardrobe, inferBodyType, enrichAll, hydrate,
     renderList, renderEditor, getRefForClip, injectIntoPrompt
   };
 })();
