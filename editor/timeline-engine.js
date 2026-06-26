@@ -425,6 +425,10 @@ window.SBTimelineEditor = (function () {
 
     async function renderExport() {
       if (!state.timeline.length) { agentLog('Add clips to the edit track first', 'err'); return; }
+      if (!window.SBFFmpeg) {
+        agentLog('FFmpeg module not loaded — hard refresh the page', 'err');
+        return;
+      }
       agentLog('Rendering…', 'info');
       const blobs = [];
       for (const tl of state.timeline) {
@@ -435,32 +439,17 @@ window.SBTimelineEditor = (function () {
           if (!r.ok) throw new Error('fetch failed');
           blobs.push(await r.blob());
         } catch (e) {
-          agentLog('Could not fetch ' + b.name, 'err');
+          agentLog('Could not fetch ' + b.name + ' (CORS or network)', 'err');
           return;
         }
       }
       try {
-        const { FFmpeg } = await import('https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js');
-        const { fetchFile, toBlobURL } = await import('https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/esm/index.js');
-        const ff = new FFmpeg();
-        const base = location.origin + '/static/ffmpeg/';
-        await ff.load({
-          coreURL: await toBlobURL(base + 'ffmpeg-core.js', 'text/javascript'),
-          wasmURL: await toBlobURL(base + 'ffmpeg-core.wasm', 'application/wasm'),
-        });
-        for (let i = 0; i < blobs.length; i++) await ff.writeFile('in' + i + '.mp4', await fetchFile(blobs[i]));
-        if (blobs.length === 1) {
-          await ff.exec(['-i', 'in0.mp4', '-c', 'copy', 'out.mp4']);
-        } else {
-          const list = blobs.map((_, i) => "file 'in" + i + ".mp4'").join('\n');
-          await ff.writeFile('list.txt', new TextEncoder().encode(list));
-          await ff.exec(['-f', 'concat', '-safe', '0', '-i', 'list.txt', '-c', 'copy', 'out.mp4']);
-        }
-        const data = await ff.readFile('out.mp4');
+        const out = await window.SBFFmpeg.stitchBlobs(blobs, (msg) => agentLog(msg, 'info'));
         const a = document.createElement('a');
-        a.href = URL.createObjectURL(new Blob([data.buffer], { type: 'video/mp4' }));
+        a.href = URL.createObjectURL(out);
         a.download = (state.projectName || 'shotbreak_edit').replace(/\s+/g, '_') + '.mp4';
         a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
         agentLog('Render complete', 'ok');
       } catch (e) {
         agentLog('Render failed: ' + e.message, 'err');

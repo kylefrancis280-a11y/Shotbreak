@@ -116,25 +116,8 @@ window.SBExport = (function(){
   }
 
   async function stitchWithFFmpeg(blobs, opts, onProgress){
-    const {FFmpeg}=await import('https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js');
-    const {fetchFile,toBlobURL}=await import('https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/esm/index.js');
-    const ff=new FFmpeg();
-    ff.on('progress',({progress})=>{if(onProgress)onProgress('Rendering '+Math.round((progress||0)*100)+'%')});
-    const base=location.origin+'/static/ffmpeg/';
-    await ff.load({
-      coreURL:await toBlobURL(base+'ffmpeg-core.js','text/javascript'),
-      wasmURL:await toBlobURL(base+'ffmpeg-core.wasm','application/wasm'),
-    });
-    for(let i=0;i<blobs.length;i++)await ff.writeFile('in'+i+'.mp4',await fetchFile(blobs[i]));
-    if(blobs.length===1){
-      await ff.exec(['-i','in0.mp4','-c','copy','out.mp4']);
-    }else{
-      const list=blobs.map((_,i)=>'file in'+i+'.mp4').join('\n');
-      await ff.writeFile('concat.txt',new TextEncoder().encode(list));
-      await ff.exec(['-f','concat','-safe','0','-i','concat.txt','-c','copy','out.mp4']);
-    }
-    const data=await ff.readFile('out.mp4');
-    return new Blob([data.buffer],{type:'video/mp4'});
+    if(!window.SBFFmpeg)throw new Error('FFmpeg module not loaded');
+    return window.SBFFmpeg.stitchBlobs(blobs, onProgress);
   }
 
   async function packageZip(blobs, clips){
