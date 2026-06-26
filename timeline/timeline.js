@@ -3,7 +3,7 @@
 'use strict';
 
 const STORAGE_KEY='SB_Timeline_v1';
-const BOOT_VERSION='20260625i';
+const BOOT_VERSION='20260625j';
 const OWNER_EMAILS=new Set(['kyle@shotbreak.io','scott@shotbreak.io','steve@shotbreak.io']);
 const CHAR_SKIP=new Set(['INT','EXT','FADE','CUT','CLOSE','WIDE','THE','AND','RAIN','WATER','ROOF','SCENE','OPENING','SEQUENCE','DIALOGUE','ACTION','REACTION','CLIMAX','RESOLUTION','EPILOGUE','TRANSITION','ABANDONED','WAREHOUSE','BUILDING','STREET','NIGHT','DAY','MORNING','EVENING','LOCATION','INTERIOR','EXTERIOR']);
 const JUNK_CLOSE_ON_RE=/^Close on\s+((?:OPENING|TITLE|CLOSING|END|CREDIT|TEASER|PROLOGUE)\s+(?:SEQUENCE|SCENE|CREDITS)|SEQUENCE|DIALOGUE|ACTION|REACTION|TRANSITION|CLIMAX|RESOLUTION|EPILOGUE|CHARACTER\s+INTRO|OPENING\s+SCENE)/i;
@@ -287,6 +287,8 @@ function isDescriptiveTrait(s){
   if(!d||d.length<3)return false;
   if(/^(v\.?o\.?|o\.?s\.?|cont'?d|whispering|shouting|beat|pause)$/i.test(d))return false;
   if(/^(to|at|from|with|into)\s+[A-Za-z][A-Za-z .'\-]{0,30}\.?$/i.test(d))return false;
+  if(/reads\s*["']\s*["']/i.test(d))return false;
+  if(/^(his|her|their)\s+(?:nametag|name\s*tag|nameplate|badge)\s+reads\b/i.test(d))return false;
   return /\d|s|hair|suit|jacket|eyes|weathered|military|tall|old|young|beard|scar|worn|tailored|silver|grey|gray|dark|pale/i.test(d)||d.length>12;
 }
 

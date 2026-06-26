@@ -32,6 +32,27 @@ window.SBCharacters = (function () {
     return d.length < 4;
   }
 
+  /** Hollow prop/stage lines — not usable appearance traits for prompts. */
+  function isWeakAppearanceText (text, charName) {
+    const d = String(text || '').trim();
+    if (!d || isDialogueDirection(d, charName)) return true;
+    if (/reads\s*["']\s*["']/i.test(d)) return true;
+    if (/^(his|her|their)\s+(?:nametag|name\s*tag|nameplate|badge)\s+reads\b/i.test(d)) return true;
+    if (/\b(?:nametag|name\s*tag|nameplate|badge)\s+reads\s*["']\s*["']/i.test(d)) return true;
+    if (/^["']\s*["']\.?$/.test(d)) return true;
+    if (/\b(?:nametag|name\s*tag|nameplate|badge)\b/i.test(d)) {
+      const hasLook = /\b(jacket|uniform|suit|coat|hair|eyes|beard|wearing|dressed|military|tailored|groomed|stern|sunglasses|nametag|badge)\b/i.test(d);
+      const hasAgeOrBuild = /\b(\d{2}s|mid-?\d|late-?\d|early-?\d|athletic|stocky|tall|lean|burly|weathered)\b/i.test(d);
+      if (!hasLook && !hasAgeOrBuild && d.length < 48) return true;
+    }
+    if (/^(he|she|they)\s+(looks|turns|walks|stands|sits|enters|exits|says|tells)\b/i.test(d)) return true;
+    if (/^Close on\b/i.test(d)) return true;
+    if (/delivering dialogue\.?$/i.test(d)) return true;
+    const letters = (d.match(/[a-z]/gi) || []).length;
+    if (letters < 6 && d.length > 8) return true;
+    return false;
+  }
+
   function collapseRepeatedPhrases (text) {
     const d = String(text || '').trim();
     if (!d) return '';
@@ -54,16 +75,21 @@ window.SBCharacters = (function () {
     if (up) {
       const esc = up.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       d = d.replace(new RegExp('(?:to\\s+' + esc + '\\.?\\s*){2,}', 'gi'), 'to ' + up + '. ');
+      d = d.replace(new RegExp('(?:his|her|their)\\s+nametag\\s+reads\\s*["\']\\s*["\']\\.?', 'gi'), '');
     }
-    return d.trim().slice(0, 420);
+    const phrases = d.split(/\.\s+/).map(function (p) { return p.trim(); }).filter(function (p) {
+      return p && !isWeakAppearanceText(p, charName) && !isDialogueDirection(p, charName);
+    });
+    d = phrases.join('. ').replace(/\.\s*\./g, '.').replace(/\s+/g, ' ').trim();
+    return d.slice(0, 420);
   }
 
   function isBetterDescription (next, prev, charName) {
     const n = sanitizeDescription(next, charName);
     const p = sanitizeDescription(prev, charName);
-    if (!n || isDialogueDirection(n, charName)) return false;
+    if (!n || isDialogueDirection(n, charName) || isWeakAppearanceText(n, charName)) return false;
     if (!p) return n.length >= 8;
-    if (isDialogueDirection(p, charName)) return true;
+    if (isDialogueDirection(p, charName) || isWeakAppearanceText(p, charName)) return true;
     if (n === p) return false;
     if (n.startsWith(p) && n.length > p.length + 6) {
       const extra = n.slice(p.length).trim();
@@ -84,12 +110,20 @@ window.SBCharacters = (function () {
     const nameRE = new RegExp('\\b' + escName + '\\b', 'i');
 
     const bruteParen = script.match(new RegExp(escName + '\\s*\\(([^)]{3,200})\\)', 'i'));
-    if (bruteParen && bruteParen[1] && !isDialogueDirection(bruteParen[1].trim(), name)) {
+    if (bruteParen && bruteParen[1] && !isWeakAppearanceText(bruteParen[1].trim(), name)) {
       return sanitizeDescription(bruteParen[1].trim(), name);
     }
     const bruteComma = script.match(new RegExp(escName + '\\s*,\\s*([^.!?\\n]{4,200})', 'i'));
-    if (bruteComma && bruteComma[1] && !isDialogueDirection(bruteComma[1].trim(), name)) {
+    if (bruteComma && bruteComma[1] && !isWeakAppearanceText(bruteComma[1].trim(), name)) {
       return sanitizeDescription(bruteComma[1].trim(), name);
+    }
+    const richIntro = script.match(new RegExp(
+      '([^.!?\\n]{12,220}\\b(?:nametag|name\\s*tag|nameplate|badge)\\b[^.!?\\n]{0,100}' + escName + '[^.!?\\n]{0,40}|' +
+      '[^.!?\\n]{12,220}' + escName + '[^.!?\\n]{0,120}\\b(?:nametag|name\\s*tag|nameplate|badge)\\b[^.!?\\n]{0,100})',
+      'i'
+    ));
+    if (richIntro && richIntro[1] && !isWeakAppearanceText(richIntro[1].trim(), name)) {
+      return sanitizeDescription(richIntro[1].trim(), name);
     }
 
     const lines = script.split('\n');
@@ -150,18 +184,25 @@ window.SBCharacters = (function () {
     }
 
     const parts = [];
-    if (parenTraits && !isDialogueDirection(parenTraits, name)) parts.push(parenTraits);
-    else if (commaTraits && !isDialogueDirection(commaTraits, name)) parts.push(commaTraits);
+    if (parenTraits && !isWeakAppearanceText(parenTraits, name)) parts.push(parenTraits);
+    else if (commaTraits && !isWeakAppearanceText(commaTraits, name)) parts.push(commaTraits);
     else if (introSentence) {
-      const bit = introSentence.replace(nameRE, '').replace(/^\s*[,.\-–—:\s]+/, '').trim();
-      if (bit && !isDialogueDirection(bit, name)) parts.push(bit);
+      const stripped = introSentence.replace(nameRE, '').replace(/^\s*[,.\-–—:\s]+/, '').trim();
+      const bit = !isWeakAppearanceText(stripped, name) ? stripped
+        : (!isWeakAppearanceText(introSentence.trim(), name) ? introSentence.trim() : '');
+      if (bit) parts.push(bit);
     }
     if (parts.join(' ').length < 24 && laterActions.length) {
-      const bit = laterActions[0].replace(nameRE, '').replace(/^\s*[,.\-–—:\s]+/, '').trim().substring(0, 160);
-      if (bit && !isDialogueDirection(bit, name)) parts.push(bit);
+      const stripped = laterActions[0].replace(nameRE, '').replace(/^\s*[,.\-–—:\s]+/, '').trim().substring(0, 160);
+      const bit = !isWeakAppearanceText(stripped, name) ? stripped
+        : (!isWeakAppearanceText(laterActions[0].trim(), name) ? laterActions[0].trim().substring(0, 160) : '');
+      if (bit) parts.push(bit);
     }
 
-    if (!parts.length) return sanitizeDescription(hint || '', name);
+    if (!parts.length) {
+      const safeHint = sanitizeDescription(hint || '', name);
+      return safeHint && !isWeakAppearanceText(safeHint, name) ? safeHint : '';
+    }
     return sanitizeDescription(parts.filter(Boolean).join('. '), name);
   }
 
@@ -197,7 +238,10 @@ window.SBCharacters = (function () {
       if (!appearsInClip(name, clip)) continue;
       const desc = String(clip.description || '').trim();
       if (desc && desc.length > 12 && !/^Close on\s+/i.test(desc)) {
-        return desc.replace(new RegExp('\\b' + up.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'gi'), '').replace(/^\s*[,.\-–—:\s]+/, '').trim().slice(0, 280);
+        const stripped = desc.replace(new RegExp('\\b' + up.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'gi'), '').replace(/^\s*[,.\-–—:\s]+/, '').trim().slice(0, 280);
+        const full = desc.trim().slice(0, 280);
+        if (!isWeakAppearanceText(stripped, name)) return stripped;
+        if (!isWeakAppearanceText(full, name)) return full;
       }
       if (clip.dialogue && String(clip.dialogue).trim()) {
         return 'Dialogue in clip ' + (clip.num || (i + 1)) + ': "' + String(clip.dialogue).trim().slice(0, 120) + '"';
@@ -230,7 +274,7 @@ window.SBCharacters = (function () {
         const m = desc.match(re);
         if (!m || !m[1]) return;
         const bit = m[1].trim().replace(/,?\s*delivering dialogue\.?/i, '').trim();
-        if (!bit || isDialogueDirection(bit, name)) return;
+        if (!bit || isWeakAppearanceText(bit, name)) return;
         if (parts.indexOf(bit) < 0) parts.push(bit);
       });
       if (dlg && parts.length < 2) {
@@ -264,12 +308,12 @@ window.SBCharacters = (function () {
       const candidates = [syn, fromClips, parseHint].map(function (x) {
         return sanitizeDescription(x, name);
       }).filter(function (x) {
-        return x && !isDialogueDirection(x, name);
+        return x && !isWeakAppearanceText(x, name);
       });
       let best = candidates.sort(function (a, b) { return b.length - a.length; })[0] || '';
       if (!best || best.length < 8) {
         const fb = sanitizeDescription(fallbackFromClips(name, clips), name);
-        if (fb && !isDialogueDirection(fb, name) && fb.length > (best || '').length) best = fb;
+        if (fb && !isWeakAppearanceText(fb, name) && fb.length > (best || '').length) best = fb;
       }
 
       const current = sanitizeDescription(c.description || '', name);
