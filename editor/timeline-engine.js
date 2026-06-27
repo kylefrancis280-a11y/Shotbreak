@@ -430,21 +430,29 @@ window.SBTimelineEditor = (function () {
         return;
       }
       agentLog('Rendering…', 'info');
-      const blobs = [];
-      for (const tl of state.timeline) {
+      const segments = [];
+      for (let i = 0; i < state.timeline.length; i++) {
+        const tl = state.timeline[i];
         const b = binById(tl.binId);
         if (!b || !b.src) continue;
         try {
           const r = await fetch(b.src);
           if (!r.ok) throw new Error('fetch failed');
-          blobs.push(await r.blob());
+          const trimOut = tl.trimOut != null ? tl.trimOut : b.duration;
+          segments.push({
+            blob: await r.blob(),
+            trimIn: tl.trimIn || 0,
+            trimOut: trimOut,
+            transition: tl.transition || 'cut',
+            transitionDur: tl.transitionDur != null ? tl.transitionDur : ((tl.transition === 'dissolve' || tl.transition === 'fade') ? 0.4 : 0),
+          });
         } catch (e) {
           agentLog('Could not fetch ' + b.name + ' (CORS or network)', 'err');
           return;
         }
       }
       try {
-        const out = await window.SBFFmpeg.stitchBlobs(blobs, (msg) => agentLog(msg, 'info'));
+        const out = await window.SBFFmpeg.stitchTimeline(segments, (msg) => agentLog(msg, 'info'));
         const a = document.createElement('a');
         a.href = URL.createObjectURL(out);
         a.download = (state.projectName || 'shotbreak_edit').replace(/\s+/g, '_') + '.mp4';
@@ -454,6 +462,40 @@ window.SBTimelineEditor = (function () {
       } catch (e) {
         agentLog('Render failed: ' + e.message, 'err');
       }
+    }
+
+    async function applyProCut(edl) {
+      if (!edl || !Array.isArray(edl.clips) || !edl.clips.length) {
+        agentLog('Pro Cut EDL empty', 'err');
+        return 0;
+      }
+      state.bin = [];
+      state.timeline = [];
+      for (let i = 0; i < edl.clips.length; i++) {
+        const e = edl.clips[i];
+        const b = await addToBin({
+          id: e.id || uid(),
+          name: e.name || ('Clip ' + (e.num || (i + 1))),
+          src: e.src,
+          duration: e.trimOut != null ? e.trimOut : 5,
+          source: 'pro-cut',
+        }, true);
+        if (!b) continue;
+        state.timeline.push({
+          id: uid(),
+          binId: b.id,
+          trimIn: e.trimIn || 0,
+          trimOut: e.trimOut != null ? e.trimOut : null,
+          transition: e.transition || 'cut',
+          transitionDur: e.transitionDur || 0,
+        });
+      }
+      save();
+      renderBin();
+      renderTimeline();
+      renderInspector();
+      agentLog('Pro Cut applied — ' + edl.clips.length + ' clip(s)', 'ok');
+      return edl.clips.length;
     }
 
     function wireDropTargets() {
@@ -481,6 +523,7 @@ window.SBTimelineEditor = (function () {
         seekToOffset(x / (PX_PER_SEC * (state.zoom || 1)));
       };
       if ($('btnSync')) $('btnSync').onclick = () => { if (extra.onSync) extra.onSync(); };
+      if ($('btnProCut')) $('btnProCut').onclick = () => { if (extra.onProCut) extra.onProCut(); };
       if ($('btnUpload')) $('btnUpload').onclick = () => ensureFileInput().click();
       if ($('btnRender')) $('btnRender').onclick = () => renderExport();
       if ($('btnEdl')) $('btnEdl').onclick = () => exportEdl();
@@ -510,6 +553,7 @@ window.SBTimelineEditor = (function () {
     return {
       init: init,
       syncFromClips: syncFromClips,
+      applyProCut: applyProCut,
       upload: () => ensureFileInput().click(),
       renderExport: renderExport,
       exportEdl: exportEdl,

@@ -6,7 +6,7 @@
 <title>SHOTBREAK — Text-to-Video Movie System</title>
 <link rel="icon" href="/favicon.ico">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Anybody:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="timeline.css?v=20260627e">
+<link rel="stylesheet" href="timeline.css?v=20260628a">
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -156,6 +156,7 @@
             <div id="assemblyBody" class="tl-editor">
               <div class="tle-toolbar">
                 <button type="button" class="tb-btn gold" id="tle-btnSync">Sync clips</button>
+                <button type="button" class="tb-btn gold" id="tle-btnProCut" title="Analyze clips, trim AI mush, set dissolves on scene changes">Pro Cut</button>
                 <button type="button" class="tb-btn" id="tle-btnUpload">Upload MP4</button>
                 <button type="button" class="tb-btn" id="tle-btnRender">Render MP4</button>
                 <button type="button" class="tb-btn" id="tle-btnEdl">Export EDL</button>
@@ -280,9 +281,10 @@
 <script src="timeline-continuity.js?v=20260627d"></script>
 <script src="timeline-locations-enrich.js?v=20260627d"></script>
 <script src="timeline-enrich.js?v=20260627d"></script>
-<script src="timeline-export.js?v=20260627f"></script>
-<script src="/js/ffmpeg-wasm.js?v=20260627f"></script>
-<script src="/editor/timeline-engine.js?v=20260627f"></script>
-<script src="timeline.js?v=20260627f"></script>
+<script src="timeline-export.js?v=20260628a"></script>
+<script src="pro-cut.js?v=20260628a"></script>
+<script src="/js/ffmpeg-wasm.js?v=20260628a"></script>
+<script src="/editor/timeline-engine.js?v=20260628a"></script>
+<script src="timeline.js?v=20260628a"></script>
 </body>
 </html>

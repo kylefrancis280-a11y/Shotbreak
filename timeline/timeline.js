@@ -3,7 +3,7 @@
 'use strict';
 
 const STORAGE_KEY='SB_Timeline_v1';
-const BOOT_VERSION='20260627f';
+const BOOT_VERSION='20260628a';
 const OWNER_EMAILS=new Set(['kyle@shotbreak.io','scott@shotbreak.io','steve@shotbreak.io']);
 const CHAR_SKIP=new Set(['INT','EXT','FADE','CUT','CLOSE','WIDE','THE','AND','RAIN','WATER','ROOF','SCENE','OPENING','SEQUENCE','DIALOGUE','ACTION','REACTION','CLIMAX','RESOLUTION','EPILOGUE','TRANSITION','ABANDONED','WAREHOUSE','BUILDING','STREET','NIGHT','DAY','MORNING','EVENING','LOCATION','INTERIOR','EXTERIOR']);
 const JUNK_CLOSE_ON_RE=/^Close on\s+((?:OPENING|TITLE|CLOSING|END|CREDIT|TEASER|PROLOGUE)\s+(?:SEQUENCE|SCENE|CREDITS)|SEQUENCE|DIALOGUE|ACTION|REACTION|TRANSITION|CLIMAX|RESOLUTION|EPILOGUE|CHARACTER\s+INTRO|OPENING\s+SCENE)/i;
@@ -1088,7 +1088,34 @@ function initTimelineEditor(){
     embedded:true,
     projectName:state.projectName
   });
-  timelineEditorInst.init({onSync:syncTimelineEditor});
+  timelineEditorInst.init({onSync:syncTimelineEditor,onProCut:runProCut});
+}
+async function runProCut(){
+  if(!window.SBProCut)return toast('Pro Cut module not loaded — hard refresh');
+  const ok=clipsForEditor();
+  if(!ok.length)return toast('Generate clips first');
+  const panel=$('editorPanel');
+  if(panel)panel.open=true;
+  if(!timelineEditorInst)initTimelineEditor();
+  const log=$('tle-agentLog');
+  const prog=(msg)=>{if(log){const line=document.createElement('div');line.className='line info';line.textContent=msg;log.appendChild(line);log.scrollTop=log.scrollHeight}};
+  const btn=$('tle-btnProCut');
+  if(btn)btn.disabled=true;
+  try{
+    prog('Pro Cut starting…');
+    const result=await SBProCut.run(ok,{
+      projectName:state.projectName,
+      onProgress:prog,
+    });
+    SBProCut.applyToTimelineClips(state.clips,result.edl);
+    save();
+    if(timelineEditorInst)await timelineEditorInst.applyProCut(result.edl);
+    toast('Pro Cut ready — review track, then Render MP4');
+  }catch(e){
+    toast(e.message||'Pro Cut failed');
+    prog('Pro Cut failed: '+(e.message||e));
+  }
+  if(btn)btn.disabled=false;
 }
 function syncTimelineEditor(){
   if(!timelineEditorInst)initTimelineEditor();
@@ -1108,7 +1135,7 @@ function renderAssembly(){
   if(!hint)return;
   const n=state.clips.filter(c=>c.videoUrl).length;
   const a=state.clips.filter(c=>c.status==='approved'&&c.videoUrl).length;
-  hint.textContent=n?(a?a+' approved · '+n+' with video — Sync to refresh':'No approved clips — Sync will use all generated clips'):'Generate clips, then Sync';
+  hint.textContent=n?(a?a+' approved · '+n+' with video — Pro Cut or Sync':'No approved clips — Pro Cut uses all generated clips'):'Generate clips, then Pro Cut';
 }
 
 function deleteCharacter(name){

@@ -147,40 +147,119 @@ window.SBFFmpeg = (function () {
     return cached;
   }
 
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
   async function stitchBlobs(blobs, onProgress) {
-    if (!blobs || !blobs.length) throw new Error('No clips to stitch');
-    if (blobs.length === 1) return blobs[0];
+    const segs = (blobs || []).map((b) => ({ blob: b, trimIn: 0, trimOut: null, transition: 'cut', transitionDur: 0 }));
+    return stitchTimeline(segs, onProgress);
+  }
+
+  async function stitchTimeline(segments, onProgress) {
+    if (!segments || !segments.length) throw new Error('No clips to stitch');
 
     const ff = await loadFFmpeg(onProgress);
     if (ff.setProgress) ff.setProgress(onProgress);
 
-    const names = [];
-    for (let i = 0; i < blobs.length; i++) {
-      if (onProgress) onProgress('Writing clip ' + (i + 1) + '/' + blobs.length);
-      const name = 'in' + i + '.mp4';
-      const buf = blobs[i] instanceof Blob ? new Uint8Array(await blobs[i].arrayBuffer()) : blobs[i];
-      await ff.writeFile(name, buf);
-      names.push(name);
+    const trimmed = [];
+    for (let i = 0; i < segments.length; i++) {
+      const s = segments[i];
+      const raw = 'raw' + i + '.mp4';
+      const out = 'trim' + i + '.mp4';
+      const buf = s.blob instanceof Blob ? new Uint8Array(await s.blob.arrayBuffer()) : new Uint8Array(s.blob);
+      await ff.writeFile(raw, buf);
+      const ti = s.trimIn || 0;
+      const to = s.trimOut != null ? s.trimOut : null;
+      const dur = to != null ? Math.max(0.1, to - ti) : null;
+      if (onProgress) onProgress('Trimming clip ' + (i + 1) + '/' + segments.length);
+      const args = ['-ss', String(ti), '-i', raw];
+      if (dur != null) args.push('-t', String(dur));
+      args.push(
+        '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
+        '-c:a', 'aac', '-b:a', '128k',
+        out
+      );
+      await ff.exec(args);
+      await ff.deleteFile(raw).catch(() => {});
+      trimmed.push({
+        name: out,
+        dur: dur || 5,
+        transition: s.transition || 'cut',
+        transitionDur: s.transitionDur || 0,
+      });
     }
 
     const outName = 'out.mp4';
-    const list = names.map((n) => "file '" + n + "'").join('\n');
-    await ff.writeFile('concat.txt', new TextEncoder().encode(list));
-    if (onProgress) onProgress('Stitching clips…');
-    await ff.exec([
-      '-f', 'concat', '-safe', '0', '-i', 'concat.txt',
-      '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
-      '-c:a', 'aac', '-b:a', '128k',
-      '-movflags', '+faststart',
-      outName,
-    ]);
+
+    if (trimmed.length === 1) {
+      const data = await ff.readFile(trimmed[0].name);
+      await ff.deleteFile(trimmed[0].name).catch(() => {});
+      return new Blob([data.buffer], { type: 'video/mp4' });
+    }
+
+    const needsXfade = trimmed.some((t, idx) =>
+      idx < trimmed.length - 1 &&
+      (t.transition === 'dissolve' || t.transition === 'fade') &&
+      (t.transitionDur || 0) > 0.08
+    );
+
+    if (!needsXfade) {
+      const list = trimmed.map((t) => "file '" + t.name + "'").join('\n');
+      await ff.writeFile('concat.txt', new TextEncoder().encode(list));
+      if (onProgress) onProgress('Stitching clips…');
+      await ff.exec([
+        '-f', 'concat', '-safe', '0', '-i', 'concat.txt',
+        '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
+        '-c:a', 'aac', '-b:a', '128k',
+        '-movflags', '+faststart',
+        outName,
+      ]);
+      await ff.deleteFile('concat.txt').catch(() => {});
+    } else {
+      if (onProgress) onProgress('Applying dissolves…');
+      const args = [];
+      trimmed.forEach((t) => args.push('-i', t.name));
+      let filter = '';
+      let lastV = '0:v';
+      let lastA = '0:a';
+      let offset = trimmed[0].dur;
+      for (let i = 1; i < trimmed.length; i++) {
+        const prev = trimmed[i - 1];
+        const fade = (prev.transition === 'dissolve' || prev.transition === 'fade')
+          ? clamp(prev.transitionDur || 0.4, 0.1, 1.2)
+          : 0.08;
+        const vTag = 'vx' + i;
+        const aTag = 'ax' + i;
+        offset -= fade;
+        filter += '[' + lastV + '][' + i + ':v]xfade=transition=fade:duration=' + fade + ':offset=' + Math.max(0, offset).toFixed(3) + '[' + vTag + '];';
+        filter += '[' + lastA + '][' + i + ':a]acrossfade=d=' + fade + '[' + aTag + '];';
+        lastV = vTag;
+        lastA = aTag;
+        offset += trimmed[i].dur - fade;
+      }
+      args.push('-filter_complex', filter.replace(/;$/, ''));
+      args.push('-map', '[' + lastV + ']', '-map', '[' + lastA + ']');
+      args.push('-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', outName);
+      try {
+        await ff.exec(args);
+      } catch (e) {
+        if (onProgress) onProgress('Dissolve failed — hard-cut fallback…');
+        const list = trimmed.map((t) => "file '" + t.name + "'").join('\n');
+        await ff.writeFile('concat.txt', new TextEncoder().encode(list));
+        await ff.exec([
+          '-f', 'concat', '-safe', '0', '-i', 'concat.txt',
+          '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
+          '-c:a', 'aac', '-movflags', '+faststart',
+          outName,
+        ]);
+        await ff.deleteFile('concat.txt').catch(() => {});
+      }
+    }
 
     const data = await ff.readFile(outName);
-    for (const n of names) await ff.deleteFile(n).catch(() => {});
-    await ff.deleteFile('concat.txt').catch(() => {});
+    for (const t of trimmed) await ff.deleteFile(t.name).catch(() => {});
     await ff.deleteFile(outName).catch(() => {});
     return new Blob([data.buffer], { type: 'video/mp4' });
   }
 
-  return { loadFFmpeg, stitchBlobs };
+  return { loadFFmpeg, stitchBlobs, stitchTimeline };
 })();
